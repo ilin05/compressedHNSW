@@ -19,6 +19,20 @@ L2Sqr(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
     return (res);
 }
 
+static double
+L2SqrDouble(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
+    const double *pVect1 = static_cast<const double *>(pVect1v);
+    const double *pVect2 = static_cast<const double *>(pVect2v);
+    size_t qty = *static_cast<const size_t *>(qty_ptr);
+
+    double res = 0.0;
+    for (size_t i = 0; i < qty; i++) {
+        double diff = pVect1[i] - pVect2[i];
+        res += diff * diff;
+    }
+    return res;
+}
+
 #if defined(USE_AVX512)
 
 // Favor using AVX512 if available.
@@ -250,6 +264,33 @@ class L2Space : public SpaceInterface<float> {
     }
 
     ~L2Space() {}
+};
+
+class L2SpaceDouble : public SpaceInterface<double> {
+    DISTFUNC<double> fstdistfunc_;
+    size_t data_size_;
+    size_t dim_;
+
+ public:
+    explicit L2SpaceDouble(size_t dim) {
+        fstdistfunc_ = L2SqrDouble;
+        dim_ = dim;
+        data_size_ = dim * sizeof(double);
+    }
+
+    size_t get_data_size() {
+        return data_size_;
+    }
+
+    DISTFUNC<double> get_dist_func() {
+        return fstdistfunc_;
+    }
+
+    void *get_dist_func_param() {
+        return &dim_;
+    }
+
+    ~L2SpaceDouble() {}
 };
 
 static int

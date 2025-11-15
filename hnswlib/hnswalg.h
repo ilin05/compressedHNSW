@@ -198,7 +198,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         return (labeltype *) (data_level0_memory_ + internal_id * size_data_per_element_ + label_offset_);
     }
 
-
+    // 数据存储在第0层，每个element的大小都是固定的，size_data_per_element。可以通过HNSW内部的id随机读取数据
+    // 如果要使用差分编码压缩data，将无法通过简单的随机读取获取数据。或许需要页表之类的结构进行索引；同时，data需要解压缩。可以在每个element的开头记录上一个data的internal_id，接着回溯到第0个data，然后依次解压缩
     inline char *getDataByInternalId(tableint internal_id) const {
         return (data_level0_memory_ + internal_id * size_data_per_element_ + offsetData_);
     }
@@ -222,46 +223,67 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         return num_deleted_;
     }
 
+    // 这里是论文中的alg.2---找出layer中距离data point(也就是论文中的q)最近的前ef个元素，返回动态列表top_candidates
     std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst>
     searchBaseLayer(tableint ep_id, const void *data_point, int layer) {
+        // visitedList 包括数组和数，visited_array 是数组，tag 是数
         VisitedList *vl = visited_list_pool_->getFreeVisitedList();
+        // visited_array 存储已访问的元素
         vl_type *visited_array = vl->mass;
         vl_type visited_array_tag = vl->curV;
 
+        // top_candidates存储每一层距离datapoint最近的ef个邻居，对应于论文中的动态列表W
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
+        // candidateSet存储候选元素，对应动态列表中的C
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidateSet;
 
         dist_t lowerBound;
         if (!isMarkedDeleted(ep_id)) {
+            // 计算data_point(query) 到enterpoint的距离，结果保存在dist中。
             dist_t dist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
+            // enterpoint加入到最近邻列表
             top_candidates.emplace(dist, ep_id);
+            // lowerBound存储当前到datapoint的最近距离
             lowerBound = dist;
+            // enterpoint加入到候选列表
             candidateSet.emplace(-dist, ep_id);
         } else {
             lowerBound = std::numeric_limits<dist_t>::max();
             candidateSet.emplace(-lowerBound, ep_id);
         }
+        // enterpoint加入已访问列表
         visited_array[ep_id] = visited_array_tag;
 
+        // 当候选列表不为空时 while |C|>0
         while (!candidateSet.empty()) {
+            // 从C中取出距离q最近的元素
             std::pair<dist_t, tableint> curr_el_pair = candidateSet.top();
+            // 如果C中最近元素与q的距离 > W中与q最远元素的距离，说明W中每一个元素都已评估过，退出循环
             if ((-curr_el_pair.first) > lowerBound && top_candidates.size() == ef_construction_) {
                 break;
             }
+            // 弹出候选者列表队头
             candidateSet.pop();
 
+            // 获取当前元素的label
             tableint curNodeNum = curr_el_pair.second;
 
             std::unique_lock <std::mutex> lock(link_list_locks_[curNodeNum]);
 
+            // 获取当前元素的邻居
             int *data;  // = (int *)(linkList0_ + curNodeNum * size_links_per_element0_);
+            // 如果在第0层
             if (layer == 0) {
+                // 计算当前元素邻居的内存
                 data = (int*)get_linklist0(curNodeNum);
             } else {
+                // 计算当前元素邻居的内存
                 data = (int*)get_linklist(curNodeNum, layer);
 //                    data = (int *) (linkLists_[curNodeNum] + (layer - 1) * size_links_per_element_);
             }
+            // 获取当前元素的邻居数量
             size_t size = getListCount((linklistsizeint*)data);
+            // datal表示当前元素第一个邻居的label
             tableint *datal = (tableint *) (data + 1);
 #ifdef USE_SSE
             _mm_prefetch((char *) (visited_array + *(data + 1)), _MM_HINT_T0);
@@ -270,6 +292,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             _mm_prefetch(getDataByInternalId(*(datal + 1)), _MM_HINT_T0);
 #endif
 
+            // 对于layer层中的当前元素的每一个邻居candidate
             for (size_t j = 0; j < size; j++) {
                 tableint candidate_id = *(datal + j);
 //                    if (candidate_id == 0) continue;
@@ -277,30 +300,42 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 _mm_prefetch((char *) (visited_array + *(datal + j + 1)), _MM_HINT_T0);
                 _mm_prefetch(getDataByInternalId(*(datal + j + 1)), _MM_HINT_T0);
 #endif
+                // 如果candidate已经访问过（对应论文中，如果e属于v，无操作，循环次数加1）
                 if (visited_array[candidate_id] == visited_array_tag) continue;
+                // 没有访问过，将已访问列表中并入candidate
                 visited_array[candidate_id] = visited_array_tag;
+                // 根据candidate的id号获取这个candidate元素，也就是currObj1
                 char *currObj1 = (getDataByInternalId(candidate_id));
-
+                // 计算currObj1到data point之间的距离，对应于论文中的distance(e, q)
                 dist_t dist1 = fstdistfunc_(data_point, currObj1, dist_func_param_);
+                // 取出top_candidates中距离data point最远的元素并比较大小
+                // 对应于论文中，如果distance(e, q) < distance(f, 1) || |W| < ef
                 if (top_candidates.size() < ef_construction_ || lowerBound > dist1) {
+                    // 将currObj1的id——candidate_id加到候选列表中
                     candidateSet.emplace(-dist1, candidate_id);
 #ifdef USE_SSE
                     _mm_prefetch(getDataByInternalId(candidateSet.top().second), _MM_HINT_T0);
 #endif
 
-                    if (!isMarkedDeleted(candidate_id))
+                    if (!isMarkedDeleted(candidate_id)){
+                        // 将currObj1的id——candidate_id加到动态列表中
                         top_candidates.emplace(dist1, candidate_id);
-
-                    if (top_candidates.size() > ef_construction_)
+                    }
+                    // 如果动态列表的长度大于ef，那么减掉“最弱的”元素，对应于论文中|W| > ef
+                    if (top_candidates.size() > ef_construction_){
+                        // 取出W中距离q最远的元素
                         top_candidates.pop();
-
-                    if (!top_candidates.empty())
+                    }
+                    if (!top_candidates.empty()){
+                        // 更新distance（f,q）
                         lowerBound = top_candidates.top().first;
+                    }
                 }
             }
         }
         visited_list_pool_->releaseVisitedList(vl);
 
+        // 返回动态列表，也就是返回layer层中距离q最近的ef个邻居
         return top_candidates;
     }
 
@@ -440,38 +475,52 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     }
 
 
+    // 论文中的alg.4--启发式方法选择邻居，从top_candidates中选择距离q最近的M个元素
     void getNeighborsByHeuristic2(
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> &top_candidates,
         const size_t M) {
+        // 如果top_candidates里元素个数小于M,那还选个啥，直接return
         if (top_candidates.size() < M) {
             return;
         }
-
+        // queue_closest是working queue for the candidates，论文中是W ，存放候选者
         std::priority_queue<std::pair<dist_t, tableint>> queue_closest;
+        // return_list存放最终的M个结果,论文中是R，初始为空集 
         std::vector<std::pair<dist_t, tableint>> return_list;
+        // 将queue_closest初始化为top_candidates,论文中为W<--C
         while (top_candidates.size() > 0) {
             queue_closest.emplace(-top_candidates.top().first, top_candidates.top().second);
             top_candidates.pop();
         }
-
+        // 当queue_closest内的元素个数大于0
         while (queue_closest.size()) {
+            // 如果return_list内元素个数已经大于M,那么启发式查找过程结束
             if (return_list.size() >= M)
                 break;
+            // curent_pair是queue_closest（W）的元素
             std::pair<dist_t, tableint> curent_pair = queue_closest.top();
+            // dist_to_query是curent_pair与query的距离
             dist_t dist_to_query = -curent_pair.first;
+            // queue_cloest元素减一
             queue_closest.pop();
             bool good = true;
 
+            // 对于return_list(R)中的每一个元素
             for (std::pair<dist_t, tableint> second_pair : return_list) {
+                
                 dist_t curdist =
                         fstdistfunc_(getDataByInternalId(second_pair.second),
                                         getDataByInternalId(curent_pair.second),
                                         dist_func_param_);
+                // 如果curent_pair 与已经与q连接元素的距离 < curent_pair与query的距离
                 if (curdist < dist_to_query) {
+                    // curent_pair将不会作为q的邻居返回
                     good = false;
                     break;
                 }
             }
+            // 如果curent_pair 与已经与q连接元素的距离 >= curent_pair与query的距离，见论文中Fig.2
+            // 那么将curent_pair并入return_list(也就是论文里的R)
             if (good) {
                 return_list.push_back(curent_pair);
             }
@@ -594,6 +643,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                     std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidates;
                     candidates.emplace(d_max, cur_c);
 
+                    // 邻居的linkList已经满了，需要重新选出最好的Mcurmax个邻居。逐个计算距离，放入candidates中
                     for (size_t j = 0; j < sz_link_list_other; j++) {
                         candidates.emplace(
                                 fstdistfunc_(getDataByInternalId(data[j]), getDataByInternalId(selectedNeighbors[idx]),
@@ -1150,6 +1200,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     }
 
 
+    // label是外部的id。存储在label_lookup_中的是外部id到内部id的映射
     tableint addPoint(const void *data_point, labeltype label, int level) {
         tableint cur_c = 0;
         {
@@ -1169,11 +1220,13 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 if (isMarkedDeleted(existingInternalId)) {
                     unmarkDeletedInternal(existingInternalId);
                 }
+                // 更新原本的数据
                 updatePoint(data_point, existingInternalId, 1.0);
 
                 return existingInternalId;
             }
 
+            // 如果当前元素数量已经达到上限，抛出异常
             if (cur_element_count >= max_elements_) {
                 throw std::runtime_error("The number of elements exceeds the specified limit");
             }
@@ -1184,6 +1237,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         }
 
         std::unique_lock <std::mutex> lock_el(link_list_locks_[cur_c]);
+        // 确定新元素所在的层数，curLevel按照几何分布确定
         int curlevel = getRandomLevel(mult_);
         if (level > 0)
             curlevel = level;
@@ -1194,9 +1248,12 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         int maxlevelcopy = maxlevel_;
         if (curlevel <= maxlevelcopy)
             templock.unlock();
+
+        // currObj: 当前距离待插节点最近的节点
         tableint currObj = enterpoint_node_;
         tableint enterpoint_copy = enterpoint_node_;
 
+        // 每个节点的数据大小是一定的，size_data_per_element_。在这里为level0分配内存
         memset(data_level0_memory_ + cur_c * size_data_per_element_ + offsetLevel0_, 0, size_data_per_element_);
 
         // Initialisation of the data and label
@@ -1204,9 +1261,12 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         memcpy(getDataByInternalId(cur_c), data_point, data_size_);
 
         if (curlevel) {
+            // 为非level0的层分配内存
             linkLists_[cur_c] = (char *) malloc(size_links_per_element_ * curlevel + 1);
             if (linkLists_[cur_c] == nullptr)
                 throw std::runtime_error("Not enough memory: addPoint failed to allocate linklist");
+            
+            // 初始化link list为空
             memset(linkLists_[cur_c], 0, size_links_per_element_ * curlevel + 1);
         }
 
@@ -1219,6 +1279,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                         changed = false;
                         unsigned int *data;
                         std::unique_lock <std::mutex> lock(link_list_locks_[currObj]);
+                        // 获取currObj的所有邻居neighbors
                         data = get_linklist(currObj, level);
                         int size = getListCount(data);
 
@@ -1240,9 +1301,10 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
             bool epDeleted = isMarkedDeleted(enterpoint_copy);
             for (int level = std::min(curlevel, maxlevelcopy); level >= 0; level--) {
-                if (level > maxlevelcopy || level < 0)  // possible?
+                if (level > maxlevelcopy || level < 0)  // possible? 这不可能吧？
                     throw std::runtime_error("Level error");
 
+                // 在level层找到与data_point距离最近的ef个节点，存储在列表中
                 std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(
                         currObj, data_point, level);
                 if (epDeleted) {
@@ -1250,6 +1312,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                     if (top_candidates.size() > ef_construction_)
                         top_candidates.pop();
                 }
+                // 在level层建立data_point与top_candidates中每一个元素的连接
                 currObj = mutuallyConnectNewElement(data_point, cur_c, top_candidates, level, false);
             }
         } else {
@@ -1267,32 +1330,38 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     }
 
 
+    //knn搜索 ---论文中的alg.5
     std::priority_queue<std::pair<dist_t, labeltype >>
     searchKnn(const void *query_data, size_t k, BaseFilterFunctor* isIdAllowed = nullptr) const {
         std::priority_queue<std::pair<dist_t, labeltype >> result;
         if (cur_element_count == 0) return result;
 
+        // currObj和curdist分别记录距离data point最近的点和距离
         tableint currObj = enterpoint_node_;
         dist_t curdist = fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
-
+        // 在层L...1之间
         for (int level = maxlevel_; level > 0; level--) {
             bool changed = true;
             while (changed) {
+                // 首先没有变化，表示在同一层中搜索
                 changed = false;
                 unsigned int *data;
-
+                // 获得currObj的连接数，也就是邻居
                 data = (unsigned int *) get_linklist(currObj, level);
                 int size = getListCount(data);
                 metric_hops++;
                 metric_distance_computations+=size;
 
                 tableint *datal = (tableint *) (data + 1);
+                // 对于currObj的每一个邻居，计算它与data point的距离，并及时更新currObj和currdist
                 for (int i = 0; i < size; i++) {
+                    // 获取邻居的id
                     tableint cand = datal[i];
                     if (cand < 0 || cand > max_elements_)
                         throw std::runtime_error("cand error");
+                    // 根据id获取邻居并计算其到query的距离
                     dist_t d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
-
+                    // 如果这个邻居与query的距离比curdist还小，更新curdist为这个邻居，changed改为true
                     if (d < curdist) {
                         curdist = d;
                         currObj = cand;
@@ -1302,6 +1371,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             }
         }
 
+        // 目前已获得第一层与query最近的元素currObj
+        // 在第零层获取currObj邻居中距离query最近的max(k, ef)个近邻，也就是动态列表top_candidates-----论文中是W
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
         bool bare_bone_search = !num_deleted_ && !isIdAllowed;
         if (bare_bone_search) {
@@ -1311,10 +1382,11 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             top_candidates = searchBaseLayerST<false>(
                     currObj, query_data, std::max(ef_, k), isIdAllowed);
         }
-
+        // top_candidates修建为k个
         while (top_candidates.size() > k) {
             top_candidates.pop();
         }
+        // 将结果放入result中返回
         while (top_candidates.size() > 0) {
             std::pair<dist_t, tableint> rez = top_candidates.top();
             result.push(std::pair<dist_t, labeltype>(rez.first, getExternalLabel(rez.second)));

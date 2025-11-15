@@ -78,6 +78,18 @@ if(HNSWLIB_EXAMPLES)
     add_executable(example_mt_replace_deleted examples/cpp/example_mt_replace_deleted.cpp)
     target_link_libraries(example_mt_replace_deleted hnswlib)
 
+    add_executable(example_double_vector examples/cpp/example_double_vector.cpp)
+    target_link_libraries(example_double_vector hnswlib)
+
+    file(GLOB_RECURSE ENCODING_ALGO_SRC
+      "encoding_algorithms/dexor/*.cpp"
+      "encoding_algorithms/gorilla/*.cpp"
+      "encoding_algorithms/elf/*.cpp"
+      "encoding_algorithms/camel/*.cpp")
+
+    add_executable(vector_compress examples/cpp/vector_compress.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(vector_compress hnswlib)
+
     # tests
     add_executable(multivector_search_test tests/cpp/multivector_search_test.cpp)
     target_link_libraries(multivector_search_test hnswlib)
