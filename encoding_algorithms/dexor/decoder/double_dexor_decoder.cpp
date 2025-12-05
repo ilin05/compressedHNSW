@@ -1,29 +1,49 @@
 #include "double_dexor_decoder.h"
 
+#include <cstddef>
+
 namespace encoding_algorithm {
 namespace dexor {
 
-    // Constructor implementations
-    DoubleDeXORDecoder::DoubleDeXORDecoder(const std::string& inputPath) : Decoder(inputPath) {
-        method = std::make_unique<Native>(this);
+    DoubleDeXORDecoder::DoubleDeXORDecoder(const std::string& inputPath)
+        : Decoder(inputPath) {
+        initializeMethod();
     }
 
-    DoubleDeXORDecoder::DoubleDeXORDecoder(const std::string& inputPath, const std::string& configStr) : Decoder(inputPath, configStr) {
-        auto it_buffer = config.find("buffer_bits");
-        if (it_buffer != config.end()) {
-            buffer_bits = std::stoi(it_buffer->second);
-        }
-        auto it_rho = config.find("rho");
-        if (it_rho != config.end()) {
-            rho = std::stoi(it_rho->second);
-        }
-        auto it_skip = config.find("skip_available");
-        if (it_skip != config.end()) {
-            skip_available = std::stoi(it_skip->second);
-        }
+    DoubleDeXORDecoder::DoubleDeXORDecoder(const std::string& inputPath, const std::string& configStr)
+        : Decoder(inputPath, configStr) {
+        initializeMethod();
+    }
+
+    DoubleDeXORDecoder::DoubleDeXORDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn)
+        : Decoder(std::move(sharedIn)) {
+        initializeMethod();
+    }
+
+    DoubleDeXORDecoder::DoubleDeXORDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn, const std::string& configStr)
+        : Decoder(std::move(sharedIn), configStr) {
+        initializeMethod();
+    }
+
+    void DoubleDeXORDecoder::initializeMethod() {
+        auto parseInt = [&](const char* key, int current) -> int {
+            auto it = config.find(key);
+            if (it != config.end()) {
+                try {
+                    return std::stoi(it->second);
+                } catch (...) {
+                    return current;
+                }
+            }
+            return current;
+        };
+
+        buffer_bits = parseInt("buffer_bits", buffer_bits);
+        rho = parseInt("rho", rho);
+        skip_available = parseInt("skip_available", skip_available);
 
         if (buffer_bits > 0) {
-            buffer.resize(1 << buffer_bits);
+            buffer.assign(static_cast<size_t>(1) << buffer_bits, 0.0);
             method = std::make_unique<Buffered>(this);
         } else if (skip_available >= 0) {
             method = std::make_unique<Skippable>(this);
@@ -32,66 +52,163 @@ namespace dexor {
         }
     }
 
-    // Main decode method
     double DoubleDeXORDecoder::decodeDouble() {
-        return method->decodeDouble();
+        return method ? method->decodeDouble() : 0.0;
     }
 
-    // ExceptionDecode
     double DoubleDeXORDecoder::ExceptionDecode() {
-        int bias = DeXORTools::getP2(EL - 1) - 1;
-        long long delta = in->readLong(EL) - bias;
-        uint64_t lv;
+        const int bias = DeXORTools::getP2(EL - 1) - 1;
+        const long long delta = blockIn->readLong(EL) - bias;
+        uint64_t lv = 0;
 
         if (delta >= -bias && delta <= bias) {
             previous_exp += delta;
-            long long sign = in->readLong(1);
-            lv = (sign << 63) | (previous_exp << 52) | in->readLong(52);
+            const uint64_t sign = static_cast<uint64_t>(blockIn->readLong(1));
+            const uint64_t mantissa = static_cast<uint64_t>(blockIn->readLong(52));
+            lv = (sign << 63) | (static_cast<uint64_t>(previous_exp) << 52) | mantissa;
 
             if (EL > 1) {
-                contract_step++;
+                const int su_bias = DeXORTools::getP2(EL - 2) - 1;
+                if (delta >= -su_bias && delta <= su_bias) {
+                    contract_step++;
+                } else {
+                    contract_step = 0;
+                }
                 if (contract_step == rho) {
                     EL--;
                     contract_step = 0;
                 }
             }
         } else {
-            lv = in->readLong(64);
-            previous_exp = DeXORTools::segment(lv, 2, 12);
+            lv = static_cast<uint64_t>(blockIn->readLong(64));
+            previous_exp = DeXORTools::segment(static_cast<long long>(lv), 2, 12);
 
             if (EL < 10) {
                 EL++;
                 contract_step = 0;
             }
         }
-        union { uint64_t l; double d; } u;
-        u.l = lv;
-        return u.d;
+
+        union {
+            uint64_t bits;
+            double value;
+        } converter{};
+        converter.bits = lv;
+        return converter.value;
     }
 
-    // Native::decodeDouble
     double DoubleDeXORDecoder::Native::decodeDouble() {
-        if (decoder->skip) {
-            // Placeholder for Decimal_XOR decoding logic
-            decoder->skip = false;
-            decoder->previous_value = 0.0; // This needs actual implementation
-        } else {
-            decoder->previous_value = decoder->ExceptionDecode();
-            decoder->skip = true;
+        auto* dec = decoder;
+        int con = dec->blockIn->readInt(2);
+        if (con == 3) {
+            return dec->ExceptionDecode();
         }
-        return decoder->previous_value;
+
+        if (con == 0 || con == 1) {
+            if (con == 0) {
+                dec->previous_q = dec->blockIn->readInt(5) - 20;
+            }
+            dec->previous_delta = dec->blockIn->readInt(4);
+            const double pow = DeXORTools::getP10(dec->previous_q + dec->previous_delta);
+            const double truncated = static_cast<double>(DeXORTools::truncate(dec->previous_value / pow));
+            dec->previous_alpha = truncated * pow;
+        }
+
+        long long sign = dec->previous_alpha > 0 ? 1LL : -1LL;
+        if (DeXORTools::comp(dec->previous_alpha, 0) == 0) {
+            sign = dec->blockIn->readBoolean() ? 1LL : -1LL;
+        }
+
+        const int bits = DeXORTools::decimalBits(dec->previous_delta);
+        long long magnitude = bits > 0 ? dec->blockIn->readLong(bits) : 0;
+        const double beta = static_cast<double>(sign * magnitude) * DeXORTools::getP10(dec->previous_q);
+
+        dec->previous_value = dec->previous_alpha + beta;
+        return dec->previous_value;
     }
 
-    // Buffered::decodeDouble
     double DoubleDeXORDecoder::Buffered::decodeDouble() {
-        // Placeholder for Buffered decoding logic
-        return 0.0;
+        auto* dec = decoder;
+        int con = dec->blockIn->readInt(2);
+        if (con == 3) {
+            return dec->ExceptionDecode();
+        }
+
+        const size_t capacity = dec->buffer.size();
+        if (dec->buffer_bits > 0 && capacity > 0) {
+            const size_t idx = static_cast<size_t>(dec->blockIn->readInt(dec->buffer_bits)) % capacity;
+            dec->previous_value = dec->buffer[idx];
+        } else {
+            dec->previous_value = 0.0;
+        }
+
+        if (con == 0 || con == 1) {
+            if (con == 0) {
+                dec->previous_q = dec->blockIn->readInt(5) - 20;
+            }
+            dec->previous_delta = dec->blockIn->readInt(4);
+        }
+
+        const double pow = DeXORTools::getP10(dec->previous_q + dec->previous_delta);
+        const double truncated = static_cast<double>(DeXORTools::truncate(dec->previous_value / pow));
+        dec->previous_alpha = truncated * pow;
+
+        long long sign = dec->previous_alpha > 0 ? 1LL : -1LL;
+        if (DeXORTools::comp(dec->previous_alpha, 0) == 0) {
+            sign = dec->blockIn->readBoolean() ? 1LL : -1LL;
+        }
+
+        const int bits = DeXORTools::decimalBits(dec->previous_delta);
+        long long magnitude = bits > 0 ? dec->blockIn->readLong(bits) : 0;
+        const double residual = static_cast<double>(sign * magnitude) * DeXORTools::getP10(dec->previous_q);
+
+        dec->previous_value = dec->previous_alpha + residual;
+
+        if (capacity > 0) {
+            dec->buffer[total] = dec->previous_value;
+            total = (total + 1) % capacity;
+        }
+
+        return dec->previous_value;
     }
 
-    // Skippable::decodeDouble
     double DoubleDeXORDecoder::Skippable::decodeDouble() {
-        // Placeholder for Skippable decoding logic
-        return 0.0;
+        auto* dec = decoder;
+        if (dec->skip) {
+            return dec->ExceptionDecode();
+        }
+
+        int con = dec->blockIn->readInt(2);
+        if (con == 3) {
+            exception_times++;
+            if (dec->skip_available >= 0 && exception_times >= dec->skip_available) {
+                dec->skip = true;
+            }
+            return dec->ExceptionDecode();
+        }
+        exception_times = 0;
+
+        if (con == 0 || con == 1) {
+            if (con == 0) {
+                dec->previous_q = dec->blockIn->readInt(5) - 20;
+            }
+            dec->previous_delta = dec->blockIn->readInt(4);
+            const double pow = DeXORTools::getP10(dec->previous_q + dec->previous_delta);
+            const double truncated = static_cast<double>(DeXORTools::truncate(dec->previous_value / pow));
+            dec->previous_alpha = truncated * pow;
+        }
+
+        long long sign = dec->previous_alpha > 0 ? 1LL : -1LL;
+        if (DeXORTools::comp(dec->previous_alpha, 0) == 0) {
+            sign = dec->blockIn->readBoolean() ? 1LL : -1LL;
+        }
+
+        const int bits = DeXORTools::decimalBits(dec->previous_delta);
+        long long magnitude = bits > 0 ? dec->blockIn->readLong(bits) : 0;
+        const double beta = static_cast<double>(sign * magnitude) * DeXORTools::getP10(dec->previous_q);
+
+        dec->previous_value = dec->previous_alpha + beta;
+        return dec->previous_value;
     }
 
 }

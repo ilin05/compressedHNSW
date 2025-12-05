@@ -3,6 +3,7 @@
 #include "../algorithm.h"
 #include "encoder/double_dexor_encoder.h"
 #include "decoder/double_dexor_decoder.h"
+#include <memory>
 #include <string>
 
 namespace encoding_algorithm {
@@ -21,6 +22,13 @@ namespace dexor {
             encoderFactoryWithConfigMap[DATA_TYPE_DOUBLE] = [](const std::string& path, const std::string& config) {
                 return std::make_unique<DoubleDeXOREncoder>(path, config);
             };
+            // Added factories for shared StreamWriter
+            encoderFactoryWithSharedOutMap[DATA_TYPE_DOUBLE] = [](std::shared_ptr<utils::StreamWriter> sharedOut) {
+                return std::make_unique<DoubleDeXOREncoder>(sharedOut);
+            };
+            encoderFactoryWithSharedOutAndConfigMap[DATA_TYPE_DOUBLE] = [](std::shared_ptr<utils::StreamWriter> sharedOut, const std::string& config) {
+                return std::make_unique<DoubleDeXOREncoder>(sharedOut, config);
+            };
 
             // Decoder
             decoderFactoryMap[DATA_TYPE_DOUBLE] = [](const std::string& path) {
@@ -28,6 +36,13 @@ namespace dexor {
             };
             decoderFactoryWithConfigMap[DATA_TYPE_DOUBLE] = [](const std::string& path, const std::string& config) {
                 return std::make_unique<DoubleDeXORDecoder>(path, config);
+            };
+            // Added factories for shared BlockStreamReader
+            decoderFactoryWithSharedInMap[DATA_TYPE_DOUBLE] = [](std::shared_ptr<utils::BlockStreamReader> sharedIn) {
+                return std::make_unique<DoubleDeXORDecoder>(std::move(sharedIn));
+            };
+            decoderFactoryWithSharedInAndConfigMap[DATA_TYPE_DOUBLE] = [](std::shared_ptr<utils::BlockStreamReader> sharedIn, const std::string& config) {
+                return std::make_unique<DoubleDeXORDecoder>(std::move(sharedIn), config);
             };
         }
     };

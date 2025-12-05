@@ -16,10 +16,10 @@ namespace utils {
         int currentByte = 0;
         int leftBits = 8;
         long long delta_bits = 0;
-
-        std::ofstream outputStream;
+        std::string path;
 
         void writeToDisk(const char* data, int size) {
+            std::ofstream outputStream(path, std::ios::binary | std::ios::app);
             if (outputStream.is_open()) {
                 outputStream.write(data, size);
             }
@@ -46,18 +46,12 @@ namespace utils {
 
     public:
         explicit StreamWriter(const std::string& path) {
-            outputStream.open(path, std::ios::binary);
-            if (!outputStream.is_open()) {
-                throw std::runtime_error("Could not open file for writing: " + path);
-            }
+            this->path = path;
             init();
         }
 
         ~StreamWriter() {
             clear();
-            if (outputStream.is_open()) {
-                outputStream.close();
-            }
         }
 
         long long track_bits() {

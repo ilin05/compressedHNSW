@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <memory>
+#include <cstddef>
 
 namespace encoding_algorithm {
 namespace dexor {
@@ -38,7 +40,7 @@ namespace dexor {
 
         class Buffered : public Method {
         public:
-            int total = 0;
+            size_t total = 0;
             Buffered(DoubleDeXORDecoder* dec) : Method(dec) {}
             double decodeDouble() override;
         };
@@ -60,10 +62,13 @@ namespace dexor {
         int skip_available = -1;
 
         double ExceptionDecode();
+        void initializeMethod();
 
     public:
         DoubleDeXORDecoder(const std::string& inputPath);
         DoubleDeXORDecoder(const std::string& inputPath, const std::string& config);
+        DoubleDeXORDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn);
+        DoubleDeXORDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn, const std::string& config);
 
         double decodeDouble() override;
     };

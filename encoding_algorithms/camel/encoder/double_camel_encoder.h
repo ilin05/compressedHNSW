@@ -23,6 +23,8 @@ namespace camel {
     public:
         explicit DoubleCamelEncoder(const std::string& outputPath);
         DoubleCamelEncoder(const std::string& outputPath, const std::string& config);
+        DoubleCamelEncoder(std::shared_ptr<utils::StreamWriter> sharedOut);
+        DoubleCamelEncoder(std::shared_ptr<utils::StreamWriter> sharedOut, const std::string& config);
 
         std::unique_ptr<Encoder> deepCopy() override;
         int encode(double value) override;

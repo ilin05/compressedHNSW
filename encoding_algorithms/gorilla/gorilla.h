@@ -3,6 +3,7 @@
 #include "../algorithm.h"
 #include "encoder/double_gorilla_encoder.h"
 #include "decoder/double_gorilla_decoder.h"
+#include <memory>
 #include <string>
 
 namespace encoding_algorithm {
@@ -21,6 +22,12 @@ namespace gorilla {
             encoderFactoryWithConfigMap[DATA_TYPE_DOUBLE] = [](const std::string& path, const std::string& config) {
                 return std::make_unique<DoubleGorillaEncoder>(path, config);
             };
+            encoderFactoryWithSharedOutMap[DATA_TYPE_DOUBLE] = [](std::shared_ptr<utils::StreamWriter> sharedOut) {
+                return std::make_unique<DoubleGorillaEncoder>(sharedOut);
+            };
+            encoderFactoryWithSharedOutAndConfigMap[DATA_TYPE_DOUBLE] = [](std::shared_ptr<utils::StreamWriter> sharedOut, const std::string& config) {
+                return std::make_unique<DoubleGorillaEncoder>(sharedOut, config);
+            };
 
             // Decoder
             decoderFactoryMap[DATA_TYPE_DOUBLE] = [](const std::string& path) {
@@ -28,6 +35,12 @@ namespace gorilla {
             };
             decoderFactoryWithConfigMap[DATA_TYPE_DOUBLE] = [](const std::string& path, const std::string& config) {
                 return std::make_unique<DoubleGorillaDecoder>(path, config);
+            };
+            decoderFactoryWithSharedInMap[DATA_TYPE_DOUBLE] = [](std::shared_ptr<utils::BlockStreamReader> sharedIn) {
+                return std::make_unique<DoubleGorillaDecoder>(std::move(sharedIn));
+            };
+            decoderFactoryWithSharedInAndConfigMap[DATA_TYPE_DOUBLE] = [](std::shared_ptr<utils::BlockStreamReader> sharedIn, const std::string& config) {
+                return std::make_unique<DoubleGorillaDecoder>(std::move(sharedIn), config);
             };
         }
     };

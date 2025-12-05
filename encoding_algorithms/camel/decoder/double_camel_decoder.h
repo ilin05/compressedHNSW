@@ -22,6 +22,8 @@ namespace camel {
     public:
         explicit DoubleCamelDecoder(const std::string& inputPath);
         DoubleCamelDecoder(const std::string& inputPath, const std::string& config);
+        DoubleCamelDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn);
+        DoubleCamelDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn, const std::string& config);
 
         double decodeDouble() override;
     };

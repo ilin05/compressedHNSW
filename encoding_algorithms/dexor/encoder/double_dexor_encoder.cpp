@@ -1,4 +1,7 @@
 #include "double_dexor_encoder.h"
+
+#include <cmath>
+#include <cstdlib>
 #include <cstring>
 
 namespace encoding_algorithm {
@@ -9,28 +12,61 @@ namespace dexor {
         method = std::make_unique<Native>(this);
     }
 
-    DoubleDeXOREncoder::DoubleDeXOREncoder(const std::string& outputPath, const std::string& configStr) : Encoder(outputPath, configStr) {
-        auto it_buffer = config.find("buffer_bits");
-        if (it_buffer != config.end()) {
-            buffer_bits = std::stoi(it_buffer->second);
+    DoubleDeXOREncoder::DoubleDeXOREncoder(const std::string& outputPath, const std::string& configStr)
+        : Encoder(outputPath, configStr) {
+        const auto select_method = [this]() {
+            if (buffer_bits > 0) {
+                buffer.assign(1 << buffer_bits, 0.0);
+                method = std::make_unique<Buffered>(this);
+            } else if (skip_available >= 0) {
+                method = std::make_unique<Skippable>(this);
+            } else {
+                method = std::make_unique<Native>(this);
+            }
+        };
+
+        if (auto it = config.find("buffer_bits"); it != config.end()) {
+            buffer_bits = std::stoi(it->second);
         }
-        auto it_rho = config.find("rho");
-        if (it_rho != config.end()) {
-            rho = std::stoi(it_rho->second);
+        if (auto it = config.find("rho"); it != config.end()) {
+            rho = std::stoi(it->second);
         }
-        auto it_skip = config.find("skip_available");
-        if (it_skip != config.end()) {
-            skip_available = std::stoi(it_skip->second);
+        if (auto it = config.find("skip_available"); it != config.end()) {
+            skip_available = std::stoi(it->second);
         }
 
-        if (buffer_bits > 0) {
-            buffer.resize(1 << buffer_bits);
-            method = std::make_unique<Buffered>(this);
-        } else if (skip_available >= 0) {
-            method = std::make_unique<Skippable>(this);
-        } else {
-            method = std::make_unique<Native>(this);
+        select_method();
+    }
+
+    DoubleDeXOREncoder::DoubleDeXOREncoder(std::shared_ptr<utils::StreamWriter> sharedOut)
+        : Encoder(std::move(sharedOut)) {
+        method = std::make_unique<Native>(this);
+    }
+
+    DoubleDeXOREncoder::DoubleDeXOREncoder(std::shared_ptr<utils::StreamWriter> sharedOut, const std::string& configStr)
+        : Encoder(std::move(sharedOut), configStr) {
+        const auto select_method = [this]() {
+            if (buffer_bits > 0) {
+                buffer.assign(1 << buffer_bits, 0.0);
+                method = std::make_unique<Buffered>(this);
+            } else if (skip_available >= 0) {
+                method = std::make_unique<Skippable>(this);
+            } else {
+                method = std::make_unique<Native>(this);
+            }
+        };
+
+        if (auto it = config.find("buffer_bits"); it != config.end()) {
+            buffer_bits = std::stoi(it->second);
         }
+        if (auto it = config.find("rho"); it != config.end()) {
+            rho = std::stoi(it->second);
+        }
+        if (auto it = config.find("skip_available"); it != config.end()) {
+            skip_available = std::stoi(it->second);
+        }
+
+        select_method();
     }
 
     // deepCopy implementation
@@ -103,18 +139,15 @@ namespace dexor {
 
     // Method::Decimal_XOR
     void DoubleDeXOREncoder::Method::Decimal_XOR(double value) {
-        // This is a complex method. A direct port requires careful handling of floating point logic.
-        // The logic from the Java file needs to be translated here.
-        // This is a placeholder for the complex logic.
         int q = DeXORTools::getEnd(value, encoder->previous_q);
 
         int delta = 0;
         double alpha = 0;
-        while(delta < 16){
+        while (delta < 16) {
             double pow = DeXORTools::getP10(q + delta);
             long long a = DeXORTools::truncate(value / pow);
-            long b = DeXORTools::truncate(encoder->previous_value / pow);
-            if(a == b){
+            long long b = DeXORTools::truncate(encoder->previous_value / pow);
+            if (a == b) {
                 alpha = a * pow;
                 break;
             }
@@ -123,24 +156,24 @@ namespace dexor {
 
         double pow = DeXORTools::getP10(q);
         double residual = value - alpha;
-        long long beta = std::round(residual / pow);
+        long long beta = std::llround(residual / pow);
 
-        if(delta >= 16 || DeXORTools::comp(alpha + beta * pow, value, pow) != 0){
+        if (delta >= 16 || DeXORTools::comp(alpha + beta * pow, value, pow) != 0) {
             encoder->out->write(true);
-            encoder->out->write(false);
+            encoder->out->write(true);
             encoder->ExceptionHandle(value);
             return;
         }
 
-        beta = abs(beta);
+        beta = std::llabs(beta);
         bool flag = q == encoder->previous_q;
-        if(flag && delta == encoder->previous_delta){
+        if (flag && delta == encoder->previous_delta) {
             encoder->out->write(true);
             encoder->out->write(false);
-        }else{
+        } else {
             encoder->out->write(false);
             encoder->out->write(flag);
-            if(!flag){
+            if (!flag) {
                 encoder->out->write(q + 20, 5);
                 encoder->previous_q = q;
             }
@@ -148,7 +181,7 @@ namespace dexor {
             encoder->previous_delta = delta;
         }
 
-        if(DeXORTools::comp(alpha, 0) == 0){
+        if (DeXORTools::comp(alpha, 0) == 0) {
             encoder->out->write(value > 0); // sign bit
         }
 
@@ -198,7 +231,7 @@ namespace dexor {
 
         double q_pow = DeXORTools::getP10(q);
         double residual = value - alpha;
-        long long beta = std::round(residual / q_pow);
+        long long beta = std::llround(residual / q_pow);
 
         if (delta >= 16 || DeXORTools::comp(alpha + beta * q_pow, value, q_pow) != 0) {
             encoder->out->write(true);
@@ -207,7 +240,7 @@ namespace dexor {
             return;
         }
 
-        beta = std::abs(beta);
+        beta = std::llabs(beta);
         bool flag = q == encoder->previous_q;
         if (flag && delta == encoder->previous_delta) {
             encoder->out->write(true);
@@ -258,19 +291,21 @@ namespace dexor {
         }
         double pow = DeXORTools::getP10(q);
         double residual = value - alpha;
-        long long beta = std::round(residual / pow);
+        long long beta = std::llround(residual / pow);
 
         if (delta >= 16 || DeXORTools::comp(alpha + beta * pow, value, pow) != 0) {
             encoder->out->write(true);
             encoder->out->write(true);
             exception_times++;
-            if (exception_times >= encoder->skip_available) encoder->skip = true;
+            if (exception_times >= encoder->skip_available) {
+                encoder->skip = true;
+            }
             encoder->ExceptionHandle(value);
             return;
         }
 
         exception_times = 0;
-        beta = std::abs(beta);
+        beta = std::llabs(beta);
         bool flag = q == encoder->previous_q;
         if (flag && delta == encoder->previous_delta) {
             encoder->out->write(true);

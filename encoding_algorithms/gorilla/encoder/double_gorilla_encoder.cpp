@@ -6,6 +6,12 @@ namespace gorilla {
 
     DoubleGorillaEncoder::DoubleGorillaEncoder(const std::string& outputPath) : Encoder(outputPath) {}
     DoubleGorillaEncoder::DoubleGorillaEncoder(const std::string& outputPath, const std::string& config) : Encoder(outputPath, config) {}
+    // 用StreamWriter构造Encoder
+    DoubleGorillaEncoder::DoubleGorillaEncoder(std::shared_ptr<utils::StreamWriter> sharedOut)
+        : Encoder(std::move(sharedOut)) {}
+
+    DoubleGorillaEncoder::DoubleGorillaEncoder(std::shared_ptr<utils::StreamWriter> sharedOut, const std::string& config)
+        : Encoder(std::move(sharedOut), config) {}
 
     std::unique_ptr<Encoder> DoubleGorillaEncoder::deepCopy() {
         auto copy = std::make_unique<DoubleGorillaEncoder>(this->outputPath);

@@ -18,6 +18,8 @@ namespace gorilla {
     public:
         DoubleGorillaDecoder(const std::string& inputPath);
         DoubleGorillaDecoder(const std::string& inputPath, const std::string& config);
+        DoubleGorillaDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn);
+        DoubleGorillaDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn, const std::string& config);
 
         double decodeDouble() override;
     };

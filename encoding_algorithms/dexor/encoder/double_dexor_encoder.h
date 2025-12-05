@@ -69,6 +69,8 @@ namespace dexor {
     public:
         DoubleDeXOREncoder(const std::string& outputPath);
         DoubleDeXOREncoder(const std::string& outputPath, const std::string& config);
+        DoubleDeXOREncoder(std::shared_ptr<utils::StreamWriter> sharedOut);
+        DoubleDeXOREncoder(std::shared_ptr<utils::StreamWriter> sharedOut, const std::string& config);
 
         std::unique_ptr<Encoder> deepCopy() override;
 

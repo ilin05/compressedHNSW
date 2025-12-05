@@ -24,7 +24,7 @@ namespace encoding_algorithm {
 
     class Encoder {
     protected:
-        std::unique_ptr<utils::StreamWriter> out;
+        std::shared_ptr<utils::StreamWriter> out;
         std::map<std::string, double> meta;
         std::map<std::string, std::string> config;
         std::string outputPath;
@@ -61,14 +61,26 @@ namespace encoding_algorithm {
 
 
     public:
+        // 默认构造函数
+        Encoder() = default;
+
         Encoder(const std::string& outputPath) : outputPath(outputPath) {
-            this->out = std::make_unique<utils::StreamWriter>(outputPath);
+            this->out = std::make_shared<utils::StreamWriter>(outputPath);
         }
 
         Encoder(const std::string& outputPath, const std::string& configStr) : outputPath(outputPath) {
-            this->out = std::make_unique<utils::StreamWriter>(outputPath);
+            this->out = std::make_shared<utils::StreamWriter>(outputPath);
             this->config = parseStringToMap(configStr);
         }
+
+        // 多个Encoder共用一个StreamWriter时使用
+        Encoder(std::shared_ptr<utils::StreamWriter> sharedOut, const std::string& configStr)
+            : out(std::move(sharedOut)) {
+            this->config = parseStringToMap(configStr);
+        }
+
+        Encoder(std::shared_ptr<utils::StreamWriter> sharedOut)
+            : out(std::move(sharedOut)) {}
 
         virtual ~Encoder() = default;
 
