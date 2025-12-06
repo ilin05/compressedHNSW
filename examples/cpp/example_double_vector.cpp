@@ -24,16 +24,21 @@ int main() {
     hnswlib::HierarchicalNSW<double>* alg_hnsw = new hnswlib::HierarchicalNSW<double>(&space, max_elements);
 
     double* data_ptr = new double[dim * max_elements];
-    for (int i = 0; i < rows; i++) {
+    for (int i = 0; i < std::min(rows, max_elements); i++) {
         for (int j = 0; j < cols; j++) {
             data_ptr[i * dim + j] = data[i][j];
         }
     }
 
+    // std::cout << "Data loaded into array." << std::endl;
+
     // Add data to index
     for (int i = 0; i < max_elements; i++) {
         alg_hnsw->addPoint(data_ptr + i * dim, i);
+        // std::cout << "Added point " << i << std::endl;
     }
+
+    // std::cout << "Index built with " << max_elements << " elements." << std::endl;
 
     // Query the elements for themselves and measure recall
     float correct = 0;

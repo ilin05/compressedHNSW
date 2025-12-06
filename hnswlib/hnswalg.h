@@ -47,6 +47,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     size_t size_links_level0_{0};
     size_t offsetData_{0}, offsetLevel0_{0}, label_offset_{ 0 };
 
+    // 记录level0每个element数据的开始位置
+    std::vector<size_t> level0_element_start_positions_;
+
     char *data_level0_memory_{nullptr};
     char **linkLists_{nullptr};
     std::vector<int> element_levels_;  // keeps level of each element
@@ -95,6 +98,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         bool allow_replace_deleted = false)
         : label_op_locks_(MAX_LABEL_OPERATION_LOCKS),
             link_list_locks_(max_elements),
+            level0_element_start_positions_(max_elements),
             element_levels_(max_elements),
             allow_replace_deleted_(allow_replace_deleted) {
         max_elements_ = max_elements;
@@ -119,8 +123,11 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
         size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
         size_data_per_element_ = size_links_level0_ + data_size_ + sizeof(labeltype);
-        offsetData_ = size_links_level0_;
-        label_offset_ = size_links_level0_ + data_size_;
+        // offsetData_ = size_links_level0_;
+        // label_offset_ = size_links_level0_ + data_size_;
+        // 调换label和data的位置
+        offsetData_ = sizeof(labeltype) + size_links_level0_;
+        label_offset_ = size_links_level0_;
         offsetLevel0_ = 0;
 
         data_level0_memory_ = (char *) malloc(max_elements_ * size_data_per_element_);
@@ -184,24 +191,24 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
     inline labeltype getExternalLabel(tableint internal_id) const {
         labeltype return_label;
-        memcpy(&return_label, (data_level0_memory_ + internal_id * size_data_per_element_ + label_offset_), sizeof(labeltype));
+        memcpy(&return_label, (data_level0_memory_ + level0_element_start_positions_[internal_id] + label_offset_), sizeof(labeltype));
         return return_label;
     }
 
 
     inline void setExternalLabel(tableint internal_id, labeltype label) const {
-        memcpy((data_level0_memory_ + internal_id * size_data_per_element_ + label_offset_), &label, sizeof(labeltype));
+        memcpy((data_level0_memory_ + level0_element_start_positions_[internal_id] + label_offset_), &label, sizeof(labeltype));
     }
 
 
     inline labeltype *getExternalLabeLp(tableint internal_id) const {
-        return (labeltype *) (data_level0_memory_ + internal_id * size_data_per_element_ + label_offset_);
+        return (labeltype *) (data_level0_memory_ + level0_element_start_positions_[internal_id] + label_offset_);
     }
 
     // 数据存储在第0层，每个element的大小都是固定的，size_data_per_element。可以通过HNSW内部的id随机读取数据
     // 如果要使用差分编码压缩data，将无法通过简单的随机读取获取数据。或许需要页表之类的结构进行索引；同时，data需要解压缩。可以在每个element的开头记录上一个data的internal_id，接着回溯到第0个data，然后依次解压缩
     inline char *getDataByInternalId(tableint internal_id) const {
-        return (data_level0_memory_ + internal_id * size_data_per_element_ + offsetData_);
+        return (data_level0_memory_ + level0_element_start_positions_[internal_id] + offsetData_);
     }
 
 
@@ -254,6 +261,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         // enterpoint加入已访问列表
         visited_array[ep_id] = visited_array_tag;
 
+        // std::cout << "Searching base layer " << layer << " from entry point " << ep_id << std::endl;
+
         // 当候选列表不为空时 while |C|>0
         while (!candidateSet.empty()) {
             // 从C中取出距离q最近的元素
@@ -286,26 +295,38 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             // datal表示当前元素第一个邻居的label
             tableint *datal = (tableint *) (data + 1);
 #ifdef USE_SSE
-            _mm_prefetch((char *) (visited_array + *(data + 1)), _MM_HINT_T0);
-            _mm_prefetch((char *) (visited_array + *(data + 1) + 64), _MM_HINT_T0);
-            _mm_prefetch(getDataByInternalId(*datal), _MM_HINT_T0);
-            _mm_prefetch(getDataByInternalId(*(datal + 1)), _MM_HINT_T0);
+            if (size > 0) {
+                _mm_prefetch((char *) (visited_array + *(data + 1)), _MM_HINT_T0);
+                _mm_prefetch((char *) (visited_array + *(data + 1) + 64), _MM_HINT_T0);
+                _mm_prefetch(getDataByInternalId(*datal), _MM_HINT_T0);
+            }
+            if (size > 1) {
+                _mm_prefetch(getDataByInternalId(*(datal + 1)), _MM_HINT_T0);
+            }
 #endif
 
+            // std::cout << "Evaluating " << size << " neighbors." << std::endl;
             // 对于layer层中的当前元素的每一个邻居candidate
             for (size_t j = 0; j < size; j++) {
                 tableint candidate_id = *(datal + j);
 //                    if (candidate_id == 0) continue;
 #ifdef USE_SSE
-                _mm_prefetch((char *) (visited_array + *(datal + j + 1)), _MM_HINT_T0);
-                _mm_prefetch(getDataByInternalId(*(datal + j + 1)), _MM_HINT_T0);
+                if (j + 1 < size) {
+                    // std::cout << "Prefetching data for neighbor " << j + 1 << std::endl;
+                    _mm_prefetch((char *) (visited_array + *(datal + j + 1)), _MM_HINT_T0);
+                    // std::cout << "_mm_prefetch visited_array done." << std::endl;
+                    _mm_prefetch(getDataByInternalId(*(datal + j + 1)), _MM_HINT_T0);
+                    // std::cout << "_mm_prefetch data done." << std::endl;
+                }
 #endif
                 // 如果candidate已经访问过（对应论文中，如果e属于v，无操作，循环次数加1）
                 if (visited_array[candidate_id] == visited_array_tag) continue;
                 // 没有访问过，将已访问列表中并入candidate
                 visited_array[candidate_id] = visited_array_tag;
                 // 根据candidate的id号获取这个candidate元素，也就是currObj1
+                // std::cout << "Visiting candidate " << candidate_id << std::endl;
                 char *currObj1 = (getDataByInternalId(candidate_id));
+                // std::cout << "Data for candidate retrieved." << std::endl;
                 // 计算currObj1到data point之间的距离，对应于论文中的distance(e, q)
                 dist_t dist1 = fstdistfunc_(data_point, currObj1, dist_func_param_);
                 // 取出top_candidates中距离data point最远的元素并比较大小
@@ -332,6 +353,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                     }
                 }
             }
+
+            // std::cout << "Top candidates size: " << top_candidates.size() << ", lower bound: " << lowerBound << std::endl;
         }
         visited_list_pool_->releaseVisitedList(vl);
 
@@ -403,19 +426,23 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             }
 
 #ifdef USE_SSE
-            _mm_prefetch((char *) (visited_array + *(data + 1)), _MM_HINT_T0);
-            _mm_prefetch((char *) (visited_array + *(data + 1) + 64), _MM_HINT_T0);
-            _mm_prefetch(data_level0_memory_ + (*(data + 1)) * size_data_per_element_ + offsetData_, _MM_HINT_T0);
-            _mm_prefetch((char *) (data + 2), _MM_HINT_T0);
+            if (size > 0) {
+                _mm_prefetch((char *) (visited_array + *(data + 1)), _MM_HINT_T0);
+                _mm_prefetch((char *) (visited_array + *(data + 1) + 64), _MM_HINT_T0);
+                _mm_prefetch(data_level0_memory_ + level0_element_start_positions_[*(data + 1)] + offsetData_, _MM_HINT_T0);
+                _mm_prefetch((char *) (data + 2), _MM_HINT_T0);
+            }
 #endif
 
             for (size_t j = 1; j <= size; j++) {
                 int candidate_id = *(data + j);
 //                    if (candidate_id == 0) continue;
 #ifdef USE_SSE
-                _mm_prefetch((char *) (visited_array + *(data + j + 1)), _MM_HINT_T0);
-                _mm_prefetch(data_level0_memory_ + (*(data + j + 1)) * size_data_per_element_ + offsetData_,
-                                _MM_HINT_T0);  ////////////
+                if (j < size) {
+                    _mm_prefetch((char *) (visited_array + *(data + j + 1)), _MM_HINT_T0);
+                    _mm_prefetch(data_level0_memory_ + level0_element_start_positions_[*(data + j + 1)] + offsetData_,
+                                    _MM_HINT_T0);  ////////////
+                }
 #endif
                 if (!(visited_array[candidate_id] == visited_array_tag)) {
                     visited_array[candidate_id] = visited_array_tag;
@@ -433,9 +460,11 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                     if (flag_consider_candidate) {
                         candidate_set.emplace(-dist, candidate_id);
 #ifdef USE_SSE
-                        _mm_prefetch(data_level0_memory_ + candidate_set.top().second * size_data_per_element_ +
-                                        offsetLevel0_,  ///////////
-                                        _MM_HINT_T0);  ////////////////////////
+                        if (candidate_set.size() > 0) {
+                            _mm_prefetch(data_level0_memory_ + level0_element_start_positions_[candidate_set.top().second] +
+                                            offsetLevel0_,  ///////////
+                                            _MM_HINT_T0);  ////////////////////////
+                        }
 #endif
 
                         if (bare_bone_search || 
@@ -533,12 +562,12 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
 
     linklistsizeint *get_linklist0(tableint internal_id) const {
-        return (linklistsizeint *) (data_level0_memory_ + internal_id * size_data_per_element_ + offsetLevel0_);
+        return (linklistsizeint *) (data_level0_memory_ + level0_element_start_positions_[internal_id] + offsetLevel0_);
     }
 
 
     linklistsizeint *get_linklist0(tableint internal_id, char *data_level0_memory_) const {
-        return (linklistsizeint *) (data_level0_memory_ + internal_id * size_data_per_element_ + offsetLevel0_);
+        return (linklistsizeint *) (data_level0_memory_ + level0_element_start_positions_[internal_id] + offsetLevel0_);
     }
 
 
@@ -687,6 +716,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         visited_list_pool_.reset(new VisitedListPool(1, new_max_elements));
 
         element_levels_.resize(new_max_elements);
+        level0_element_start_positions_.resize(new_max_elements);
 
         std::vector<std::mutex>(new_max_elements).swap(link_list_locks_);
 
@@ -751,6 +781,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         writeBinaryPOD(output, mult_);
         writeBinaryPOD(output, ef_construction_);
 
+        output.write(reinterpret_cast<const char*>(level0_element_start_positions_.data()), cur_element_count * sizeof(size_t));
+
         output.write(data_level0_memory_, cur_element_count * size_data_per_element_);
 
         for (size_t i = 0; i < cur_element_count; i++) {
@@ -794,6 +826,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         readBinaryPOD(input, M_);
         readBinaryPOD(input, mult_);
         readBinaryPOD(input, ef_construction_);
+
+        level0_element_start_positions_.resize(max_elements_);
+        input.read(reinterpret_cast<char*>(level0_element_start_positions_.data()), cur_element_count * sizeof(size_t));
 
         data_size_ = s->get_data_size();
         fstdistfunc_ = s->get_dist_func();
@@ -841,9 +876,11 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         if (linkLists_ == nullptr)
             throw std::runtime_error("Not enough memory: loadIndex failed to allocate linklists");
         element_levels_ = std::vector<int>(max_elements);
+        level0_element_start_positions_ = std::vector<size_t>(max_elements);
         revSize_ = 1.0 / mult_;
         ef_ = 10;
         for (size_t i = 0; i < cur_element_count; i++) {
+            level0_element_start_positions_[i] = i * size_data_per_element_;
             label_lookup_[getExternalLabel(i)] = i;
             unsigned int linkListSize;
             readBinaryPOD(input, linkListSize);
@@ -1253,12 +1290,17 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         tableint currObj = enterpoint_node_;
         tableint enterpoint_copy = enterpoint_node_;
 
+        // std::cout << "Adding point " << cur_c << " with label " << label << " at level " << curlevel << std::endl;
+
         // 每个节点的数据大小是一定的，size_data_per_element_。在这里为level0分配内存
-        memset(data_level0_memory_ + cur_c * size_data_per_element_ + offsetLevel0_, 0, size_data_per_element_);
+        level0_element_start_positions_[cur_c] = cur_c * size_data_per_element_;
+        memset(data_level0_memory_ + level0_element_start_positions_[cur_c] + offsetLevel0_, 0, size_data_per_element_);
 
         // Initialisation of the data and label
         memcpy(getExternalLabeLp(cur_c), &label, sizeof(labeltype));
         memcpy(getDataByInternalId(cur_c), data_point, data_size_);
+
+        // std::cout << "Data copied for point " << cur_c << std::endl;
 
         if (curlevel) {
             // 为非level0的层分配内存
@@ -1269,6 +1311,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             // 初始化link list为空
             memset(linkLists_[cur_c], 0, size_links_per_element_ * curlevel + 1);
         }
+
+        // std::cout << "Link list allocated for point " << cur_c << std::endl;
 
         if ((signed)currObj != -1) {
             if (curlevel < maxlevelcopy) {
@@ -1299,6 +1343,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 }
             }
 
+            // std::cout << "Entering level <= maxlevel loop for point " << cur_c << " at level " << curlevel << std::endl;
+
             bool epDeleted = isMarkedDeleted(enterpoint_copy);
             for (int level = std::min(curlevel, maxlevelcopy); level >= 0; level--) {
                 if (level > maxlevelcopy || level < 0)  // possible? 这不可能吧？
@@ -1307,6 +1353,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 // 在level层找到与data_point距离最近的ef个节点，存储在列表中
                 std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(
                         currObj, data_point, level);
+
+                // std::cout << "Point " << cur_c << " found " << top_candidates.size() << " candidates at level " << level << std::endl;
                 if (epDeleted) {
                     top_candidates.emplace(fstdistfunc_(data_point, getDataByInternalId(enterpoint_copy), dist_func_param_), enterpoint_copy);
                     if (top_candidates.size() > ef_construction_)
@@ -1315,6 +1363,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 // 在level层建立data_point与top_candidates中每一个元素的连接
                 currObj = mutuallyConnectNewElement(data_point, cur_c, top_candidates, level, false);
             }
+
+            // std::cout << "Point " << cur_c << " connected up to level " << curlevel << std::endl;
         } else {
             // Do nothing for the first element
             enterpoint_node_ = 0;
