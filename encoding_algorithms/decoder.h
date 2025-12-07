@@ -2,6 +2,8 @@
 
 #include "../examples/utils/stream_reader.h"
 #include "../examples/utils/block_stream_reader.h"
+#include "../examples/utils/memory_block_stream_reader.h"
+#include "../examples/utils/base_block_stream_reader.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -26,7 +28,7 @@ namespace encoding_algorithm {
     class Decoder {
     protected:
         std::unique_ptr<utils::StreamReader> in;
-        std::shared_ptr<utils::BlockStreamReader> blockIn;
+        std::shared_ptr<utils::BaseBlockStreamReader> blockIn;
         std::map<std::string, std::string> config;
 
         std::map<std::string, std::string> parseStringToMap(const std::string& input) {
@@ -65,12 +67,12 @@ namespace encoding_algorithm {
         }
 
         // 多个Decoder共用一个BlockStreamReader时使用
-        Decoder(std::shared_ptr<utils::BlockStreamReader> sharedIn, const std::string& configStr)
+        Decoder(std::shared_ptr<utils::BaseBlockStreamReader> sharedIn, const std::string& configStr)
             : blockIn(std::move(sharedIn)) {
             this->config = parseStringToMap(configStr);
         }
 
-        Decoder(std::shared_ptr<utils::BlockStreamReader> sharedIn)
+        Decoder(std::shared_ptr<utils::BaseBlockStreamReader> sharedIn)
             : blockIn(std::move(sharedIn)) {}
 
         virtual ~Decoder() = default;

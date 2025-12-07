@@ -25,8 +25,8 @@ namespace elf {
     public:
         DoubleElfEncoder(const std::string& outputPath);
         DoubleElfEncoder(const std::string& outputPath, const std::string& config);
-        DoubleElfEncoder(std::shared_ptr<utils::StreamWriter> sharedOut);
-        DoubleElfEncoder(std::shared_ptr<utils::StreamWriter> sharedOut, const std::string& config);
+        DoubleElfEncoder(std::shared_ptr<utils::BaseStreamWriter> sharedOut);
+        DoubleElfEncoder(std::shared_ptr<utils::BaseStreamWriter> sharedOut, const std::string& config);
 
         std::unique_ptr<Encoder> deepCopy() override;
         int encode(double value) override;

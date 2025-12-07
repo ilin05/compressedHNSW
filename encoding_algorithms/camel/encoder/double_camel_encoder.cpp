@@ -11,10 +11,10 @@ namespace camel {
     DoubleCamelEncoder::DoubleCamelEncoder(const std::string& outputPath, const std::string& config)
         : Encoder(outputPath, config) {}
     
-    DoubleCamelEncoder::DoubleCamelEncoder(std::shared_ptr<utils::StreamWriter> sharedOut)
+    DoubleCamelEncoder::DoubleCamelEncoder(std::shared_ptr<utils::BaseStreamWriter> sharedOut)
         : Encoder(std::move(sharedOut)) {}
 
-    DoubleCamelEncoder::DoubleCamelEncoder(std::shared_ptr<utils::StreamWriter> sharedOut, const std::string& config)
+    DoubleCamelEncoder::DoubleCamelEncoder(std::shared_ptr<utils::BaseStreamWriter> sharedOut, const std::string& config)
         : Encoder(std::move(sharedOut), config) {}
 
     std::unique_ptr<Encoder> DoubleCamelEncoder::deepCopy() {

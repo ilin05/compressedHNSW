@@ -90,6 +90,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(vector_compress examples/cpp/vector_compress.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(vector_compress hnswlib)
 
+    add_executable(memory_vector_compress examples/cpp/memory_vector_compress.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(memory_vector_compress hnswlib)
+
     add_executable(single_vector_decompress examples/cpp/single_vector_decompress.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(single_vector_decompress hnswlib)
 

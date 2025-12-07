@@ -9,6 +9,9 @@
 #include <unordered_set>
 #include <list>
 #include <memory>
+#include "../examples/utils/memory_block_stream_reader.h"
+#include "../examples/utils/memory_stream_writer.h"
+#include "../encoding_algorithms/algorithms_manager.h"
 
 namespace hnswlib {
 typedef unsigned int tableint;

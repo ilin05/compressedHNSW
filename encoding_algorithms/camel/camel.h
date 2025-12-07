@@ -21,10 +21,10 @@ namespace camel {
             encoderFactoryWithConfigMap[DATA_TYPE_DOUBLE] = [](const std::string& path, const std::string& config) {
                 return std::make_unique<DoubleCamelEncoder>(path, config);
             };
-            encoderFactoryWithSharedOutMap[DATA_TYPE_DOUBLE] = [](std::shared_ptr<utils::StreamWriter> sharedOut) {
+            encoderFactoryWithSharedOutMap[DATA_TYPE_DOUBLE] = [](std::shared_ptr<utils::BaseStreamWriter> sharedOut) {
                 return std::make_unique<DoubleCamelEncoder>(sharedOut);
             };
-            encoderFactoryWithSharedOutAndConfigMap[DATA_TYPE_DOUBLE] = [](std::shared_ptr<utils::StreamWriter> sharedOut, const std::string& config) {
+            encoderFactoryWithSharedOutAndConfigMap[DATA_TYPE_DOUBLE] = [](std::shared_ptr<utils::BaseStreamWriter> sharedOut, const std::string& config) {
                 return std::make_unique<DoubleCamelEncoder>(sharedOut, config);
             };
 
@@ -34,10 +34,10 @@ namespace camel {
             decoderFactoryWithConfigMap[DATA_TYPE_DOUBLE] = [](const std::string& path, const std::string& config) {
                 return std::make_unique<DoubleCamelDecoder>(path, config);
             };
-            decoderFactoryWithSharedInMap[DATA_TYPE_DOUBLE] = [](std::shared_ptr<utils::BlockStreamReader> sharedIn) {
+            decoderFactoryWithSharedInMap[DATA_TYPE_DOUBLE] = [](std::shared_ptr<utils::BaseBlockStreamReader> sharedIn) {
                 return std::make_unique<DoubleCamelDecoder>(std::move(sharedIn));
             };
-            decoderFactoryWithSharedInAndConfigMap[DATA_TYPE_DOUBLE] = [](std::shared_ptr<utils::BlockStreamReader> sharedIn, const std::string& config) {
+            decoderFactoryWithSharedInAndConfigMap[DATA_TYPE_DOUBLE] = [](std::shared_ptr<utils::BaseBlockStreamReader> sharedIn, const std::string& config) {
                 return std::make_unique<DoubleCamelDecoder>(std::move(sharedIn), config);
             };
         }

@@ -67,8 +67,8 @@ namespace dexor {
     public:
         DoubleDeXORDecoder(const std::string& inputPath);
         DoubleDeXORDecoder(const std::string& inputPath, const std::string& config);
-        DoubleDeXORDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn);
-        DoubleDeXORDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn, const std::string& config);
+        DoubleDeXORDecoder(std::shared_ptr<utils::BaseBlockStreamReader> sharedIn);
+        DoubleDeXORDecoder(std::shared_ptr<utils::BaseBlockStreamReader> sharedIn, const std::string& config);
 
         double decodeDouble() override;
     };

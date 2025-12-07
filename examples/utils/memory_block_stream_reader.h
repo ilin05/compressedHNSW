@@ -3,24 +3,22 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
-#include <fstream>
-#include <string>
 #include <vector>
 #include "base_block_stream_reader.h"
 
 namespace utils {
 
-    class BlockStreamReader : public BaseBlockStreamReader {
+    class MemoryBlockStreamReader : public BaseBlockStreamReader {
     private:
-        std::string fileName;
+        const unsigned char* data_source;
         std::vector<unsigned char> buffer;
         size_t cachedBytes = 0;
         size_t pointer = 0;
         int leftBits = 8;
 
     public:
-        BlockStreamReader(const std::string& path, size_t dataSize)
-            : fileName(path), buffer(std::max<size_t>(dataSize, 1), 0) {}
+        MemoryBlockStreamReader(const unsigned char* data)
+            : data_source(data), buffer(1024, 0) {}
 
         void init() override {
             pointer = 0;
@@ -29,13 +27,6 @@ namespace utils {
 
         void cacheData(int beginBit, int endBit) override {
             if (endBit <= beginBit) {
-                cachedBytes = 0;
-                init();
-                return;
-            }
-
-            std::ifstream input(fileName, std::ios::binary);
-            if (!input) {
                 cachedBytes = 0;
                 init();
                 return;
@@ -51,21 +42,11 @@ namespace utils {
                 return;
             }
 
-            bytesToRead = std::min(bytesToRead, buffer.size());
-
-            input.seekg(static_cast<std::streamoff>(byteBegin), std::ios::beg);
-            if (!input) {
-                cachedBytes = 0;
-                init();
-                return;
+            if (buffer.size() < bytesToRead) {
+                buffer.resize(bytesToRead);
             }
 
-            input.read(reinterpret_cast<char*>(buffer.data()), static_cast<std::streamsize>(bytesToRead));
-            cachedBytes = static_cast<size_t>(input.gcount());
-
-            if (cachedBytes < bytesToRead) {
-                std::fill(buffer.begin() + cachedBytes, buffer.begin() + bytesToRead, 0);
-            }
+            std::memcpy(buffer.data(), data_source + byteBegin, bytesToRead);
             cachedBytes = bytesToRead;
 
             int offset = beginBit % 8;
@@ -77,6 +58,15 @@ namespace utils {
                 }
             }
 
+            init();
+        }
+
+        void resetBuffer(const unsigned char* ptr, size_t size) {
+            if (buffer.size() < size) {
+                buffer.resize(size);
+            }
+            std::memcpy(buffer.data(), ptr, size);
+            cachedBytes = size;
             init();
         }
 
@@ -105,11 +95,8 @@ namespace utils {
             return static_cast<int>(readLong(size));
         }
 
-        float readFloat(int size) {
-            std::uint32_t bits = static_cast<std::uint32_t>(readLong(size));
-            float value;
-            std::memcpy(&value, &bits, sizeof(float));
-            return value;
+        bool readBoolean() override {
+            return readLong(1) > 0;
         }
 
         double readDouble(int size) override {
@@ -118,10 +105,5 @@ namespace utils {
             std::memcpy(&value, &bits, sizeof(double));
             return value;
         }
-
-        bool readBoolean() override {
-            return readLong(1) > 0;
-        }
     };
-
-}  // namespace utils
+}

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "../examples/utils/stream_writer.h"
+#include "../examples/utils/memory_stream_writer.h"
+#include "../examples/utils/base_stream_writer.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -24,7 +26,7 @@ namespace encoding_algorithm {
 
     class Encoder {
     protected:
-        std::shared_ptr<utils::StreamWriter> out;
+        std::shared_ptr<utils::BaseStreamWriter> out;
         std::map<std::string, double> meta;
         std::map<std::string, std::string> config;
         std::string outputPath;
@@ -74,12 +76,12 @@ namespace encoding_algorithm {
         }
 
         // 多个Encoder共用一个StreamWriter时使用
-        Encoder(std::shared_ptr<utils::StreamWriter> sharedOut, const std::string& configStr)
+        Encoder(std::shared_ptr<utils::BaseStreamWriter> sharedOut, const std::string& configStr)
             : out(std::move(sharedOut)) {
             this->config = parseStringToMap(configStr);
         }
 
-        Encoder(std::shared_ptr<utils::StreamWriter> sharedOut)
+        Encoder(std::shared_ptr<utils::BaseStreamWriter> sharedOut)
             : out(std::move(sharedOut)) {}
 
         virtual ~Encoder() = default;

@@ -23,8 +23,8 @@ namespace elf {
     public:
         DoubleElfDecoder(const std::string& inputPath);
         DoubleElfDecoder(const std::string& inputPath, const std::string& config);
-        DoubleElfDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn);
-        DoubleElfDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn, const std::string& config);
+        DoubleElfDecoder(std::shared_ptr<utils::BaseBlockStreamReader> sharedIn);
+        DoubleElfDecoder(std::shared_ptr<utils::BaseBlockStreamReader> sharedIn, const std::string& config);
 
         double decodeDouble() override;
     };
