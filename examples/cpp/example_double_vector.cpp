@@ -14,7 +14,7 @@ int main() {
 
 
     int dim = cols;               // Dimension of the elements
-    int max_elements = rows;   // Maximum number of elements, should be known beforehand
+    int max_elements = 10;   // Maximum number of elements, should be known beforehand
     int M = 16;                 // Tightly connected with internal dimensionality of the data
                                 // strongly affects the memory consumption
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
@@ -35,7 +35,7 @@ int main() {
     // Add data to index
     for (int i = 0; i < max_elements; i++) {
         alg_hnsw->addPoint(data_ptr + i * dim, i);
-        // std::cout << "Added point " << i << std::endl;
+        std::cout << "Added point " << i << std::endl;
     }
 
     // std::cout << "Index built with " << max_elements << " elements." << std::endl;
