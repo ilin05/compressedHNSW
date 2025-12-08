@@ -1412,79 +1412,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         tableint currObj = enterpoint_node_;
         tableint enterpoint_copy = enterpoint_node_;
 
-        // std::cout << "Adding point " << cur_c << " with label " << label << " at level " << curlevel << std::endl;
-
-        // 每个节点的数据大小是一定的，size_data_per_element_。在这里为level0分配内存
-        // level0_element_start_positions_[cur_c] = cur_c * size_data_per_element_;
-        // memset(data_level0_memory_ + level0_element_start_positions_[cur_c] + offsetLevel0_, 0, size_data_per_element_);
-
-        // Compression Logic
-        size_t dim = data_size_ / sizeof(double);
-        tableint prenode = -1;
-        if (cur_element_count > 0 && enterpoint_node_ != -1) {
-            prenode = enterpoint_node_; 
-        }
-        
-        std::vector<double> prenode_data(dim, 0.0);
-        if (prenode != (tableint)-1) {
-            prenode_data = getOriginalDataByInternalId(prenode);
-        }
-        
-        std::vector<char> compressed_buffer;
-        auto writer = std::make_shared<utils::MemoryStreamWriter>(&compressed_buffer);
-        
-        std::vector<std::unique_ptr<encoding_algorithm::Encoder>> encoders;
-        for(size_t i=0; i<dim; ++i) {
-            encoders.push_back(encoding_algorithm::AlgorithmsManager::getEncoder("Double", "DeXOR", writer));
-        }
-        
-        if (prenode != (tableint)-1) {
-            std::vector<char> dummy_buffer;
-            writer->setBuffer(&dummy_buffer);
-            for(size_t i=0; i<dim; ++i) {
-                encoders[i]->encode(prenode_data[i]);
-            }
-            writer->align();
-            writer->setBuffer(&compressed_buffer);
-        }
-        
-        const double* data_arr = (const double*)data_point;
-        for(size_t i=0; i<dim; ++i) {
-            encoders[i]->encode(data_arr[i]);
-        }
-        writer->align();
-
-        std::cout << "compressed buffer size for point " << cur_c << " is " << compressed_buffer.size() << std::endl;
-        
-        size_t start_pos = data_level0_memory_.size();
-        level0_element_start_positions_[cur_c] = start_pos;
-        
-        size_t total_size = offsetData_ + compressed_buffer.size();
-        data_level0_memory_.resize(start_pos + total_size);
-        
-        memset(data_level0_memory_.data() + start_pos, 0, size_links_level0_);
-        setPrenodeId(cur_c, prenode);
-        setExternalLabel(cur_c, label);
-        memcpy(data_level0_memory_.data() + start_pos + offsetData_, compressed_buffer.data(), compressed_buffer.size());
-
-        // Initialisation of the data and label
-        // memcpy(getExternalLabeLp(cur_c), &label, sizeof(labeltype));
-        // memcpy(getDataByInternalId(cur_c), data_point, data_size_);
-
-        // std::cout << "Data copied for point " << cur_c << std::endl;
-
-        if (curlevel) {
-            // 为非level0的层分配内存
-            linkLists_[cur_c] = (char *) malloc(size_links_per_element_ * curlevel + 1);
-            if (linkLists_[cur_c] == nullptr)
-                throw std::runtime_error("Not enough memory: addPoint failed to allocate linklist");
-            
-            // 初始化link list为空
-            memset(linkLists_[cur_c], 0, size_links_per_element_ * curlevel + 1);
-        }
-
-        // std::cout << "Link list allocated for point " << cur_c << std::endl;
-
         if ((signed)currObj != -1) {
             if (curlevel < maxlevelcopy) {
                 std::vector<double> vec_curr = getOriginalDataByInternalId(currObj);
@@ -1515,7 +1442,107 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                     }
                 }
             }
+        }
 
+        // Compression Logic
+        size_t dim = data_size_ / sizeof(double);
+        tableint prenode = -1;
+        if ((signed)currObj != -1) {
+            prenode = currObj; 
+        }
+        
+        // Build chain from prenode to root
+        std::vector<tableint> chain;
+        tableint curr = prenode;
+        while (curr != (tableint)-1) {
+            chain.push_back(curr);
+            curr = getPrenodeId(curr);
+            if (chain.size() > 1000) break; 
+        }
+        std::reverse(chain.begin(), chain.end());
+
+        // Prepare Encoders
+        std::vector<char> compressed_buffer;
+        std::vector<char> dummy_buffer; 
+        auto writer = std::make_shared<utils::MemoryStreamWriter>(&dummy_buffer);
+        
+        std::vector<std::unique_ptr<encoding_algorithm::Encoder>> encoders;
+        for(size_t i=0; i<dim; ++i) {
+            encoders.push_back(encoding_algorithm::AlgorithmsManager::getEncoder("Double", "DeXOR", writer));
+        }
+
+        // Prepare Decoders for reading chain
+        auto reader = std::make_shared<utils::MemoryBlockStreamReader>((const unsigned char*)data_level0_memory_.data());
+        std::vector<std::unique_ptr<encoding_algorithm::Decoder>> decoders;
+        for(size_t i=0; i<dim; ++i) {
+            decoders.push_back(encoding_algorithm::AlgorithmsManager::getDecoder("Double", "DeXOR", reader));
+        }
+
+        // Process chain: Decode -> Encode (to update state)
+        for (tableint id : chain) {
+             size_t start = level0_element_start_positions_[id] + offsetData_;
+             size_t end;
+             if (id + 1 < cur_element_count && level0_element_start_positions_[id+1] > 0) {
+                end = level0_element_start_positions_[id+1];
+             } else {
+                end = data_level0_memory_.size();
+             }
+             
+             reader->resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
+             
+             for(size_t i=0; i<dim; ++i) {
+                 double val = decoders[i]->decodeDouble();
+                 encoders[i]->encode(val);
+             }
+             writer->align(); 
+             // Clear dummy buffer to avoid growing indefinitely
+             dummy_buffer.clear();
+             writer->setBuffer(&dummy_buffer);
+        }
+
+        // Switch to real buffer for the new point
+        writer->setBuffer(&compressed_buffer);
+        
+        const double* data_arr = (const double*)data_point;
+        for(size_t i=0; i<dim; ++i) {
+            encoders[i]->encode(data_arr[i]);
+        }
+        writer->align();
+
+        // std::cout << "compressed buffer size for point " << cur_c << " is " << compressed_buffer.size() << std::endl;
+        
+        size_t start_pos = data_level0_memory_.size();
+        level0_element_start_positions_[cur_c] = start_pos;
+        
+        size_t total_size = offsetData_ + compressed_buffer.size();
+        data_level0_memory_.resize(start_pos + total_size);
+        
+        memset(data_level0_memory_.data() + start_pos, 0, size_links_level0_);
+        setPrenodeId(cur_c, prenode);
+        setExternalLabel(cur_c, label);
+        memcpy(data_level0_memory_.data() + start_pos + offsetData_, compressed_buffer.data(), compressed_buffer.size());
+
+        // 输出当前添加的点的信息
+        // std::cout << "Adding point " << cur_c << " at level " << curlevel << std::endl;
+        // std::cout << "Data point: ";
+        // std::vector<double> cur_data_vec(dim, 0.0);
+        // cur_data_vec = getOriginalDataByInternalId(cur_c);
+        // for(double v : cur_data_vec) {
+        //     std::cout << v << " ";
+        // }
+        // std::cout << std::endl;
+
+        if (curlevel) {
+            // 为非level0的层分配内存
+            linkLists_[cur_c] = (char *) malloc(size_links_per_element_ * curlevel + 1);
+            if (linkLists_[cur_c] == nullptr)
+                throw std::runtime_error("Not enough memory: addPoint failed to allocate linklist");
+            
+            // 初始化link list为空
+            memset(linkLists_[cur_c], 0, size_links_per_element_ * curlevel + 1);
+        }
+
+        if ((signed)currObj != -1) {
             // std::cout << "Entering level <= maxlevel loop for point " << cur_c << " at level " << curlevel << std::endl;
 
             bool epDeleted = isMarkedDeleted(enterpoint_copy);
@@ -1705,6 +1732,61 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             std::cout << "Min inbound: " << min1 << ", Max inbound:" << max1 << "\n";
         }
         std::cout << "integrity ok, checked " << connections_checked << " connections\n";
+    }
+
+    void printCompressionTree(const std::string& filename = "storage/encoding_order.txt") {
+        std::ofstream out(filename);
+        if (!out.is_open()) {
+            std::cerr << "Failed to open file for writing: " << filename << std::endl;
+            return;
+        }
+
+        std::unordered_map<tableint, std::vector<tableint>> adj;
+        std::vector<tableint> roots;
+
+        for (tableint i = 0; i < cur_element_count; i++) {
+            tableint pre = getPrenodeId(i);
+            if (pre == (tableint)-1) {
+                roots.push_back(i);
+            } else {
+                adj[pre].push_back(i);
+            }
+        }
+
+        out << "\n=== Compression Tree Structure (Prenode -> Children) ===\n";
+        out << "Total elements: " << cur_element_count << "\n";
+        out << "Roots count: " << roots.size() << "\n";
+
+        // Use a stack for iterative DFS to avoid recursion depth issues, 
+        // or just simple recursion if depth is not expected to be huge.
+        // Given it's a compression chain, it might be deep.
+        // But for visualization, recursion is simpler. 
+        
+        std::function<void(tableint, int)> printNode = 
+            [&](tableint node, int depth) {
+            for (int i = 0; i < depth; ++i) out << "  ";
+            out << "|- " << node << " (Label: " << getExternalLabel(node) << ")";
+            
+            // Optional: Print data size or other info
+            // size_t start = level0_element_start_positions_[node];
+            // size_t end = (node + 1 < cur_element_count) ? level0_element_start_positions_[node+1] : data_level0_memory_.size();
+            // out << " [Size: " << (end - start) << "]";
+            
+            out << "\n";
+
+            if (adj.count(node)) {
+                for (tableint child : adj[node]) {
+                    printNode(child, depth + 1);
+                }
+            }
+        };
+
+        for (tableint root : roots) {
+            printNode(root, 0);
+        }
+        out << "====================================================\n";
+        out.close();
+        std::cout << "Compression tree structure written to " << filename << std::endl;
     }
 };
 }  // namespace hnswlib
