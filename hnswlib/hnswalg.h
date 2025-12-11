@@ -1788,5 +1788,21 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         out.close();
         std::cout << "Compression tree structure written to " << filename << std::endl;
     }
+
+    int getCompressedDataSize() const {
+        // 返回压缩的所有element的data部分的总大小
+        int total_size = 0;
+        for (tableint i = 0; i < cur_element_count; i++) {
+            size_t start = level0_element_start_positions_[i] + offsetData_;
+            size_t end;
+            if (i + 1 < cur_element_count && level0_element_start_positions_[i+1] > 0) {
+                end = level0_element_start_positions_[i+1];
+            } else {
+                end = data_level0_memory_.size();
+            }
+            total_size += (end - start);
+        }
+        return total_size;
+    }
 };
 }  // namespace hnswlib

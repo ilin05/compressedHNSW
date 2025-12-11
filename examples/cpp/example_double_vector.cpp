@@ -1,9 +1,33 @@
 #include "../../hnswlib/hnswlib.h"
 #include "../data_processor/data_loader.h"
 
+namespace {
+    const double EPS[] = {1, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10, 1e-11, 1e-12,
+            1e-13, 1e-14, 1e-15, 1e-16, 1e-17, 1e-18, 1e-19, 1e-20, 1e-21, 1e-22, 1e-23};
+}
+
+static int getDecimalPlace(double value) {
+    std::string valueStr = std::to_string(value);
+
+    // 移除末尾的 '0'
+    valueStr.erase(valueStr.find_last_not_of('0') + 1, std::string::npos);
+
+    // 如果移除零后末尾是小数点（例如 3.000000 -> 3.），也移除小数点
+    if (valueStr.back() == '.') {
+        valueStr.pop_back();
+    }
+
+    int index = valueStr.find('.');
+    if (index == std::string::npos) {
+        return 0;
+    } else {
+        return static_cast<int>(valueStr.length() - index - 1); 
+    }
+}
+
 int main() {
 
-    std::vector<std::vector<double>> data = data_loader::loadData("../datasets/winequality-red.csv");
+    std::vector<std::vector<double>> data = data_loader::loadData("../datasets/simulated_highdim_physical.csv");
     if (data.empty()) {
         std::cerr << "Failed to load data or data is empty." << std::endl;
         return 1;
@@ -35,8 +59,18 @@ int main() {
     // Add data to index
     for (int i = 0; i < max_elements; i++) {
         alg_hnsw->addPoint(data_ptr + i * dim, i);
+        if(i > 0 && i % 500 == 0){
+            std::cout << "Added " << i << " points." << std::endl;
+        }
         // std::cout << "Added point " << i << std::endl;
     }
+
+    // Output the data part of all elements in level 0
+    int total_compressed_data_size = alg_hnsw->getCompressedDataSize();
+    std::cout << "Total compressed data size: " << total_compressed_data_size << " bytes" << std::endl;
+
+    // 第0层数据总大小：
+    std::cout << "Level 0 data size: " << alg_hnsw->data_level0_memory_.size() << " bytes" << std::endl;
 
     // Output the compression tree structure
     alg_hnsw->printCompressionTree();
@@ -53,16 +87,22 @@ int main() {
     float recall = correct / max_elements;
     std::cout << "Recall: " << recall << "\n";
 
-    // // 检查完整性
-    // for(int i = 0; i < rows; i++) {
-    //     std::vector<double> decompressedVec = alg_hnsw->getOriginalDataByInternalId(i);
-    //     // 输出改行数据
-    //     std::cout << "Decompressed vector for internal ID " << i << ": ";
-    //     for(double val : decompressedVec) {
-    //         std::cout << val << " ";
-    //     }
-    //     std::cout << std::endl;
-    // }
+    // 检查数据正确性
+    for(int i = 0; i < rows; i++) {
+        std::vector<double> decompressedVec = alg_hnsw->getOriginalDataByInternalId(i);
+        for(int j = 0; j < cols; j++) {
+            double originalValue = data[i][j];
+            double decompressedValue = decompressedVec[j];
+            int place = getDecimalPlace(originalValue);
+            double eps = EPS[place];
+            if (std::abs(originalValue - decompressedValue) > eps && place < 13) {
+                std::cerr << "Data mismatch at row " << i << ", col " << j
+                          << ": original=" << originalValue
+                          << ", decompressed=" << decompressedValue
+                          << ", eps=" << eps << std::endl;
+            }
+        }
+    }
 
     // // Serialize index
     // std::string hnsw_path = "hnsw.bin";

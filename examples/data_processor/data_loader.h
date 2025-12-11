@@ -25,6 +25,19 @@ static std::vector<std::vector<double>> loadData(const std::string& filePath) {
         throw std::runtime_error("Could not open file: " + filePath);
     }
 
+    // Check for UTF-8 BOM
+    char bom[3] = {0};
+    file.read(bom, 3);
+    if (file.gcount() == 3 && 
+        static_cast<unsigned char>(bom[0]) == 0xEF && 
+        static_cast<unsigned char>(bom[1]) == 0xBB && 
+        static_cast<unsigned char>(bom[2]) == 0xBF) {
+        // BOM found, skip it (file pointer is already at position 3)
+    } else {
+        // No BOM, rewind
+        file.seekg(0, std::ios::beg);
+    }
+
     std::string line;
     size_t num_cols = 0;
     while (std::getline(file, line)) {
@@ -36,6 +49,18 @@ static std::vector<std::vector<double>> loadData(const std::string& filePath) {
         std::string value;
 
         while (std::getline(ss, value, ',')) {
+            // Trim whitespace
+            const std::string whitespace = " \t\r\n";
+            size_t start = value.find_first_not_of(whitespace);
+            if (start != std::string::npos) {
+                size_t end = value.find_last_not_of(whitespace);
+                value = value.substr(start, end - start + 1);
+            } else {
+                value = "";
+            }
+
+            if (value.empty()) continue;
+
             try {
                 row.push_back(std::stod(value));
             } catch (const std::invalid_argument& ia) {
