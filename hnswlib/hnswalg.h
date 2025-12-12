@@ -76,6 +76,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     std::mutex deleted_elements_lock;  // lock for deleted_elements
     std::unordered_set<tableint> deleted_elements;  // contains internal ids of deleted elements
 
+    std::string encoding_algorithm_name_ = "DeXOR";
+
 
     HierarchicalNSW(SpaceInterface<dist_t> *s) {
     }
@@ -95,6 +97,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     HierarchicalNSW(
         SpaceInterface<dist_t> *s,
         size_t max_elements,
+        const std::string &encoding_algorithm_name = "DeXOR",
         size_t M = 16,
         size_t ef_construction = 200,
         size_t random_seed = 100,
@@ -103,7 +106,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             link_list_locks_(max_elements),
             level0_element_start_positions_(max_elements),
             element_levels_(max_elements),
-            allow_replace_deleted_(allow_replace_deleted) {
+            allow_replace_deleted_(allow_replace_deleted),
+            encoding_algorithm_name_(encoding_algorithm_name) {
         max_elements_ = max_elements;
         num_deleted_ = 0;
         data_size_ = s->get_data_size();
@@ -245,7 +249,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         
         std::vector<std::unique_ptr<encoding_algorithm::Decoder>> decoders;
         for(size_t i=0; i<dim; ++i) {
-            decoders.push_back(encoding_algorithm::AlgorithmsManager::getDecoder("Double", "DeXOR", reader));
+            decoders.push_back(encoding_algorithm::AlgorithmsManager::getDecoder("Double", encoding_algorithm_name_, reader));
         }
         
         for (tableint id : chain) {
@@ -1170,7 +1174,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         
         std::vector<std::unique_ptr<encoding_algorithm::Encoder>> encoders;
         for(size_t i=0; i<dim; ++i) {
-            encoders.push_back(encoding_algorithm::AlgorithmsManager::getEncoder("Double", "DeXOR", writer));
+            encoders.push_back(encoding_algorithm::AlgorithmsManager::getEncoder("Double", encoding_algorithm_name_, writer));
         }
         
         if (prenode != (tableint)-1) {
@@ -1468,14 +1472,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         
         std::vector<std::unique_ptr<encoding_algorithm::Encoder>> encoders;
         for(size_t i=0; i<dim; ++i) {
-            encoders.push_back(encoding_algorithm::AlgorithmsManager::getEncoder("Double", "DeXOR", writer));
+            encoders.push_back(encoding_algorithm::AlgorithmsManager::getEncoder("Double", encoding_algorithm_name_, writer));
         }
 
         // Prepare Decoders for reading chain
         auto reader = std::make_shared<utils::MemoryBlockStreamReader>((const unsigned char*)data_level0_memory_.data());
         std::vector<std::unique_ptr<encoding_algorithm::Decoder>> decoders;
         for(size_t i=0; i<dim; ++i) {
-            decoders.push_back(encoding_algorithm::AlgorithmsManager::getDecoder("Double", "DeXOR", reader));
+            decoders.push_back(encoding_algorithm::AlgorithmsManager::getDecoder("Double", encoding_algorithm_name_, reader));
         }
 
         // Process chain: Decode -> Encode (to update state)

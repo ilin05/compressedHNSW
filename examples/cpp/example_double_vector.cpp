@@ -43,9 +43,11 @@ int main() {
                                 // strongly affects the memory consumption
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
 
+    std::string encoding_algorithm_name = "DeXOR"; // Compression algorithm name
+
     // Initing index
     hnswlib::L2SpaceDouble space(dim);
-    hnswlib::HierarchicalNSW<double>* alg_hnsw = new hnswlib::HierarchicalNSW<double>(&space, max_elements);
+    hnswlib::HierarchicalNSW<double>* alg_hnsw = new hnswlib::HierarchicalNSW<double>(&space, max_elements, encoding_algorithm_name, M, ef_construction);
 
     double* data_ptr = new double[dim * max_elements];
     for (int i = 0; i < std::min(rows, max_elements); i++) {
@@ -88,6 +90,7 @@ int main() {
     std::cout << "Recall: " << recall << "\n";
 
     // 检查数据正确性
+    bool mismatch_found = false;
     for(int i = 0; i < rows; i++) {
         std::vector<double> decompressedVec = alg_hnsw->getOriginalDataByInternalId(i);
         for(int j = 0; j < cols; j++) {
@@ -100,8 +103,11 @@ int main() {
                           << ": original=" << originalValue
                           << ", decompressed=" << decompressedValue
                           << ", eps=" << eps << std::endl;
-            }
+                mismatch_found = true;}
         }
+    }
+    if(!mismatch_found) {
+        std::cout << encoding_algorithm_name << " compression algorithm passed data integrity check." << std::endl;
     }
 
     // // Serialize index
