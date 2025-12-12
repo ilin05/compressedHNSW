@@ -9,9 +9,6 @@
 #include <unordered_set>
 #include <list>
 #include <memory>
-#include "../examples/utils/memory_block_stream_reader.h"
-#include "../examples/utils/memory_stream_writer.h"
-#include "../encoding_algorithms/algorithms_manager.h"
 
 namespace hnswlib {
 typedef unsigned int tableint;
@@ -48,12 +45,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     tableint enterpoint_node_{0};
 
     size_t size_links_level0_{0};
-    size_t offsetData_{0}, offsetLevel0_{0}, label_offset_{ 0 }, prenode_offset_{ 0 };
+    size_t offsetData_{0}, offsetLevel0_{0}, label_offset_{ 0 };
 
-    // 记录level0每个element数据的开始位置
-    std::vector<size_t> level0_element_start_positions_;
-
-    std::vector<char> data_level0_memory_;
+    char *data_level0_memory_{nullptr};
     char **linkLists_{nullptr};
     std::vector<int> element_levels_;  // keeps level of each element
 
@@ -76,8 +70,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     std::mutex deleted_elements_lock;  // lock for deleted_elements
     std::unordered_set<tableint> deleted_elements;  // contains internal ids of deleted elements
 
-    std::string encoding_algorithm_name_ = "DeXOR";
-
+    mutable std::atomic<long> getDataTimeMicroseconds{0};
 
     HierarchicalNSW(SpaceInterface<dist_t> *s) {
     }
@@ -97,17 +90,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     HierarchicalNSW(
         SpaceInterface<dist_t> *s,
         size_t max_elements,
-        const std::string &encoding_algorithm_name = "DeXOR",
         size_t M = 16,
         size_t ef_construction = 200,
         size_t random_seed = 100,
         bool allow_replace_deleted = false)
         : label_op_locks_(MAX_LABEL_OPERATION_LOCKS),
             link_list_locks_(max_elements),
-            level0_element_start_positions_(max_elements),
             element_levels_(max_elements),
-            allow_replace_deleted_(allow_replace_deleted),
-            encoding_algorithm_name_(encoding_algorithm_name) {
+            allow_replace_deleted_(allow_replace_deleted) {
         max_elements_ = max_elements;
         num_deleted_ = 0;
         data_size_ = s->get_data_size();
@@ -129,14 +119,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         update_probability_generator_.seed(random_seed + 1);
 
         size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
-        size_data_per_element_ = size_links_level0_ + data_size_ + sizeof(labeltype) + sizeof(tableint);
-        
+        size_data_per_element_ = size_links_level0_ + data_size_ + sizeof(labeltype);
+        offsetData_ = size_links_level0_;
+        label_offset_ = size_links_level0_ + data_size_;
         offsetLevel0_ = 0;
-        prenode_offset_ = size_links_level0_;
-        label_offset_ = prenode_offset_ + sizeof(tableint);
-        offsetData_ = label_offset_ + sizeof(labeltype);
 
-        data_level0_memory_.reserve(max_elements_ * size_data_per_element_);
+        data_level0_memory_ = (char *) malloc(max_elements_ * size_data_per_element_);
+        if (data_level0_memory_ == nullptr)
+            throw std::runtime_error("Not enough memory");
 
         cur_element_count = 0;
 
@@ -160,8 +150,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     }
 
     void clear() {
-        data_level0_memory_.clear();
-        data_level0_memory_.shrink_to_fit();
+        free(data_level0_memory_);
+        data_level0_memory_ = nullptr;
         for (tableint i = 0; i < cur_element_count; i++) {
             if (element_levels_[i] > 0)
                 free(linkLists_[i]);
@@ -195,85 +185,31 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
     inline labeltype getExternalLabel(tableint internal_id) const {
         labeltype return_label;
-        memcpy(&return_label, (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + label_offset_), sizeof(labeltype));
+        memcpy(&return_label, (data_level0_memory_ + internal_id * size_data_per_element_ + label_offset_), sizeof(labeltype));
         return return_label;
     }
 
 
     inline void setExternalLabel(tableint internal_id, labeltype label) const {
-        memcpy((char*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + label_offset_), &label, sizeof(labeltype));
+        memcpy((data_level0_memory_ + internal_id * size_data_per_element_ + label_offset_), &label, sizeof(labeltype));
     }
 
 
     inline labeltype *getExternalLabeLp(tableint internal_id) const {
-        return (labeltype *) (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + label_offset_);
-    }
-
-    inline tableint getPrenodeId(tableint internal_id) const {
-        tableint prenode;
-        memcpy(&prenode, (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + prenode_offset_), sizeof(tableint));
-        return prenode;
-    }
-
-    inline void setPrenodeId(tableint internal_id, tableint prenode) {
-        memcpy((char*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + prenode_offset_), &prenode, sizeof(tableint));
+        return (labeltype *) (data_level0_memory_ + internal_id * size_data_per_element_ + label_offset_);
     }
 
     // 数据存储在第0层，每个element的大小都是固定的，size_data_per_element。可以通过HNSW内部的id随机读取数据
     // 如果要使用差分编码压缩data，将无法通过简单的随机读取获取数据。或许需要页表之类的结构进行索引；同时，data需要解压缩。可以在每个element的开头记录上一个data的internal_id，接着回溯到第0个data，然后依次解压缩
     inline char *getDataByInternalId(tableint internal_id) const {
-        return (char*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offsetData_);
-    }
-
-    inline char *getDataByInternalId(tableint internal_id, char* data_level0_memory) const {
-        return (char*)(data_level0_memory + level0_element_start_positions_[internal_id] + offsetData_);
-    }
-
-    std::vector<double> getOriginalDataByInternalId(tableint internal_id) const {
-        size_t dim = *((size_t *) dist_func_param_);
-        std::vector<double> result(dim);
-        
-        std::vector<tableint> chain;
-        tableint curr = internal_id;
-        while (curr != (tableint)-1) {
-            chain.push_back(curr);
-            curr = getPrenodeId(curr);
-            if (chain.size() > 1000) break; 
-        }
-
-        // std::cout << "Decompression chain length: " << chain.size() << std::endl;
-        
-        std::reverse(chain.begin(), chain.end());
-        
-        auto reader = std::make_shared<utils::MemoryBlockStreamReader>((const unsigned char*)data_level0_memory_.data());
-        
-        std::vector<std::unique_ptr<encoding_algorithm::Decoder>> decoders;
-        for(size_t i=0; i<dim; ++i) {
-            decoders.push_back(encoding_algorithm::AlgorithmsManager::getDecoder("Double", encoding_algorithm_name_, reader));
-        }
-        
-        for (tableint id : chain) {
-            // std::cout << "Decoding id: " << id << "cur_element_count" << cur_element_count << std::endl;
-            size_t start = level0_element_start_positions_[id] + offsetData_;
-            size_t end;
-            if (id + 1 < cur_element_count && level0_element_start_positions_[id+1] > 0) {
-                end = level0_element_start_positions_[id+1];
-            } else {
-                end = data_level0_memory_.size();
-            }
-
-            // std::cout << "Data range in memory: " << start << " to " << end << std::endl;
-            
-            reader->resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
-            
-            for(size_t i=0; i<dim; ++i) {
-                // std::cout << "Decoding dimension: " << i << std::endl;
-                result[i] = decoders[i]->decodeDouble();
-            }
-        }
+        auto start = std::chrono::high_resolution_clock::now();
+        char* result = data_level0_memory_ + internal_id * size_data_per_element_ + offsetData_;
+        auto end = std::chrono::high_resolution_clock::now();
+        // return (data_level0_memory_ + internal_id * size_data_per_element_ + offsetData_);
+    
+        getDataTimeMicroseconds += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
         return result;
     }
-
 
     int getRandomLevel(double reverse_size) {
         std::uniform_real_distribution<double> distribution(0.0, 1.0);
@@ -310,8 +246,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         dist_t lowerBound;
         if (!isMarkedDeleted(ep_id)) {
             // 计算data_point(query) 到enterpoint的距离，结果保存在dist中。
-            std::vector<double> vec_ep = getOriginalDataByInternalId(ep_id);
-            dist_t dist = fstdistfunc_(data_point, vec_ep.data(), dist_func_param_);
+            dist_t dist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
             // enterpoint加入到最近邻列表
             top_candidates.emplace(dist, ep_id);
             // lowerBound存储当前到datapoint的最近距离
@@ -324,8 +259,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         }
         // enterpoint加入已访问列表
         visited_array[ep_id] = visited_array_tag;
-
-        // std::cout << "Searching base layer " << layer << " from entry point " << ep_id << std::endl;
 
         // 当候选列表不为空时 while |C|>0
         while (!candidateSet.empty()) {
@@ -359,41 +292,26 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             // datal表示当前元素第一个邻居的label
             tableint *datal = (tableint *) (data + 1);
 #ifdef USE_SSE
-            if (size > 0) {
-                _mm_prefetch((char *) (visited_array + *(data + 1)), _MM_HINT_T0);
-                _mm_prefetch((char *) (visited_array + *(data + 1) + 64), _MM_HINT_T0);
-                _mm_prefetch(getDataByInternalId(*datal), _MM_HINT_T0);
-            }
-            if (size > 1) {
-                _mm_prefetch(getDataByInternalId(*(datal + 1)), _MM_HINT_T0);
-            }
+            _mm_prefetch((char *) (visited_array + *(data + 1)), _MM_HINT_T0);
+            _mm_prefetch((char *) (visited_array + *(data + 1) + 64), _MM_HINT_T0);
+            _mm_prefetch(getDataByInternalId(*datal), _MM_HINT_T0);
+            _mm_prefetch(getDataByInternalId(*(datal + 1)), _MM_HINT_T0);
 #endif
 
-            // std::cout << "Evaluating " << size << " neighbors." << std::endl;
             // 对于layer层中的当前元素的每一个邻居candidate
             for (size_t j = 0; j < size; j++) {
                 tableint candidate_id = *(datal + j);
 //                    if (candidate_id == 0) continue;
 #ifdef USE_SSE
-                if (j + 1 < size) {
-                    // std::cout << "Prefetching data for neighbor " << j + 1 << std::endl;
-                    _mm_prefetch((char *) (visited_array + *(datal + j + 1)), _MM_HINT_T0);
-                    // std::cout << "_mm_prefetch visited_array done." << std::endl;
-                    _mm_prefetch(getDataByInternalId(*(datal + j + 1)), _MM_HINT_T0);
-                    // std::cout << "_mm_prefetch data done." << std::endl;
-                }
+                _mm_prefetch((char *) (visited_array + *(datal + j + 1)), _MM_HINT_T0);
+                _mm_prefetch(getDataByInternalId(*(datal + j + 1)), _MM_HINT_T0);
 #endif
                 // 如果candidate已经访问过（对应论文中，如果e属于v，无操作，循环次数加1）
                 if (visited_array[candidate_id] == visited_array_tag) continue;
                 // 没有访问过，将已访问列表中并入candidate
                 visited_array[candidate_id] = visited_array_tag;
                 // 根据candidate的id号获取这个candidate元素，也就是currObj1
-                // std::cout << "Visiting candidate " << candidate_id << std::endl;
-                // char *currObj1 = (getDataByInternalId(candidate_id));
-                std::vector<double> currObjVec = getOriginalDataByInternalId(candidate_id);
-                const void* currObj1 = currObjVec.data();
-
-                // std::cout << "Data for candidate retrieved." << std::endl;
+                char *currObj1 = (getDataByInternalId(candidate_id));
                 // 计算currObj1到data point之间的距离，对应于论文中的distance(e, q)
                 dist_t dist1 = fstdistfunc_(data_point, currObj1, dist_func_param_);
                 // 取出top_candidates中距离data point最远的元素并比较大小
@@ -420,8 +338,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                     }
                 }
             }
-
-            // std::cout << "Top candidates size: " << top_candidates.size() << ", lower bound: " << lowerBound << std::endl;
         }
         visited_list_pool_->releaseVisitedList(vl);
 
@@ -493,31 +409,24 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             }
 
 #ifdef USE_SSE
-            if (size > 0) {
-                _mm_prefetch((char *) (visited_array + *(data + 1)), _MM_HINT_T0);
-                _mm_prefetch((char *) (visited_array + *(data + 1) + 64), _MM_HINT_T0);
-                _mm_prefetch(data_level0_memory_.data() + level0_element_start_positions_[*(data + 1)] + offsetData_, _MM_HINT_T0);
-                _mm_prefetch((char *) (data + 2), _MM_HINT_T0);
-            }
+            _mm_prefetch((char *) (visited_array + *(data + 1)), _MM_HINT_T0);
+            _mm_prefetch((char *) (visited_array + *(data + 1) + 64), _MM_HINT_T0);
+            _mm_prefetch(data_level0_memory_ + (*(data + 1)) * size_data_per_element_ + offsetData_, _MM_HINT_T0);
+            _mm_prefetch((char *) (data + 2), _MM_HINT_T0);
 #endif
 
             for (size_t j = 1; j <= size; j++) {
                 int candidate_id = *(data + j);
 //                    if (candidate_id == 0) continue;
 #ifdef USE_SSE
-                if (j < size) {
-                    _mm_prefetch((char *) (visited_array + *(data + j + 1)), _MM_HINT_T0);
-                    _mm_prefetch(data_level0_memory_.data() + level0_element_start_positions_[*(data + j + 1)] + offsetData_,
-                                    _MM_HINT_T0);  ////////////
-                }
+                _mm_prefetch((char *) (visited_array + *(data + j + 1)), _MM_HINT_T0);
+                _mm_prefetch(data_level0_memory_ + (*(data + j + 1)) * size_data_per_element_ + offsetData_,
+                                _MM_HINT_T0);  ////////////
 #endif
                 if (!(visited_array[candidate_id] == visited_array_tag)) {
                     visited_array[candidate_id] = visited_array_tag;
 
-                    // char *currObj1 = (getDataByInternalId(candidate_id));
-                    std::vector<double> currObjVec = getOriginalDataByInternalId(candidate_id);
-                    const void* currObj1 = currObjVec.data();
-
+                    char *currObj1 = (getDataByInternalId(candidate_id));
                     dist_t dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
 
                     bool flag_consider_candidate;
@@ -530,11 +439,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                     if (flag_consider_candidate) {
                         candidate_set.emplace(-dist, candidate_id);
 #ifdef USE_SSE
-                        if (candidate_set.size() > 0) {
-                            _mm_prefetch(data_level0_memory_.data() + level0_element_start_positions_[candidate_set.top().second] +
-                                            offsetLevel0_,  ///////////
-                                            _MM_HINT_T0);  ////////////////////////
-                        }
+                        _mm_prefetch(data_level0_memory_ + candidate_set.top().second * size_data_per_element_ +
+                                        offsetLevel0_,  ///////////
+                                        _MM_HINT_T0);  ////////////////////////
 #endif
 
                         if (bare_bone_search || 
@@ -604,14 +511,12 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             queue_closest.pop();
             bool good = true;
 
-            std::vector<double> vec2 = getOriginalDataByInternalId(curent_pair.second);
-
             // 对于return_list(R)中的每一个元素
             for (std::pair<dist_t, tableint> second_pair : return_list) {
-                std::vector<double> vec1 = getOriginalDataByInternalId(second_pair.second);
+                
                 dist_t curdist =
-                        fstdistfunc_(vec1.data(),
-                                        vec2.data(),
+                        fstdistfunc_(getDataByInternalId(second_pair.second),
+                                        getDataByInternalId(curent_pair.second),
                                         dist_func_param_);
                 // 如果curent_pair 与已经与q连接元素的距离 < curent_pair与query的距离
                 if (curdist < dist_to_query) {
@@ -634,12 +539,12 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
 
     linklistsizeint *get_linklist0(tableint internal_id) const {
-        return (linklistsizeint *) (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offsetLevel0_);
+        return (linklistsizeint *) (data_level0_memory_ + internal_id * size_data_per_element_ + offsetLevel0_);
     }
 
 
     linklistsizeint *get_linklist0(tableint internal_id, char *data_level0_memory_) const {
-        return (linklistsizeint *) (data_level0_memory_ + level0_element_start_positions_[internal_id] + offsetLevel0_);
+        return (linklistsizeint *) (data_level0_memory_ + internal_id * size_data_per_element_ + offsetLevel0_);
     }
 
 
@@ -737,11 +642,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                     data[sz_link_list_other] = cur_c;
                     setListCount(ll_other, sz_link_list_other + 1);
                 } else {
-                    std::vector<double> vec_cur = getOriginalDataByInternalId(cur_c);
-                    std::vector<double> vec_neigh = getOriginalDataByInternalId(selectedNeighbors[idx]);
-
                     // finding the "weakest" element to replace it with the new one
-                    dist_t d_max = fstdistfunc_(vec_cur.data(), vec_neigh.data(),
+                    dist_t d_max = fstdistfunc_(getDataByInternalId(cur_c), getDataByInternalId(selectedNeighbors[idx]),
                                                 dist_func_param_);
                     // Heuristic:
                     std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidates;
@@ -749,9 +651,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
                     // 邻居的linkList已经满了，需要重新选出最好的Mcurmax个邻居。逐个计算距离，放入candidates中
                     for (size_t j = 0; j < sz_link_list_other; j++) {
-                        std::vector<double> vec_cand = getOriginalDataByInternalId(data[j]);
                         candidates.emplace(
-                                fstdistfunc_(vec_cand.data(), vec_neigh.data(),
+                                fstdistfunc_(getDataByInternalId(data[j]), getDataByInternalId(selectedNeighbors[idx]),
                                                 dist_func_param_), data[j]);
                     }
 
@@ -792,14 +693,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         visited_list_pool_.reset(new VisitedListPool(1, new_max_elements));
 
         element_levels_.resize(new_max_elements);
-        level0_element_start_positions_.resize(new_max_elements);
 
         std::vector<std::mutex>(new_max_elements).swap(link_list_locks_);
 
         // Reallocate base layer
-        // data_level0_memory_ is std::vector, no need to realloc manually.
-        // We can reserve if we want.
-        // data_level0_memory_.reserve(new_max_elements * size_data_per_element_);
+        char * data_level0_memory_new = (char *) realloc(data_level0_memory_, new_max_elements * size_data_per_element_);
+        if (data_level0_memory_new == nullptr)
+            throw std::runtime_error("Not enough memory: resizeIndex failed to allocate base layer");
+        data_level0_memory_ = data_level0_memory_new;
 
         // Reallocate all other layers
         char ** linkLists_new = (char **) realloc(linkLists_, sizeof(void *) * new_max_elements);
@@ -856,11 +757,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         writeBinaryPOD(output, mult_);
         writeBinaryPOD(output, ef_construction_);
 
-        output.write(reinterpret_cast<const char*>(level0_element_start_positions_.data()), cur_element_count * sizeof(size_t));
-
-        size_t level0_memory_size = data_level0_memory_.size();
-        writeBinaryPOD(output, level0_memory_size);
-        output.write(data_level0_memory_.data(), level0_memory_size);
+        output.write(data_level0_memory_, cur_element_count * size_data_per_element_);
 
         for (size_t i = 0; i < cur_element_count; i++) {
             unsigned int linkListSize = element_levels_[i] > 0 ? size_links_per_element_ * element_levels_[i] : 0;
@@ -904,9 +801,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         readBinaryPOD(input, mult_);
         readBinaryPOD(input, ef_construction_);
 
-        level0_element_start_positions_.resize(max_elements_);
-        input.read(reinterpret_cast<char*>(level0_element_start_positions_.data()), cur_element_count * sizeof(size_t));
-
         data_size_ = s->get_data_size();
         fstdistfunc_ = s->get_dist_func();
         dist_func_param_ = s->get_dist_func_param();
@@ -914,7 +808,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         auto pos = input.tellg();
 
         /// Optional - check if index is ok:
-        /*
         input.seekg(cur_element_count * size_data_per_element_, input.cur);
         for (size_t i = 0; i < cur_element_count; i++) {
             if (input.tellg() < 0 || input.tellg() >= total_filesize) {
@@ -933,15 +826,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             throw std::runtime_error("Index seems to be corrupted or unsupported");
 
         input.clear();
-        */
         /// Optional check end
 
         input.seekg(pos, input.beg);
 
-        size_t level0_memory_size;
-        readBinaryPOD(input, level0_memory_size);
-        data_level0_memory_.resize(level0_memory_size);
-        input.read(data_level0_memory_.data(), level0_memory_size);
+        data_level0_memory_ = (char *) malloc(max_elements * size_data_per_element_);
+        if (data_level0_memory_ == nullptr)
+            throw std::runtime_error("Not enough memory: loadIndex failed to allocate level0");
+        input.read(data_level0_memory_, cur_element_count * size_data_per_element_);
 
         size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
 
@@ -955,11 +847,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         if (linkLists_ == nullptr)
             throw std::runtime_error("Not enough memory: loadIndex failed to allocate linklists");
         element_levels_ = std::vector<int>(max_elements);
-        level0_element_start_positions_ = std::vector<size_t>(max_elements);
         revSize_ = 1.0 / mult_;
         ef_ = 10;
         for (size_t i = 0; i < cur_element_count; i++) {
-            // level0_element_start_positions_[i] = i * size_data_per_element_;
             label_lookup_[getExternalLabel(i)] = i;
             unsigned int linkListSize;
             readBinaryPOD(input, linkListSize);
@@ -1001,12 +891,13 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         tableint internalId = search->second;
         lock_table.unlock();
 
-        // char* data_ptrv = getDataByInternalId(internalId);
-        std::vector<double> vec = getOriginalDataByInternalId(internalId);
-        
+        char* data_ptrv = getDataByInternalId(internalId);
+        size_t dim = *((size_t *) dist_func_param_);
         std::vector<data_t> data;
-        for(double v : vec) {
-            data.push_back((data_t)v);
+        data_t* data_ptr = (data_t*) data_ptrv;
+        for (size_t i = 0; i < dim; i++) {
+            data.push_back(*data_ptr);
+            data_ptr += 1;
         }
         return data;
     }
@@ -1159,50 +1050,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
     void updatePoint(const void *dataPoint, tableint internalId, float updateNeighborProbability) {
         // update the feature vector associated with existing point with new vector
-        // memcpy(getDataByInternalId(internalId), dataPoint, data_size_);
-
-        size_t dim = data_size_ / sizeof(double);
-        tableint prenode = getPrenodeId(internalId);
-        
-        std::vector<double> prenode_data(dim, 0.0);
-        if (prenode != (tableint)-1) {
-            prenode_data = getOriginalDataByInternalId(prenode);
-        }
-        
-        std::vector<char> compressed_buffer;
-        auto writer = std::make_shared<utils::MemoryStreamWriter>(&compressed_buffer);
-        
-        std::vector<std::unique_ptr<encoding_algorithm::Encoder>> encoders;
-        for(size_t i=0; i<dim; ++i) {
-            encoders.push_back(encoding_algorithm::AlgorithmsManager::getEncoder("Double", encoding_algorithm_name_, writer));
-        }
-        
-        if (prenode != (tableint)-1) {
-            std::vector<char> dummy_buffer;
-            writer->setBuffer(&dummy_buffer);
-            for(size_t i=0; i<dim; ++i) {
-                encoders[i]->encode(prenode_data[i]);
-            }
-            writer->align();
-            writer->setBuffer(&compressed_buffer);
-        }
-        
-        const double* data_arr = (const double*)dataPoint;
-        for(size_t i=0; i<dim; ++i) {
-            encoders[i]->encode(data_arr[i]);
-        }
-        writer->align();
-        
-        size_t old_pos = level0_element_start_positions_[internalId];
-        size_t new_pos = data_level0_memory_.size();
-        
-        size_t total_size = offsetData_ + compressed_buffer.size();
-        data_level0_memory_.resize(new_pos + total_size);
-        
-        memcpy(data_level0_memory_.data() + new_pos, data_level0_memory_.data() + old_pos, offsetData_);
-        memcpy(data_level0_memory_.data() + new_pos + offsetData_, compressed_buffer.data(), compressed_buffer.size());
-        
-        level0_element_start_positions_[internalId] = new_pos;
+        memcpy(getDataByInternalId(internalId), dataPoint, data_size_);
 
         int maxLevelCopy = maxlevel_;
         tableint entryPointCopy = enterpoint_node_;
@@ -1246,9 +1094,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                     if (cand == neigh)
                         continue;
 
-                    std::vector<double> vec_neigh = getOriginalDataByInternalId(neigh);
-                    std::vector<double> vec_cand = getOriginalDataByInternalId(cand);
-                    dist_t distance = fstdistfunc_(vec_neigh.data(), vec_cand.data(), dist_func_param_);
+                    dist_t distance = fstdistfunc_(getDataByInternalId(neigh), getDataByInternalId(cand), dist_func_param_);
                     if (candidates.size() < elementsToKeep) {
                         candidates.emplace(distance, cand);
                     } else {
@@ -1289,8 +1135,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         int maxLevel) {
         tableint currObj = entryPointInternalId;
         if (dataPointLevel < maxLevel) {
-            std::vector<double> vec_curr = getOriginalDataByInternalId(currObj);
-            dist_t curdist = fstdistfunc_(dataPoint, vec_curr.data(), dist_func_param_);
+            dist_t curdist = fstdistfunc_(dataPoint, getDataByInternalId(currObj), dist_func_param_);
             for (int level = maxLevel; level > dataPointLevel; level--) {
                 bool changed = true;
                 while (changed) {
@@ -1308,8 +1153,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                         _mm_prefetch(getDataByInternalId(*(datal + i + 1)), _MM_HINT_T0);
 #endif
                         tableint cand = datal[i];
-                        std::vector<double> vec_cand = getOriginalDataByInternalId(cand);
-                        dist_t d = fstdistfunc_(dataPoint, vec_cand.data(), dist_func_param_);
+                        dist_t d = fstdistfunc_(dataPoint, getDataByInternalId(cand), dist_func_param_);
                         if (d < curdist) {
                             curdist = d;
                             currObj = cand;
@@ -1340,8 +1184,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             if (filteredTopCandidates.size() > 0) {
                 bool epDeleted = isMarkedDeleted(entryPointInternalId);
                 if (epDeleted) {
-                    std::vector<double> vec_ep = getOriginalDataByInternalId(entryPointInternalId);
-                    filteredTopCandidates.emplace(fstdistfunc_(dataPoint, vec_ep.data(), dist_func_param_), entryPointInternalId);
+                    filteredTopCandidates.emplace(fstdistfunc_(dataPoint, getDataByInternalId(entryPointInternalId), dist_func_param_), entryPointInternalId);
                     if (filteredTopCandidates.size() > ef_construction_)
                         filteredTopCandidates.pop();
                 }
@@ -1416,10 +1259,26 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         tableint currObj = enterpoint_node_;
         tableint enterpoint_copy = enterpoint_node_;
 
+        // 每个节点的数据大小是一定的，size_data_per_element_。在这里为level0分配内存
+        memset(data_level0_memory_ + cur_c * size_data_per_element_ + offsetLevel0_, 0, size_data_per_element_);
+
+        // Initialisation of the data and label
+        memcpy(getExternalLabeLp(cur_c), &label, sizeof(labeltype));
+        memcpy(getDataByInternalId(cur_c), data_point, data_size_);
+
+        if (curlevel) {
+            // 为非level0的层分配内存
+            linkLists_[cur_c] = (char *) malloc(size_links_per_element_ * curlevel + 1);
+            if (linkLists_[cur_c] == nullptr)
+                throw std::runtime_error("Not enough memory: addPoint failed to allocate linklist");
+            
+            // 初始化link list为空
+            memset(linkLists_[cur_c], 0, size_links_per_element_ * curlevel + 1);
+        }
+
         if ((signed)currObj != -1) {
             if (curlevel < maxlevelcopy) {
-                std::vector<double> vec_curr = getOriginalDataByInternalId(currObj);
-                dist_t curdist = fstdistfunc_(data_point, vec_curr.data(), dist_func_param_);
+                dist_t curdist = fstdistfunc_(data_point, getDataByInternalId(currObj), dist_func_param_);
                 for (int level = maxlevelcopy; level > curlevel; level--) {
                     bool changed = true;
                     while (changed) {
@@ -1435,8 +1294,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                             tableint cand = datal[i];
                             if (cand < 0 || cand > max_elements_)
                                 throw std::runtime_error("cand error");
-                            std::vector<double> vec_cand = getOriginalDataByInternalId(cand);
-                            dist_t d = fstdistfunc_(data_point, vec_cand.data(), dist_func_param_);
+                            dist_t d = fstdistfunc_(data_point, getDataByInternalId(cand), dist_func_param_);
                             if (d < curdist) {
                                 curdist = d;
                                 currObj = cand;
@@ -1446,108 +1304,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                     }
                 }
             }
-        }
-
-        // Compression Logic
-        size_t dim = data_size_ / sizeof(double);
-        tableint prenode = -1;
-        if ((signed)currObj != -1) {
-            prenode = currObj; 
-        }
-        
-        // Build chain from prenode to root
-        std::vector<tableint> chain;
-        tableint curr = prenode;
-        while (curr != (tableint)-1) {
-            chain.push_back(curr);
-            curr = getPrenodeId(curr);
-            if (chain.size() > 1000) break; 
-        }
-        std::reverse(chain.begin(), chain.end());
-
-        // Prepare Encoders
-        std::vector<char> compressed_buffer;
-        std::vector<char> dummy_buffer; 
-        auto writer = std::make_shared<utils::MemoryStreamWriter>(&dummy_buffer);
-        
-        std::vector<std::unique_ptr<encoding_algorithm::Encoder>> encoders;
-        for(size_t i=0; i<dim; ++i) {
-            encoders.push_back(encoding_algorithm::AlgorithmsManager::getEncoder("Double", encoding_algorithm_name_, writer));
-        }
-
-        // Prepare Decoders for reading chain
-        auto reader = std::make_shared<utils::MemoryBlockStreamReader>((const unsigned char*)data_level0_memory_.data());
-        std::vector<std::unique_ptr<encoding_algorithm::Decoder>> decoders;
-        for(size_t i=0; i<dim; ++i) {
-            decoders.push_back(encoding_algorithm::AlgorithmsManager::getDecoder("Double", encoding_algorithm_name_, reader));
-        }
-
-        // Process chain: Decode -> Encode (to update state)
-        for (tableint id : chain) {
-             size_t start = level0_element_start_positions_[id] + offsetData_;
-             size_t end;
-             if (id + 1 < cur_element_count && level0_element_start_positions_[id+1] > 0) {
-                end = level0_element_start_positions_[id+1];
-             } else {
-                end = data_level0_memory_.size();
-             }
-             
-             reader->resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
-             
-             for(size_t i=0; i<dim; ++i) {
-                 double val = decoders[i]->decodeDouble();
-                 encoders[i]->encode(val);
-             }
-             writer->align(); 
-             // Clear dummy buffer to avoid growing indefinitely
-             dummy_buffer.clear();
-             writer->setBuffer(&dummy_buffer);
-        }
-
-        // Switch to real buffer for the new point
-        writer->setBuffer(&compressed_buffer);
-        
-        const double* data_arr = (const double*)data_point;
-        for(size_t i=0; i<dim; ++i) {
-            encoders[i]->encode(data_arr[i]);
-        }
-        writer->align();
-
-        // std::cout << "compressed buffer size for point " << cur_c << " is " << compressed_buffer.size() << std::endl;
-        
-        size_t start_pos = data_level0_memory_.size();
-        level0_element_start_positions_[cur_c] = start_pos;
-        
-        size_t total_size = offsetData_ + compressed_buffer.size();
-        data_level0_memory_.resize(start_pos + total_size);
-        
-        memset(data_level0_memory_.data() + start_pos, 0, size_links_level0_);
-        setPrenodeId(cur_c, prenode);
-        setExternalLabel(cur_c, label);
-        memcpy(data_level0_memory_.data() + start_pos + offsetData_, compressed_buffer.data(), compressed_buffer.size());
-
-        // 输出当前添加的点的信息
-        // std::cout << "Adding point " << cur_c << " at level " << curlevel << std::endl;
-        // std::cout << "Data point: ";
-        // std::vector<double> cur_data_vec(dim, 0.0);
-        // cur_data_vec = getOriginalDataByInternalId(cur_c);
-        // for(double v : cur_data_vec) {
-        //     std::cout << v << " ";
-        // }
-        // std::cout << std::endl;
-
-        if (curlevel) {
-            // 为非level0的层分配内存
-            linkLists_[cur_c] = (char *) malloc(size_links_per_element_ * curlevel + 1);
-            if (linkLists_[cur_c] == nullptr)
-                throw std::runtime_error("Not enough memory: addPoint failed to allocate linklist");
-            
-            // 初始化link list为空
-            memset(linkLists_[cur_c], 0, size_links_per_element_ * curlevel + 1);
-        }
-
-        if ((signed)currObj != -1) {
-            // std::cout << "Entering level <= maxlevel loop for point " << cur_c << " at level " << curlevel << std::endl;
 
             bool epDeleted = isMarkedDeleted(enterpoint_copy);
             for (int level = std::min(curlevel, maxlevelcopy); level >= 0; level--) {
@@ -1557,19 +1313,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 // 在level层找到与data_point距离最近的ef个节点，存储在列表中
                 std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(
                         currObj, data_point, level);
-
-                // std::cout << "Point " << cur_c << " found " << top_candidates.size() << " candidates at level " << level << std::endl;
                 if (epDeleted) {
-                    std::vector<double> vec_ep = getOriginalDataByInternalId(enterpoint_copy);
-                    top_candidates.emplace(fstdistfunc_(data_point, vec_ep.data(), dist_func_param_), enterpoint_copy);
+                    top_candidates.emplace(fstdistfunc_(data_point, getDataByInternalId(enterpoint_copy), dist_func_param_), enterpoint_copy);
                     if (top_candidates.size() > ef_construction_)
                         top_candidates.pop();
                 }
                 // 在level层建立data_point与top_candidates中每一个元素的连接
                 currObj = mutuallyConnectNewElement(data_point, cur_c, top_candidates, level, false);
             }
-
-            // std::cout << "Point " << cur_c << " connected up to level " << curlevel << std::endl;
         } else {
             // Do nothing for the first element
             enterpoint_node_ = 0;
@@ -1593,8 +1344,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
         // currObj和curdist分别记录距离data point最近的点和距离
         tableint currObj = enterpoint_node_;
-        std::vector<double> vec_ep = getOriginalDataByInternalId(enterpoint_node_);
-        dist_t curdist = fstdistfunc_(query_data, vec_ep.data(), dist_func_param_);
+        dist_t curdist = fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
         // 在层L...1之间
         for (int level = maxlevel_; level > 0; level--) {
             bool changed = true;
@@ -1616,8 +1366,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                     if (cand < 0 || cand > max_elements_)
                         throw std::runtime_error("cand error");
                     // 根据id获取邻居并计算其到query的距离
-                    std::vector<double> vec_cand = getOriginalDataByInternalId(cand);
-                    dist_t d = fstdistfunc_(query_data, vec_cand.data(), dist_func_param_);
+                    dist_t d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
                     // 如果这个邻居与query的距离比curdist还小，更新curdist为这个邻居，changed改为true
                     if (d < curdist) {
                         curdist = d;
@@ -1738,73 +1487,17 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         std::cout << "integrity ok, checked " << connections_checked << " connections\n";
     }
 
-    void printCompressionTree(const std::string& filename = "storage/encoding_order.txt") {
-        std::ofstream out(filename);
-        if (!out.is_open()) {
-            std::cerr << "Failed to open file for writing: " << filename << std::endl;
-            return;
-        }
-
-        std::unordered_map<tableint, std::vector<tableint>> adj;
-        std::vector<tableint> roots;
-
-        for (tableint i = 0; i < cur_element_count; i++) {
-            tableint pre = getPrenodeId(i);
-            if (pre == (tableint)-1) {
-                roots.push_back(i);
-            } else {
-                adj[pre].push_back(i);
+    size_t getIndexSize() const {
+        size_t total_size = 0;
+        // base index size
+        total_size += size_data_per_element_ * max_elements_;
+        total_size += element_levels_.size() * sizeof(int);
+        total_size += sizeof(void*) * max_elements_;
+        for(size_t i = 0; i < cur_element_count; i++) {
+            int level = element_levels_[i];
+            if (level > 0) {
+                total_size += size_links_per_element_ * level;
             }
-        }
-
-        out << "\n=== Compression Tree Structure (Prenode -> Children) ===\n";
-        out << "Total elements: " << cur_element_count << "\n";
-        out << "Roots count: " << roots.size() << "\n";
-
-        // Use a stack for iterative DFS to avoid recursion depth issues, 
-        // or just simple recursion if depth is not expected to be huge.
-        // Given it's a compression chain, it might be deep.
-        // But for visualization, recursion is simpler. 
-        
-        std::function<void(tableint, int)> printNode = 
-            [&](tableint node, int depth) {
-            for (int i = 0; i < depth; ++i) out << "  ";
-            out << "|- " << node << " (Label: " << getExternalLabel(node) << ")";
-            
-            // Optional: Print data size or other info
-            // size_t start = level0_element_start_positions_[node];
-            // size_t end = (node + 1 < cur_element_count) ? level0_element_start_positions_[node+1] : data_level0_memory_.size();
-            // out << " [Size: " << (end - start) << "]";
-            
-            out << "\n";
-
-            if (adj.count(node)) {
-                for (tableint child : adj[node]) {
-                    printNode(child, depth + 1);
-                }
-            }
-        };
-
-        for (tableint root : roots) {
-            printNode(root, 0);
-        }
-        out << "====================================================\n";
-        out.close();
-        std::cout << "Compression tree structure written to " << filename << std::endl;
-    }
-
-    int getCompressedDataSize() const {
-        // 返回压缩的所有element的data部分的总大小
-        int total_size = 0;
-        for (tableint i = 0; i < cur_element_count; i++) {
-            size_t start = level0_element_start_positions_[i] + offsetData_;
-            size_t end;
-            if (i + 1 < cur_element_count && level0_element_start_positions_[i+1] > 0) {
-                end = level0_element_start_positions_[i+1];
-            } else {
-                end = data_level0_memory_.size();
-            }
-            total_size += (end - start);
         }
         return total_size;
     }

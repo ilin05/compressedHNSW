@@ -96,6 +96,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(single_vector_decompress examples/cpp/single_vector_decompress.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(single_vector_decompress hnswlib)
 
+    add_executable(test_hnswcw examples/cpp/test_hnswcw.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_hnswcw hnswlib)
+
     # tests
     add_executable(multivector_search_test tests/cpp/multivector_search_test.cpp)
     target_link_libraries(multivector_search_test hnswlib)

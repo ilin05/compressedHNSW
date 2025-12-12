@@ -47,7 +47,7 @@ int main() {
 
     // Initing index
     hnswlib::L2SpaceDouble space(dim);
-    hnswlib::HierarchicalNSW<double>* alg_hnsw = new hnswlib::HierarchicalNSW<double>(&space, max_elements, encoding_algorithm_name, M, ef_construction);
+    hnswlib::HierarchicalNSWCW<double>* alg_hnsw = new hnswlib::HierarchicalNSWCW<double>(&space, max_elements, encoding_algorithm_name, M, ef_construction);
 
     double* data_ptr = new double[dim * max_elements];
     for (int i = 0; i < std::min(rows, max_elements); i++) {
@@ -59,6 +59,8 @@ int main() {
     // std::cout << "Data loaded into array." << std::endl;
 
     // Add data to index
+    // build index time
+    auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < max_elements; i++) {
         alg_hnsw->addPoint(data_ptr + i * dim, i);
         if(i > 0 && i % 500 == 0){
@@ -66,6 +68,9 @@ int main() {
         }
         // std::cout << "Added point " << i << std::endl;
     }
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> build_duration = end - start;
+    std::cout << "Index built in " << build_duration.count() << " seconds." << std::endl;
 
     // Output the data part of all elements in level 0
     int total_compressed_data_size = alg_hnsw->getCompressedDataSize();
@@ -73,6 +78,9 @@ int main() {
 
     // 第0层数据总大小：
     std::cout << "Level 0 data size: " << alg_hnsw->data_level0_memory_.size() << " bytes" << std::endl;
+
+    // hnsw整体大小
+    std::cout << "Total index size: " << alg_hnsw->getIndexSize() << " bytes" << std::endl;
 
     // Output the compression tree structure
     alg_hnsw->printCompressionTree();
@@ -116,7 +124,7 @@ int main() {
     // delete alg_hnsw;
 
     // // Deserialize index and check recall
-    // alg_hnsw = new hnswlib::HierarchicalNSW<double>(&space, hnsw_path);
+    // alg_hnsw = new hnswlib::HierarchicalNSWCW<double>(&space, hnsw_path);
     // correct = 0;
     // for (int i = 0; i < max_elements; i++) {
     //     std::priority_queue<std::pair<double, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data_ptr + i * dim, 1);
