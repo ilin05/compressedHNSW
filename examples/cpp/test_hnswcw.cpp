@@ -7,24 +7,24 @@ namespace {
 
     // file names list
     const std::vector<std::string> file_names = {
-        // "simulated_highdim_physical",
-        // "emotional_monitoring_dataset_with_target",
-        // "fordTest",
-        // "fordTrain",
-        // "hair_loss",
-        // "SaYoPillow",
-        // "siftsmall_base",
-        // "Stress-Lysis",
-        // "winequality-white",
+        "simulated_highdim_physical",
+        "emotional_monitoring_dataset_with_target",
+        "fordTest",
+        "fordTrain",
+        "hair_loss",
+        "SaYoPillow",
+        "siftsmall_base",
+        "Stress-Lysis",
+        "winequality-white",
         "winequality-red"
     };
 
     // encoding algorithm names list
     const std::vector<std::string> encoding_algorithm_names = {
-        "DeXOR"
-        // "Camel",
-        // "Elf",
-        // "Gorilla"
+        "DeXOR",
+        "Camel",
+        "Elf",
+        "Gorilla"
     };
 
     // 结果以csv表格形式保存。每个数据集对应一个csv表。表中的每一行记录一中encoding algorithm在该数据集上的测试结果，列包括：
