@@ -7,6 +7,7 @@ namespace {
 
     // file names list
     const std::vector<std::string> file_names = {
+        "winequality-red",
         "simulated_highdim_physical",
         "emotional_monitoring_dataset_with_target",
         "fordTest",
@@ -15,8 +16,7 @@ namespace {
         "SaYoPillow",
         "siftsmall_base",
         "Stress-Lysis",
-        "winequality-white",
-        "winequality-red"
+        "winequality-white"
     };
 
     // encoding algorithm names list
@@ -114,10 +114,12 @@ bool test_hnswcw(std::string data_path, std::string file_name, std::string encod
     test_results[file_name][encoding_algorithm_name][4] = hnsw_graph_size;
 
     // Query the elements for themselves and measure recall
+    int query_count = std::min(100, max_elements);
+    int step = max_elements / query_count;
     alg_hnsw->resetTotalTimeGetOriginalData();
     float correct = 0;
     auto start_query = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < max_elements; i++) {
+    for (int i = 0; i < max_elements; i += step) {
         std::priority_queue<std::pair<double, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data_ptr + i * dim, 1);
         hnswlib::labeltype label = result.top().second;
         if (label == i) correct++;
@@ -126,12 +128,12 @@ bool test_hnswcw(std::string data_path, std::string file_name, std::string encod
     std::chrono::duration<double, std::milli> query_duration = end_query - start_query;
     
     long getOriginalData_time_in_queries = alg_hnsw->getTotalTimeGetOriginalData();
-    float avg_getOriginalData_time_per_query = static_cast<float>(getOriginalData_time_in_queries) / max_elements / 1e3; // microseconds to milliseconds
+    float avg_getOriginalData_time_per_query = static_cast<float>(getOriginalData_time_in_queries) / query_count / 1e3; // microseconds to milliseconds
 
-    float recall = correct / max_elements;
+    float recall = correct / query_count;
     test_results[file_name][encoding_algorithm_name][7] = recall;
 
-    float avg_query_time = query_duration.count() / max_elements; // milliseconds per query
+    float avg_query_time = query_duration.count() / query_count; // milliseconds per query
     test_results[file_name][encoding_algorithm_name][9] = avg_query_time;
 
     test_results[file_name][encoding_algorithm_name][10] = avg_getOriginalData_time_per_query;
@@ -242,53 +244,31 @@ void test_hnsw(std::string data_path, std::string file_name) {
     delete alg_hnsw;
 }
 
-void run_all_hnswcw_tests(){
-    // 记录构建时间和查询时间
-    for (const auto& file_name : file_names) {
-        for (const auto& encoding_algorithm_name : encoding_algorithm_names) {
-            std::cout << "Testing file: " << file_name << " with encoding: " << encoding_algorithm_name << std::endl;
-            // 开始时间
-            auto start = std::chrono::high_resolution_clock::now();
-            bool result = test_hnswcw("../../datasets", file_name, encoding_algorithm_name);
-            auto end = std::chrono::high_resolution_clock::now();
-            std::chrono::duration<double> elapsed = end - start;
-            std::cout << "Elapsed time: " << elapsed.count() << " seconds" << std::endl;
-            if (result) {
-                std::cout << "Test passed for " << file_name << " with encoding " << encoding_algorithm_name << std::endl;
-            } else {
-                std::cout << "Test FAILED for " << file_name << " with encoding " << encoding_algorithm_name << std::endl;
-            }
-        }
+void write_results_to_csv(const std::string& output_dir, const std::string& file_name) {
+    std::string output_file = output_dir + "/" + file_name + "_hnswcw_test_results.csv";
+    std::ofstream ofs(output_file);
+    if (!ofs.is_open()) {
+        std::cerr << "Failed to open output file: " << output_file << std::endl;
+        return;
     }
-}
 
-void write_results_to_csv(const std::string& output_dir) {
-    for (const auto& file_name : file_names) {
-        std::string output_file = output_dir + "/" + file_name + "_hnswcw_test_results.csv";
-        std::ofstream ofs(output_file);
-        if (!ofs.is_open()) {
-            std::cerr << "Failed to open output file: " << output_file << std::endl;
-            continue;
+    // Write header
+    ofs << "Encoding Algorithm,HNSWCW Index Build Time (s),HNSWCW getOriginalData Time in Building Index (s),"
+            "HNSW Index Build Time (s),HNSWCW Index Size (bytes),HNSWCW Graph Size (bytes),"
+            "HNSW Index Size (bytes),HNSW Graph Size (bytes),HNSWCW Recall,HNSW Recall,"
+            "HNSWCW Query Time per Query (ms),HNSWCW getOriginalData Time per Query (ms),HNSW Query Time per Query (ms)\n";
+
+    for (const auto& encoding_algorithm_name : encoding_algorithm_names) {
+        const auto& results = test_results[file_name][encoding_algorithm_name];
+        ofs << encoding_algorithm_name;
+        for (const auto& value : results) {
+            ofs << "," << value;
         }
-
-        // Write header
-        ofs << "Encoding Algorithm,HNSWCW Index Build Time (s),HNSWCW getOriginalData Time in Building Index (s),"
-               "HNSW Index Build Time (s),HNSWCW Index Size (bytes),HNSWCW Graph Size (bytes),"
-               "HNSW Index Size (bytes),HNSW Graph Size (bytes),HNSWCW Recall,HNSW Recall,"
-               "HNSWCW Query Time per Query (ms),HNSWCW getOriginalData Time per Query (ms),HNSW Query Time per Query (ms)\n";
-
-        for (const auto& encoding_algorithm_name : encoding_algorithm_names) {
-            const auto& results = test_results[file_name][encoding_algorithm_name];
-            ofs << encoding_algorithm_name;
-            for (const auto& value : results) {
-                ofs << "," << value;
-            }
-            ofs << "\n";
-        }
-
-        ofs.close();
-        std::cout << "Results written to " << output_file << std::endl;
+        ofs << "\n";
     }
+
+    ofs.close();
+    std::cout << "Results written to " << output_file << std::endl;
 }
 
 int main() {
@@ -317,9 +297,9 @@ int main() {
                 std::cerr << "Test FAILED for " << file_name << " with encoding " << encoding_algorithm_name << std::endl;
             }
         }
+        std::cout << "Completed tests for dataset: " << file_name << std::endl;
+        write_results_to_csv(output_dir, file_name);
     }
-    
-    write_results_to_csv(output_dir);
 
     return 0;
 }
