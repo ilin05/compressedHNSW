@@ -89,12 +89,14 @@ int main() {
 
     // Query the elements for themselves and measure recall
     float correct = 0;
-    for (int i = 0; i < max_elements; i++) {
+    int query_count = std::min(100, max_elements);
+    int step = max_elements / query_count;
+    for (int i = 0; i < max_elements; i+=step) {
         std::priority_queue<std::pair<double, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data_ptr + i * dim, 1);
         hnswlib::labeltype label = result.top().second;
         if (label == i) correct++;
     }
-    float recall = correct / max_elements;
+    float recall = correct / query_count;
     std::cout << "Recall: " << recall << "\n";
 
     // 检查数据正确性
