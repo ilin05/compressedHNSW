@@ -15,12 +15,12 @@ namespace dexor {
         initializeMethod();
     }
 
-    DoubleDeXORDecoder::DoubleDeXORDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn)
+    DoubleDeXORDecoder::DoubleDeXORDecoder(std::shared_ptr<utils::BaseBlockStreamReader> sharedIn)
         : Decoder(std::move(sharedIn)) {
         initializeMethod();
     }
 
-    DoubleDeXORDecoder::DoubleDeXORDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn, const std::string& configStr)
+    DoubleDeXORDecoder::DoubleDeXORDecoder(std::shared_ptr<utils::BaseBlockStreamReader> sharedIn, const std::string& configStr)
         : Decoder(std::move(sharedIn), configStr) {
         initializeMethod();
     }

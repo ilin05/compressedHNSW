@@ -79,22 +79,22 @@ namespace encoding_algorithm {
             return instance->getDecoder(data_type, input_path, config);
         }
 
-        static std::unique_ptr<Encoder> getEncoder(const std::string& data_type, const std::string& algorithm_name, std::shared_ptr<utils::StreamWriter> sharedOut, const std::string& config) {
+        static std::unique_ptr<Encoder> getEncoder(const std::string& data_type, const std::string& algorithm_name, std::shared_ptr<utils::BaseStreamWriter> sharedOut, const std::string& config) {
             auto instance = getAlgorithm(algorithm_name);
             return instance->getEncoder(data_type, std::move(sharedOut), config);
         }
 
-        static std::unique_ptr<Encoder> getEncoder(const std::string& data_type, const std::string& algorithm_name, std::shared_ptr<utils::StreamWriter> sharedOut) {
+        static std::unique_ptr<Encoder> getEncoder(const std::string& data_type, const std::string& algorithm_name, std::shared_ptr<utils::BaseStreamWriter> sharedOut) {
             auto instance = getAlgorithm(algorithm_name);
             return instance->getEncoder(data_type, std::move(sharedOut));
         }
 
-        static std::unique_ptr<Decoder> getDecoder(const std::string& data_type, const std::string& algorithm_name, std::shared_ptr<utils::BlockStreamReader> sharedIn, const std::string& config) {
+        static std::unique_ptr<Decoder> getDecoder(const std::string& data_type, const std::string& algorithm_name, std::shared_ptr<utils::BaseBlockStreamReader> sharedIn, const std::string& config) {
             auto instance = getAlgorithm(algorithm_name);
             return instance->getDecoder(data_type, std::move(sharedIn), config);
         }
 
-        static std::unique_ptr<Decoder> getDecoder(const std::string& data_type, const std::string& algorithm_name, std::shared_ptr<utils::BlockStreamReader> sharedIn) {
+        static std::unique_ptr<Decoder> getDecoder(const std::string& data_type, const std::string& algorithm_name, std::shared_ptr<utils::BaseBlockStreamReader> sharedIn) {
             auto instance = getAlgorithm(algorithm_name);
             return instance->getDecoder(data_type, std::move(sharedIn));
         }

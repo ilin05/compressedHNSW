@@ -6,9 +6,9 @@ namespace gorilla {
     DoubleGorillaDecoder::DoubleGorillaDecoder(const std::string& inputPath) : Decoder(inputPath) {}
     DoubleGorillaDecoder::DoubleGorillaDecoder(const std::string& inputPath, const std::string& config) : Decoder(inputPath, config) {}
     // 用BlockStreamReader构造Decoder
-    DoubleGorillaDecoder::DoubleGorillaDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn)
+    DoubleGorillaDecoder::DoubleGorillaDecoder(std::shared_ptr<utils::BaseBlockStreamReader> sharedIn)
         : Decoder(std::move(sharedIn)) {}
-    DoubleGorillaDecoder::DoubleGorillaDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn, const std::string& config)
+    DoubleGorillaDecoder::DoubleGorillaDecoder(std::shared_ptr<utils::BaseBlockStreamReader> sharedIn, const std::string& config)
         : Decoder(std::move(sharedIn), config) {}
 
     double DoubleGorillaDecoder::decodeDouble() {

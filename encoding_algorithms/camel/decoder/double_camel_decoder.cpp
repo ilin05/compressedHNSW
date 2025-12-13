@@ -12,10 +12,10 @@ namespace camel {
         : Decoder(inputPath, config) {}
 
     // 用BlockStreamReader构造Decoder
-    DoubleCamelDecoder::DoubleCamelDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn)
+    DoubleCamelDecoder::DoubleCamelDecoder(std::shared_ptr<utils::BaseBlockStreamReader> sharedIn)
         : Decoder(std::move(sharedIn)) {}
 
-    DoubleCamelDecoder::DoubleCamelDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn, const std::string& config)
+    DoubleCamelDecoder::DoubleCamelDecoder(std::shared_ptr<utils::BaseBlockStreamReader> sharedIn, const std::string& config)
         : Decoder(std::move(sharedIn), config) {}
 
     long long DoubleCamelDecoder::integer_decode() {

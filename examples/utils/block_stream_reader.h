@@ -6,10 +6,11 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include "base_block_stream_reader.h"
 
 namespace utils {
 
-    class BlockStreamReader {
+    class BlockStreamReader : public BaseBlockStreamReader {
     private:
         std::string fileName;
         std::vector<unsigned char> buffer;
@@ -21,12 +22,12 @@ namespace utils {
         BlockStreamReader(const std::string& path, size_t dataSize)
             : fileName(path), buffer(std::max<size_t>(dataSize, 1), 0) {}
 
-        void init() {
+        void init() override {
             pointer = 0;
             leftBits = 8;
         }
 
-        void cacheData(int beginBit, int endBit) {
+        void cacheData(int beginBit, int endBit) override {
             if (endBit <= beginBit) {
                 cachedBytes = 0;
                 init();
@@ -79,14 +80,14 @@ namespace utils {
             init();
         }
 
-        long readLong(int size) {
-            long result = 0;
+        long long readLong(int size) override {
+            long long result = 0;
             while (size > 0 && pointer < cachedBytes) {
                 int bitsToRead = std::min(leftBits, size);
                 leftBits -= bitsToRead;
                 unsigned int mask = (1u << bitsToRead) - 1u;
                 unsigned int chunk = (buffer[pointer] >> leftBits) & mask;
-                result = (result << bitsToRead) | static_cast<long>(chunk);
+                result = (result << bitsToRead) | static_cast<long long>(chunk);
                 size -= bitsToRead;
                 if (leftBits == 0) {
                     pointer++;
@@ -97,11 +98,10 @@ namespace utils {
             if (size > 0) {
                 result <<= size; // pad remaining bits with zeros when data exhausted
             }
-
             return result;
         }
 
-        int readInt(int size) {
+        int readInt(int size) override {
             return static_cast<int>(readLong(size));
         }
 
@@ -112,14 +112,14 @@ namespace utils {
             return value;
         }
 
-        double readDouble(int size) {
+        double readDouble(int size) override {
             std::uint64_t bits = static_cast<std::uint64_t>(readLong(size));
             double value;
             std::memcpy(&value, &bits, sizeof(double));
             return value;
         }
 
-        bool readBoolean() {
+        bool readBoolean() override {
             return readLong(1) > 0;
         }
     };

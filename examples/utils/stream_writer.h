@@ -6,9 +6,10 @@
 #include <cstdint> // For int32_t and uint64_t
 #include <algorithm> // For std::min
 #include <stdexcept> // For std::runtime_error
+#include "base_stream_writer.h"
 
 namespace utils {
-    class StreamWriter {
+    class StreamWriter : public BaseStreamWriter {
     private:
         static const int bufferSize = 1024;
         char buffer[bufferSize];
@@ -54,13 +55,13 @@ namespace utils {
             clear();
         }
 
-        long long track_bits() {
+        long long track_bits() override {
             long long b = delta_bits;
             this->delta_bits = 0;
             return b;
         }
 
-        void clear() {
+        void clear() override {
             if (pointer == 0 && currentByte == 0 && leftBits == 8) return;
             saveByte();
             if (pointer > 0) {
@@ -69,7 +70,7 @@ namespace utils {
             init();
         }
 
-        void write(bool b) {
+        void write(bool b) override {
             delta_bits += 1;
             leftBits--;
             currentByte = (currentByte << 1) | (b ? 1 : 0);
@@ -78,7 +79,7 @@ namespace utils {
             }
         }
 
-        void write(long long value, int size) {
+        void write(long long value, int size) override {
             delta_bits += std::max(0, size);
             while (size > 0) {
                 int len = std::min(size, leftBits);
@@ -93,7 +94,7 @@ namespace utils {
             }
         }
 
-        void write(int value, int size) {
+        void write(int value, int size) override {
             write(static_cast<long long>(value), size);
         }
 
@@ -113,6 +114,13 @@ namespace utils {
             } u;
             u.d = value;
             write(static_cast<long long>(u.l), size);
+        }
+
+        int align() override {
+            int padding = (leftBits == 8) ? 0 : leftBits;
+            saveByte();
+            delta_bits += padding;
+            return padding;
         }
     };
 }

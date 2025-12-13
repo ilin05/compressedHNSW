@@ -20,8 +20,8 @@ namespace gorilla {
     public:
         DoubleGorillaEncoder(const std::string& outputPath);
         DoubleGorillaEncoder(const std::string& outputPath, const std::string& config);
-        DoubleGorillaEncoder(std::shared_ptr<utils::StreamWriter> sharedOut);
-        DoubleGorillaEncoder(std::shared_ptr<utils::StreamWriter> sharedOut, const std::string& config);
+        DoubleGorillaEncoder(std::shared_ptr<utils::BaseStreamWriter> sharedOut);
+        DoubleGorillaEncoder(std::shared_ptr<utils::BaseStreamWriter> sharedOut, const std::string& config);
 
         std::unique_ptr<Encoder> deepCopy() override;
         int encode(double value) override;

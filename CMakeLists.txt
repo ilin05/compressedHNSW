@@ -54,6 +54,12 @@ if(HNSWLIB_EXAMPLES)
     endif()
 
     # examples
+    file(GLOB_RECURSE ENCODING_ALGO_SRC
+      "encoding_algorithms/dexor/*.cpp"
+      "encoding_algorithms/gorilla/*.cpp"
+      "encoding_algorithms/elf/*.cpp"
+      "encoding_algorithms/camel/*.cpp")
+
     add_executable(example_search examples/cpp/example_search.cpp)
     target_link_libraries(example_search hnswlib)
 
@@ -78,20 +84,20 @@ if(HNSWLIB_EXAMPLES)
     add_executable(example_mt_replace_deleted examples/cpp/example_mt_replace_deleted.cpp)
     target_link_libraries(example_mt_replace_deleted hnswlib)
 
-    add_executable(example_double_vector examples/cpp/example_double_vector.cpp)
+    add_executable(example_double_vector examples/cpp/example_double_vector.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(example_double_vector hnswlib)
-
-    file(GLOB_RECURSE ENCODING_ALGO_SRC
-      "encoding_algorithms/dexor/*.cpp"
-      "encoding_algorithms/gorilla/*.cpp"
-      "encoding_algorithms/elf/*.cpp"
-      "encoding_algorithms/camel/*.cpp")
 
     add_executable(vector_compress examples/cpp/vector_compress.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(vector_compress hnswlib)
 
+    add_executable(memory_vector_compress examples/cpp/memory_vector_compress.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(memory_vector_compress hnswlib)
+
     add_executable(single_vector_decompress examples/cpp/single_vector_decompress.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(single_vector_decompress hnswlib)
+
+    add_executable(test_hnswcw examples/cpp/test_hnswcw.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_hnswcw hnswlib)
 
     # tests
     add_executable(multivector_search_test tests/cpp/multivector_search_test.cpp)

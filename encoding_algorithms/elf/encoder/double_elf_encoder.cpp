@@ -10,10 +10,10 @@ namespace elf {
     DoubleElfEncoder::DoubleElfEncoder(const std::string& outputPath, const std::string& config)
         : Encoder(outputPath, config) {}
         
-    DoubleElfEncoder::DoubleElfEncoder(std::shared_ptr<utils::StreamWriter> sharedOut)
+    DoubleElfEncoder::DoubleElfEncoder(std::shared_ptr<utils::BaseStreamWriter> sharedOut)
         : Encoder(std::move(sharedOut)) {}
 
-    DoubleElfEncoder::DoubleElfEncoder(std::shared_ptr<utils::StreamWriter> sharedOut, const std::string& config)
+    DoubleElfEncoder::DoubleElfEncoder(std::shared_ptr<utils::BaseStreamWriter> sharedOut, const std::string& config)
         : Encoder(std::move(sharedOut), config) {}
 
     std::unique_ptr<Encoder> DoubleElfEncoder::deepCopy() {

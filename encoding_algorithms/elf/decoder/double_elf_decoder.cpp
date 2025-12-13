@@ -10,10 +10,10 @@ namespace elf {
     DoubleElfDecoder::DoubleElfDecoder(const std::string& inputPath, const std::string& config)
         : Decoder(inputPath, config) {}
 
-    DoubleElfDecoder::DoubleElfDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn)
+    DoubleElfDecoder::DoubleElfDecoder(std::shared_ptr<utils::BaseBlockStreamReader> sharedIn)
         : Decoder(std::move(sharedIn)) {}
 
-    DoubleElfDecoder::DoubleElfDecoder(std::shared_ptr<utils::BlockStreamReader> sharedIn, const std::string& config)
+    DoubleElfDecoder::DoubleElfDecoder(std::shared_ptr<utils::BaseBlockStreamReader> sharedIn, const std::string& config)
         : Decoder(std::move(sharedIn), config) {}
 
     double DoubleElfDecoder::recover(double vPrime, int betaStar) {

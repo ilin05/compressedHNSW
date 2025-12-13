@@ -38,12 +38,12 @@ namespace dexor {
         select_method();
     }
 
-    DoubleDeXOREncoder::DoubleDeXOREncoder(std::shared_ptr<utils::StreamWriter> sharedOut)
+    DoubleDeXOREncoder::DoubleDeXOREncoder(std::shared_ptr<utils::BaseStreamWriter> sharedOut)
         : Encoder(std::move(sharedOut)) {
         method = std::make_unique<Native>(this);
     }
 
-    DoubleDeXOREncoder::DoubleDeXOREncoder(std::shared_ptr<utils::StreamWriter> sharedOut, const std::string& configStr)
+    DoubleDeXOREncoder::DoubleDeXOREncoder(std::shared_ptr<utils::BaseStreamWriter> sharedOut, const std::string& configStr)
         : Encoder(std::move(sharedOut), configStr) {
         const auto select_method = [this]() {
             if (buffer_bits > 0) {

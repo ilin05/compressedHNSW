@@ -70,6 +70,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     std::mutex deleted_elements_lock;  // lock for deleted_elements
     std::unordered_set<tableint> deleted_elements;  // contains internal ids of deleted elements
 
+    mutable std::atomic<long> getDataTimeMicroseconds{0};
 
     HierarchicalNSW(SpaceInterface<dist_t> *s) {
     }
@@ -201,9 +202,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     // 数据存储在第0层，每个element的大小都是固定的，size_data_per_element。可以通过HNSW内部的id随机读取数据
     // 如果要使用差分编码压缩data，将无法通过简单的随机读取获取数据。或许需要页表之类的结构进行索引；同时，data需要解压缩。可以在每个element的开头记录上一个data的internal_id，接着回溯到第0个data，然后依次解压缩
     inline char *getDataByInternalId(tableint internal_id) const {
-        return (data_level0_memory_ + internal_id * size_data_per_element_ + offsetData_);
+        auto start = std::chrono::high_resolution_clock::now();
+        char* result = data_level0_memory_ + internal_id * size_data_per_element_ + offsetData_;
+        auto end = std::chrono::high_resolution_clock::now();
+        // return (data_level0_memory_ + internal_id * size_data_per_element_ + offsetData_);
+    
+        getDataTimeMicroseconds += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+        return result;
     }
-
 
     int getRandomLevel(double reverse_size) {
         std::uniform_real_distribution<double> distribution(0.0, 1.0);
@@ -1479,6 +1485,21 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             std::cout << "Min inbound: " << min1 << ", Max inbound:" << max1 << "\n";
         }
         std::cout << "integrity ok, checked " << connections_checked << " connections\n";
+    }
+
+    size_t getIndexSize() const {
+        size_t total_size = 0;
+        // base index size
+        total_size += size_data_per_element_ * max_elements_;
+        total_size += element_levels_.size() * sizeof(int);
+        total_size += sizeof(void*) * max_elements_;
+        for(size_t i = 0; i < cur_element_count; i++) {
+            int level = element_levels_[i];
+            if (level > 0) {
+                total_size += size_links_per_element_ * level;
+            }
+        }
+        return total_size;
     }
 };
 }  // namespace hnswlib
