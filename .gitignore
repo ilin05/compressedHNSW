@@ -11,4 +11,4 @@ var/
 .vs/
 **.DS_Store
 *.pyc
-test_results/*.csv
+test_results/*

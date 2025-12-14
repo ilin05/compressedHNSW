@@ -27,7 +27,9 @@ static int getDecimalPlace(double value) {
 
 int main() {
 
-    std::vector<std::vector<double>> data = data_loader::loadData("../datasets/simulated_highdim_physical.csv");
+    std::string file_name = "hair_loss";
+    std::string file_path = "../datasets/" + file_name + ".csv";
+    std::vector<std::vector<double>> data = data_loader::loadData(file_path);
     if (data.empty()) {
         std::cerr << "Failed to load data or data is empty." << std::endl;
         return 1;
@@ -39,7 +41,7 @@ int main() {
 
     int dim = cols;               // Dimension of the elements
     int max_elements = rows;   // Maximum number of elements, should be known beforehand
-    int M = 16;                 // Tightly connected with internal dimensionality of the data
+    int M = 30;                 // Tightly connected with internal dimensionality of the data
                                 // strongly affects the memory consumption
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
 
@@ -84,6 +86,28 @@ int main() {
 
     // Output the compression tree structure
     alg_hnsw->printCompressionTree();
+    alg_hnsw->checkPreNodeInNeighbors();
+
+    // 获取各节点第0层linkList的元素数量和压缩链长度
+    int linkList_size_level0[max_elements];
+    int compression_chain_length[max_elements];
+    for(int i = 0; i < max_elements; i++) {
+        linkList_size_level0[i] = alg_hnsw->getLevel0LinkListSize(i);
+        compression_chain_length[i] = alg_hnsw->getEncodingChainLength(i);
+    }
+    // 写入csv文件
+    std::string output_dir = "../test_results/hnswcw_node_info/";
+    std::string output_file = output_dir + file_name + "_" + encoding_algorithm_name + "_node_info.csv";
+    std::ofstream ofs(output_file);
+    if (!ofs.is_open()) {
+        std::cerr << "Failed to open output file: " << output_file << std::endl;
+        return 1;
+    }
+
+    for(int i = 0; i < max_elements; i++) {
+        ofs << i << "," << linkList_size_level0[i] << "," << compression_chain_length[i] << "\n";
+    }
+    ofs.close();
 
     // std::cout << "Index built with " << max_elements << " elements." << std::endl;
 

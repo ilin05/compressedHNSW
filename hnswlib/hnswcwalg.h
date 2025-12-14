@@ -1454,6 +1454,56 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
             }
         }
 
+        // ============================================================
+        // New Logic: Search -> Compress -> Connect
+        // ============================================================
+        
+        std::vector<std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst>> candidates_cache;
+        int start_level = std::min(curlevel, maxlevelcopy);
+        
+        if ((signed)currObj != -1) {
+            candidates_cache.resize(start_level + 1);
+            bool epDeleted = isMarkedDeleted(enterpoint_copy);
+            
+            // Phase 1: Search and Cache
+            for (int level = start_level; level >= 0; level--) {
+                std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(
+                        currObj, data_point, level);
+                
+                if (epDeleted) {
+                    std::vector<double> vec_ep = getOriginalDataByInternalId(enterpoint_copy);
+                    top_candidates.emplace(fstdistfunc_(data_point, vec_ep.data(), dist_func_param_), enterpoint_copy);
+                    if (top_candidates.size() > ef_construction_)
+                        top_candidates.pop();
+                }
+                
+                candidates_cache[level] = top_candidates;
+                
+                // Update currObj to the closest candidate for the next iteration
+                if (!top_candidates.empty()) {
+                    // top_candidates is max-heap (furthest on top). 
+                    // We need to iterate to find closest.
+                    // Since we need to keep top_candidates for Phase 3, we should copy it?
+                    // Or just traverse it non-destructively? 
+                    // Priority queue doesn't support iteration.
+                    // We have to copy.
+                    
+                    auto temp_queue = top_candidates;
+                    dist_t min_dist = std::numeric_limits<dist_t>::max();
+                    tableint closest = -1;
+                    while(!temp_queue.empty()){
+                        auto p = temp_queue.top();
+                        temp_queue.pop();
+                        if(p.first < min_dist){
+                            min_dist = p.first;
+                            closest = p.second;
+                        }
+                    }
+                    if(closest != -1) currObj = closest;
+                }
+            }
+        }
+
         // Compression Logic
         size_t dim = data_size_ / sizeof(double);
         tableint prenode = -1;
@@ -1490,24 +1540,24 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
 
         // Process chain: Decode -> Encode (to update state)
         for (tableint id : chain) {
-             size_t start = level0_element_start_positions_[id] + offsetData_;
-             size_t end;
-             if (id + 1 < cur_element_count && level0_element_start_positions_[id+1] > 0) {
-                end = level0_element_start_positions_[id+1];
-             } else {
-                end = data_level0_memory_.size();
-             }
-             
-             reader->resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
-             
-             for(size_t i=0; i<dim; ++i) {
-                 double val = decoders[i]->decodeDouble();
-                 encoders[i]->encode(val);
-             }
-             writer->align(); 
-             // Clear dummy buffer to avoid growing indefinitely
-             dummy_buffer.clear();
-             writer->setBuffer(&dummy_buffer);
+            size_t start = level0_element_start_positions_[id] + offsetData_;
+            size_t end;
+            if (id + 1 < cur_element_count && level0_element_start_positions_[id+1] > 0) {
+            end = level0_element_start_positions_[id+1];
+            } else {
+            end = data_level0_memory_.size();
+            }
+            
+            reader->resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
+            
+            for(size_t i=0; i<dim; ++i) {
+                double val = decoders[i]->decodeDouble();
+                encoders[i]->encode(val);
+            }
+            writer->align(); 
+            // Clear dummy buffer to avoid growing indefinitely
+            dummy_buffer.clear();
+            writer->setBuffer(&dummy_buffer);
         }
 
         // Switch to real buffer for the new point
@@ -1552,27 +1602,18 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
             memset(linkLists_[cur_c], 0, size_links_per_element_ * curlevel + 1);
         }
 
-        if ((signed)currObj != -1) {
+        if ((signed)enterpoint_copy != -1) {
             // std::cout << "Entering level <= maxlevel loop for point " << cur_c << " at level " << curlevel << std::endl;
 
-            bool epDeleted = isMarkedDeleted(enterpoint_copy);
-            for (int level = std::min(curlevel, maxlevelcopy); level >= 0; level--) {
+            for (int level = start_level; level >= 0; level--) {
                 if (level > maxlevelcopy || level < 0)  // possible? 这不可能吧？
                     throw std::runtime_error("Level error");
 
-                // 在level层找到与data_point距离最近的ef个节点，存储在列表中
-                std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(
-                        currObj, data_point, level);
+                // Retrieve candidates from cache
+                auto& top_candidates = candidates_cache[level];
 
-                // std::cout << "Point " << cur_c << " found " << top_candidates.size() << " candidates at level " << level << std::endl;
-                if (epDeleted) {
-                    std::vector<double> vec_ep = getOriginalDataByInternalId(enterpoint_copy);
-                    top_candidates.emplace(fstdistfunc_(data_point, vec_ep.data(), dist_func_param_), enterpoint_copy);
-                    if (top_candidates.size() > ef_construction_)
-                        top_candidates.pop();
-                }
                 // 在level层建立data_point与top_candidates中每一个元素的连接
-                currObj = mutuallyConnectNewElement(data_point, cur_c, top_candidates, level, false);
+                mutuallyConnectNewElement(data_point, cur_c, top_candidates, level, false);
             }
 
             // std::cout << "Point " << cur_c << " connected up to level " << curlevel << std::endl;
@@ -1843,6 +1884,51 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
 
     void resetTotalTimeGetOriginalData() {
         getOriginalData_time = 0;
+    }
+
+    // 根据internal id获取该节点在level0的linkLists中元素的数量
+    int getLevel0LinkListSize(tableint internalId) {
+        std::unique_lock <std::mutex> lock(link_list_locks_[internalId]);
+        linklistsizeint *ll_cur = get_linklist_at_level(internalId, 0);
+        int size = getListCount(ll_cur);
+        return size;
+    }
+
+    // 获取internal id的encoding chain长度
+    int getEncodingChainLength(tableint internalId) {
+        int length = 0;
+        tableint curr = getPrenodeId(internalId);
+        while (curr != (tableint)-1) {
+            length++;
+            curr = getPrenodeId(curr);
+            if (length > 1000) break; 
+        }
+        return length;
+    }
+
+    void checkPreNodeInNeighbors() {
+        for (tableint i = 0; i < cur_element_count; i++) {
+            tableint prenode = getPrenodeId(i);
+            if (prenode == (tableint)-1) continue;
+            bool found = false;
+            linklistsizeint *ll_cur = get_linklist_at_level(i, 0);
+            int size = getListCount(ll_cur);
+            tableint *data = (tableint *) (ll_cur + 1);
+            for (int j = 0; j < size; j++) {
+                if (data[j] == prenode) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                std::cout << "Prenode " << prenode << " of node " << i << " is: " << prenode << ", not found in its neighbors!\n";
+                std::cout << "Neighbors are: ";
+                for (int j = 0; j < size; j++) {
+                    std::cout << data[j] << " ";
+                }
+                std::cout << std::endl;
+            }
+        }
     }
 };
 }  // namespace hnswlib
