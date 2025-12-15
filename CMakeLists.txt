@@ -48,7 +48,7 @@ if(HNSWLIB_EXAMPLES)
         endif()
       endif()
     elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-      SET( CMAKE_CXX_FLAGS  "-Ofast -lrt -std=c++11 -DHAVE_CXX0X -march=native -fpic -w -fopenmp -ftree-vectorize -ftree-vectorizer-verbose=0" )
+      SET( CMAKE_CXX_FLAGS  "-Ofast -g -lrt -std=c++11 -DHAVE_CXX0X -march=native -fpic -w -fopenmp -ftree-vectorize -ftree-vectorizer-verbose=0" )
     elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
       SET( CMAKE_CXX_FLAGS  "/O2 -DHAVE_CXX0X /W1 /openmp /EHsc" )
     endif()
@@ -98,6 +98,12 @@ if(HNSWLIB_EXAMPLES)
 
     add_executable(test_hnswcw examples/cpp/test_hnswcw.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_hnswcw hnswlib)
+
+    add_executable(test_hnswcw_cached examples/cpp/test_hnswcw_cached.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_hnswcw_cached hnswlib)
+
+    add_executable(test_flame examples/cpp/test_flame.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_flame hnswlib)
 
     # tests
     add_executable(multivector_search_test tests/cpp/multivector_search_test.cpp)

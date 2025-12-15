@@ -27,7 +27,7 @@ static int getDecimalPlace(double value) {
 
 int main() {
 
-    std::string file_name = "hair_loss";
+    std::string file_name = "winequality-white";
     std::string file_path = "../datasets/" + file_name + ".csv";
     std::vector<std::vector<double>> data = data_loader::loadData(file_path);
     if (data.empty()) {
@@ -41,9 +41,9 @@ int main() {
 
     int dim = cols;               // Dimension of the elements
     int max_elements = rows;   // Maximum number of elements, should be known beforehand
-    int M = 30;                 // Tightly connected with internal dimensionality of the data
+    int M = 16;                 // Tightly connected with internal dimensionality of the data
                                 // strongly affects the memory consumption
-    int ef_construction = 200;  // Controls index search speed/build speed tradeoff
+    int ef_construction = 160;  // Controls index search speed/build speed tradeoff
 
     std::string encoding_algorithm_name = "DeXOR"; // Compression algorithm name
 
@@ -86,7 +86,7 @@ int main() {
 
     // Output the compression tree structure
     alg_hnsw->printCompressionTree();
-    alg_hnsw->checkPreNodeInNeighbors();
+    // alg_hnsw->checkPreNodeInNeighbors();
 
     // 获取各节点第0层linkList的元素数量和压缩链长度
     int linkList_size_level0[max_elements];

@@ -81,7 +81,14 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
     // 记录getOriginalData消耗的时间
     mutable std::atomic<long> getOriginalData_time{0};
 
-
+    // data cache for getOriginalDataByInternalId
+    size_t cache_max_size_ = 0;
+    mutable std::list<tableint> lru_history_;
+    mutable std::unordered_map<tableint, std::pair<std::vector<double>, std::list<tableint>::iterator>> getOriginalData_cache_;
+    mutable std::mutex cache_lock_;
+    mutable std::atomic<int> cache_pop_count_{0};
+    mutable std::atomic<int> getOriginalData_call_count_{0};
+    
     HierarchicalNSWCW(SpaceInterface<dist_t> *s) {
     }
 
@@ -103,6 +110,7 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
         const std::string &encoding_algorithm_name = "DeXOR",
         size_t M = 16,
         size_t ef_construction = 200,
+        size_t cache_max_size = 100,
         size_t random_seed = 100,
         bool allow_replace_deleted = false)
         : label_op_locks_(MAX_LABEL_OPERATION_LOCKS),
@@ -110,7 +118,8 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
             level0_element_start_positions_(max_elements),
             element_levels_(max_elements),
             allow_replace_deleted_(allow_replace_deleted),
-            encoding_algorithm_name_(encoding_algorithm_name) {
+            encoding_algorithm_name_(encoding_algorithm_name),
+            cache_max_size_(cache_max_size) {
         max_elements_ = max_elements;
         num_deleted_ = 0;
         data_size_ = s->get_data_size();
@@ -155,6 +164,9 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
         size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
         mult_ = 1 / log(1.0 * M_);
         revSize_ = 1.0 / mult_;
+
+        // 为getOriginalData缓存预留空间
+        getOriginalData_cache_.reserve(cache_max_size_);
     }
 
 
@@ -165,6 +177,8 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
     void clear() {
         data_level0_memory_.clear();
         data_level0_memory_.shrink_to_fit();
+        getOriginalData_cache_.clear();
+        lru_history_.clear();
         for (tableint i = 0; i < cur_element_count; i++) {
             if (element_levels_[i] > 0)
                 free(linkLists_[i]);
@@ -234,6 +248,19 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
 
     std::vector<double> getOriginalDataByInternalId(tableint internal_id) const {
         auto start_time = std::chrono::high_resolution_clock::now();
+
+        getOriginalData_call_count_++;
+        if (cache_max_size_ > 0) {
+            // std::lock_guard<std::mutex> lock(cache_lock_);
+            auto it = getOriginalData_cache_.find(internal_id);
+            if (it != getOriginalData_cache_.end()) {
+                lru_history_.splice(lru_history_.begin(), lru_history_, it->second.second);
+                auto end_time = std::chrono::high_resolution_clock::now();
+                getOriginalData_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+                return it->second.first;
+            }
+        }
+
         size_t dim = *((size_t *) dist_func_param_);
         std::vector<double> result(dim);
         
@@ -275,6 +302,22 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
                 result[i] = decoders[i]->decodeDouble();
             }
         }
+
+        if (cache_max_size_ > 0) {
+            // std::lock_guard<std::mutex> lock(cache_lock_);
+            auto it = getOriginalData_cache_.find(internal_id);
+            if (it == getOriginalData_cache_.end()) {
+                if (getOriginalData_cache_.size() >= cache_max_size_) {
+                    tableint evict_id = lru_history_.back();
+                    lru_history_.pop_back();
+                    getOriginalData_cache_.erase(evict_id);
+                    cache_pop_count_++;
+                }
+                lru_history_.push_front(internal_id);
+                getOriginalData_cache_[internal_id] = {result, lru_history_.begin()};
+            }
+        }
+
         auto end_time = std::chrono::high_resolution_clock::now();
         getOriginalData_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
         return result;
@@ -1929,6 +1972,14 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
                 std::cout << std::endl;
             }
         }
+    }
+
+    int getCachePopCount() const {
+        return cache_pop_count_;
+    }
+
+    int getGetOriginalDataCallCount() const {
+        return getOriginalData_call_count_;
     }
 };
 }  // namespace hnswlib
