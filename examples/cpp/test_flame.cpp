@@ -27,7 +27,7 @@ static int getDecimalPlace(double value) {
 
 int main() {
 
-    std::string file_name = "winequality-red";
+    std::string file_name = "sift1m";
     std::string file_path = "../datasets/" + file_name + ".csv";
     std::vector<std::vector<double>> data = data_loader::loadData(file_path);
     if (data.empty()) {
@@ -41,9 +41,9 @@ int main() {
 
     int dim = cols;               // Dimension of the elements
     int max_elements = rows;   // Maximum number of elements, should be known beforehand
-    int M = 16;                 // Tightly connected with internal dimensionality of the data
+    int M = 32;                 // Tightly connected with internal dimensionality of the data
                                 // strongly affects the memory consumption
-    int ef_construction = 200;  // Controls index search speed/build speed tradeoff
+    int ef_construction = 300;  // Controls index search speed/build speed tradeoff
 
     std::string encoding_algorithm_name = "DeXOR"; // Compression algorithm name
 
@@ -62,7 +62,7 @@ int main() {
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < max_elements; i++) {
         alg_hnsw->addPoint(data_ptr + i * dim, i);
-        if(i > 0 && i % 500 == 0){
+        if(i > 0 && i % 5000 == 0){
             std::cout << "Added " << i << " points." << std::endl;
         }
     }
@@ -72,50 +72,21 @@ int main() {
 
     // Query the elements for themselves and measure recall
     float correct = 0;
+    auto query_start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < max_elements; i++) {
         std::priority_queue<std::pair<double, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data_ptr + i * dim, 1);
         hnswlib::labeltype label = result.top().second;
         if (label == i) correct++;
+        if(label % 10000 == 0){
+            std::cout << "Queried " << i << " points." << std::endl;
+        }
     }
+    auto query_end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> query_duration = query_end - query_start;
+    float avg_query_time = query_duration.count() / max_elements; // milliseconds per query
     float recall = correct / max_elements;
     std::cout << "Recall: " << recall << "\n";
-
-    // // 检查数据正确性
-    // bool mismatch_found = false;
-    // for(int i = 0; i < rows; i++) {
-    //     std::vector<double> decompressedVec = alg_hnsw->getOriginalDataByInternalId(i);
-    //     for(int j = 0; j < cols; j++) {
-    //         double originalValue = data[i][j];
-    //         double decompressedValue = decompressedVec[j];
-    //         int place = getDecimalPlace(originalValue);
-    //         double eps = EPS[place];
-    //         if (std::abs(originalValue - decompressedValue) > eps && place < 13) {
-    //             std::cerr << "Data mismatch at row " << i << ", col " << j
-    //                       << ": original=" << originalValue
-    //                       << ", decompressed=" << decompressedValue
-    //                       << ", eps=" << eps << std::endl;
-    //             mismatch_found = true;}
-    //     }
-    // }
-    // if(!mismatch_found) {
-    //     std::cout << encoding_algorithm_name << " compression algorithm passed data integrity check." << std::endl;
-    // }
-
-    // // Serialize index
-    // std::string hnsw_path = "hnsw.bin";
-    // alg_hnsw->saveIndex(hnsw_path);
-    // delete alg_hnsw;
-
-    // // Deserialize index and check recall
-    // alg_hnsw = new hnswlib::HierarchicalNSWCW<double>(&space, hnsw_path);
-    // correct = 0;
-    // for (int i = 0; i < max_elements; i++) {
-    //     std::priority_queue<std::pair<double, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data_ptr + i * dim, 1);
-    //     hnswlib::labeltype label = result.top().second;
-    //     if (label == i) correct++;
-    // }
-    // recall = (float)correct / max_elements;
-    // std::cout << "Recall of deserialized index: " << recall << "\n";
+    std::cout << "Average query time: " << avg_query_time << " ms" << std::endl;
 
     delete[] data_ptr;
     delete alg_hnsw;

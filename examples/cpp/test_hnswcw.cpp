@@ -7,14 +7,14 @@ namespace {
 
     // file names list
     const std::vector<std::string> file_names = {
-        // "winequality-red"
+        // "winequality-red",
         // "winequality-white",
         // "Stress-Lysis",
         // "siftsmall_base",
         // "SaYoPillow",
         // "emotional_monitoring_dataset_with_target",
-        // "simulated_highdim_physical",
-        "hair_loss"
+        "hair_loss",
+        "simulated_highdim_physical"
         // "fordTest",
         // "fordTrain"
     };
@@ -97,6 +97,7 @@ bool test_hnswcw(std::string data_path, std::string file_name, std::string encod
     for (int i = 0; i < max_elements; i++) {
         alg_hnsw->addPoint(data_ptr + i * dim, i);
     }
+    alg_hnsw->compactLevel0();
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> build_duration = end - start;
     test_results[file_name][encoding_algorithm_name][0] = build_duration.count();

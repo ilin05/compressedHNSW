@@ -4,6 +4,12 @@
 namespace {
     const double EPS[] = {1, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10, 1e-11, 1e-12,
             1e-13, 1e-14, 1e-15, 1e-16, 1e-17, 1e-18, 1e-19, 1e-20, 1e-21, 1e-22, 1e-23};
+
+    int rows;
+    int cols;
+
+    std::vector<size_t> label_list;
+    std::vector<std::vector<unsigned int>> linklists_level0;
 }
 
 static int getDecimalPlace(double value) {
@@ -25,9 +31,66 @@ static int getDecimalPlace(double value) {
     }
 }
 
+void save_linklists_level0(hnswlib::HierarchicalNSWCW<double>* alg_hnsw){
+    linklists_level0.clear();
+    for(int i = 0; i < rows; i++) {
+        int linklist_size = alg_hnsw->getLevel0LinkListSize(i);
+        std::vector<unsigned int> linklist;
+        unsigned int* linklist_ptr = alg_hnsw->get_linklist0(i);
+        for(int j = 0; j < linklist_size; j++) {
+            linklist.push_back(linklist_ptr[j]);
+        }
+        linklists_level0.push_back(linklist);
+    }
+}
+
+void save_label_list(hnswlib::HierarchicalNSWCW<double>* alg_hnsw){
+    label_list.clear();
+    for(int i = 0; i < rows; i++) {
+        size_t label = alg_hnsw->getExternalLabel(i);
+        label_list.push_back(label);
+    }
+}
+
+void check_labels(hnswlib::HierarchicalNSWCW<double>* alg_hnsw){
+    bool mismatch_found = false;
+    for(int i = 0; i < rows; i++) {
+        size_t label = alg_hnsw->getExternalLabel(i);
+        if(label != label_list[i]){
+            mismatch_found = true;
+            std::cerr << "Label mismatch at index " << i << ": expected " << label_list[i] << ", got " << label << std::endl;
+        }
+    }
+    if (!mismatch_found) {
+        std::cout << "All " << rows << " labels match correctly." << std::endl;
+    }
+}
+
+void check_linklists_level0(hnswlib::HierarchicalNSWCW<double>* alg_hnsw){
+    bool mismatch_found = false;
+    for(int i = 0; i < rows; i++) {
+        int linklist_size = alg_hnsw->getLevel0LinkListSize(i);
+        if(linklist_size != linklists_level0[i].size()){
+            mismatch_found = true;
+            std::cerr << "Linklist size mismatch at index " << i << ": expected " << linklists_level0[i].size() << ", got " << linklist_size << std::endl;
+            continue;
+        }
+        unsigned int* linklist_ptr = alg_hnsw->get_linklist0(i);
+        for(int j = 0; j < linklist_size; j++) {
+            if(linklist_ptr[j] != linklists_level0[i][j]){
+                mismatch_found = true;
+                std::cerr << "Linklist element mismatch at index " << i << ", position " << j << ": expected " << linklists_level0[i][j] << ", got " << linklist_ptr[j] << std::endl;
+            }
+        }
+    }
+    if (!mismatch_found) {
+        std::cout << "All " << rows << " level 0 linklists match correctly." << std::endl;
+    }
+}
+
 int main() {
 
-    std::string file_name = "winequality-white";
+    std::string file_name = "siftsmall_base";
     std::string file_path = "../datasets/" + file_name + ".csv";
     std::vector<std::vector<double>> data = data_loader::loadData(file_path);
     if (data.empty()) {
@@ -35,8 +98,8 @@ int main() {
         return 1;
     }
 
-    const int rows = static_cast<int>(data.size());
-    const int cols = static_cast<int>(data.front().size());
+    rows = static_cast<int>(data.size());
+    cols = static_cast<int>(data.front().size());
 
 
     int dim = cols;               // Dimension of the elements
@@ -70,6 +133,9 @@ int main() {
         }
         // std::cout << "Added point " << i << std::endl;
     }
+    // shrink第0层的graph
+    alg_hnsw->compactLevel0();
+
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> build_duration = end - start;
     std::cout << "Index built in " << build_duration.count() << " seconds." << std::endl;

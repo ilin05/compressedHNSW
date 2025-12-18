@@ -105,6 +105,15 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_flame examples/cpp/test_flame.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_flame hnswlib)
 
+    add_executable(test_save_and_load_hnswcw examples/cpp/test_save_and_load_hnswcw.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_save_and_load_hnswcw hnswlib)
+
+    add_executable(test_save_hnswcw_and_hnsw examples/cpp/test_save_hnswcw_and_hnsw.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_save_hnswcw_and_hnsw hnswlib)
+
+    add_executable(test_load_hnswcw_and_hnsw examples/cpp/test_load_hnswcw_and_hnsw.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_load_hnswcw_and_hnsw hnswlib)
+
     # tests
     add_executable(multivector_search_test tests/cpp/multivector_search_test.cpp)
     target_link_libraries(multivector_search_test hnswlib)

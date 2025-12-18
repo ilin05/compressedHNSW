@@ -89,6 +89,9 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
     mutable std::atomic<int> cache_pop_count_{0};
     mutable std::atomic<int> getOriginalData_call_count_{0};
     
+    // Flag to indicate if the index has been compacted
+    bool is_compacted_ = false;
+
     HierarchicalNSWCW(SpaceInterface<dist_t> *s) {
     }
 
@@ -212,38 +215,63 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
 
     inline labeltype getExternalLabel(tableint internal_id) const {
         labeltype return_label;
-        memcpy(&return_label, (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + label_offset_), sizeof(labeltype));
+        size_t offset = is_compacted_ ? sizeof(tableint) : label_offset_;
+        memcpy(&return_label, (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset), sizeof(labeltype));
         return return_label;
     }
 
 
     inline void setExternalLabel(tableint internal_id, labeltype label) const {
-        memcpy((char*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + label_offset_), &label, sizeof(labeltype));
+        size_t offset = is_compacted_ ? sizeof(tableint) : label_offset_;
+        memcpy((char*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset), &label, sizeof(labeltype));
     }
 
 
     inline labeltype *getExternalLabeLp(tableint internal_id) const {
-        return (labeltype *) (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + label_offset_);
+        size_t offset = is_compacted_ ? sizeof(tableint) : label_offset_;
+        return (labeltype *) (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset);
     }
 
     inline tableint getPrenodeId(tableint internal_id) const {
         tableint prenode;
-        memcpy(&prenode, (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + prenode_offset_), sizeof(tableint));
+        size_t offset = is_compacted_ ? 0 : prenode_offset_;
+        memcpy(&prenode, (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset), sizeof(tableint));
         return prenode;
     }
 
     inline void setPrenodeId(tableint internal_id, tableint prenode) {
-        memcpy((char*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + prenode_offset_), &prenode, sizeof(tableint));
+        size_t offset = is_compacted_ ? 0 : prenode_offset_;
+        memcpy((char*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset), &prenode, sizeof(tableint));
     }
 
     // 数据存储在第0层，每个element的大小都是固定的，size_data_per_element。可以通过HNSW内部的id随机读取数据
     // 如果要使用差分编码压缩data，将无法通过简单的随机读取获取数据。或许需要页表之类的结构进行索引；同时，data需要解压缩。可以在每个element的开头记录上一个data的internal_id，接着回溯到第0个data，然后依次解压缩
     inline char *getDataByInternalId(tableint internal_id) const {
-        return (char*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offsetData_);
+        size_t offset;
+        if (is_compacted_) {
+            // Compacted layout: [Prenode (4)] [Label (4/8)] [LinkListSize (2)] [Neighbors (size*4)] [Data...]
+            // We need to read LinkListSize to determine Data offset
+            // Prenode (4) + Label (sizeof(labeltype))
+            size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
+            unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + linklist_size_offset));
+            // Data starts after neighbors
+            offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+        } else {
+            offset = offsetData_;
+        }
+        return (char*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset);
     }
 
     inline char *getDataByInternalId(tableint internal_id, char* data_level0_memory) const {
-        return (char*)(data_level0_memory + level0_element_start_positions_[internal_id] + offsetData_);
+        size_t offset;
+        if (is_compacted_) {
+            size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
+            unsigned short int size = *((unsigned short int*)(data_level0_memory + level0_element_start_positions_[internal_id] + linklist_size_offset));
+            offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+        } else {
+            offset = offsetData_;
+        }
+        return (char*)(data_level0_memory + level0_element_start_positions_[internal_id] + offset);
     }
 
     std::vector<double> getOriginalDataByInternalId(tableint internal_id) const {
@@ -285,12 +313,31 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
         
         for (tableint id : chain) {
             // std::cout << "Decoding id: " << id << "cur_element_count" << cur_element_count << std::endl;
-            size_t start = level0_element_start_positions_[id] + offsetData_;
+            size_t start;
             size_t end;
-            if (id + 1 < cur_element_count && level0_element_start_positions_[id+1] > 0) {
-                end = level0_element_start_positions_[id+1];
+            
+            if (is_compacted_) {
+                // In compacted mode, we need to calculate start offset dynamically
+                // Layout: [Prenode] [Label] [LinkListSize] [Neighbors] [Data]
+                size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
+                unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[id] + linklist_size_offset));
+                size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+                
+                start = level0_element_start_positions_[id] + data_offset;
+                
+                // End is the start of the next element (or end of memory)
+                if (id + 1 < cur_element_count && level0_element_start_positions_[id+1] > 0) {
+                    end = level0_element_start_positions_[id+1];
+                } else {
+                    end = data_level0_memory_.size();
+                }
             } else {
-                end = data_level0_memory_.size();
+                start = level0_element_start_positions_[id] + offsetData_;
+                if (id + 1 < cur_element_count && level0_element_start_positions_[id+1] > 0) {
+                    end = level0_element_start_positions_[id+1];
+                } else {
+                    end = data_level0_memory_.size();
+                }
             }
 
             // std::cout << "Data range in memory: " << start << " to " << end << std::endl;
@@ -498,7 +545,8 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
         dist_t lowerBound;
         if (bare_bone_search || 
             (!isMarkedDeleted(ep_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(ep_id))))) {
-            char* ep_data = getDataByInternalId(ep_id);
+            std::vector<double> ep_vec = getOriginalDataByInternalId(ep_id);
+            const void* ep_data = ep_vec.data();
             dist_t dist = fstdistfunc_(data_point, ep_data, dist_func_param_);
             lowerBound = dist;
             top_candidates.emplace(dist, ep_id);
@@ -545,7 +593,7 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
             if (size > 0) {
                 _mm_prefetch((char *) (visited_array + *(data + 1)), _MM_HINT_T0);
                 _mm_prefetch((char *) (visited_array + *(data + 1) + 64), _MM_HINT_T0);
-                _mm_prefetch(data_level0_memory_.data() + level0_element_start_positions_[*(data + 1)] + offsetData_, _MM_HINT_T0);
+                _mm_prefetch(getDataByInternalId(*(data + 1)), _MM_HINT_T0);
                 _mm_prefetch((char *) (data + 2), _MM_HINT_T0);
             }
 #endif
@@ -556,8 +604,7 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
 #ifdef USE_SSE
                 if (j < size) {
                     _mm_prefetch((char *) (visited_array + *(data + j + 1)), _MM_HINT_T0);
-                    _mm_prefetch(data_level0_memory_.data() + level0_element_start_positions_[*(data + j + 1)] + offsetData_,
-                                    _MM_HINT_T0);  ////////////
+                    _mm_prefetch(getDataByInternalId(*(data + j + 1)), _MM_HINT_T0);
                 }
 #endif
                 if (!(visited_array[candidate_id] == visited_array_tag)) {
@@ -580,8 +627,9 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
                         candidate_set.emplace(-dist, candidate_id);
 #ifdef USE_SSE
                         if (candidate_set.size() > 0) {
+                            size_t offset = is_compacted_ ? (sizeof(tableint) + sizeof(labeltype)) : offsetLevel0_;
                             _mm_prefetch(data_level0_memory_.data() + level0_element_start_positions_[candidate_set.top().second] +
-                                            offsetLevel0_,  ///////////
+                                            offset,  ///////////
                                             _MM_HINT_T0);  ////////////////////////
                         }
 #endif
@@ -683,11 +731,17 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
 
 
     linklistsizeint *get_linklist0(tableint internal_id) const {
+        if (is_compacted_) {
+            return (linklistsizeint *) (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + sizeof(tableint) + sizeof(labeltype));
+        }
         return (linklistsizeint *) (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offsetLevel0_);
     }
 
 
     linklistsizeint *get_linklist0(tableint internal_id, char *data_level0_memory_) const {
+        if (is_compacted_) {
+            return (linklistsizeint *) (data_level0_memory_ + level0_element_start_positions_[internal_id] + sizeof(tableint) + sizeof(labeltype));
+        }
         return (linklistsizeint *) (data_level0_memory_ + level0_element_start_positions_[internal_id] + offsetLevel0_);
     }
 
@@ -834,6 +888,75 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
     }
 
 
+    void compactLevel0() {
+        if (is_compacted_) return;
+
+        std::vector<char> new_memory;
+        new_memory.reserve(data_level0_memory_.size());
+
+        std::vector<size_t> new_start_positions(cur_element_count);
+
+        for (size_t i = 0; i < cur_element_count; ++i) {
+            size_t old_start = level0_element_start_positions_[i];
+            size_t new_start = new_memory.size();
+            new_start_positions[i] = new_start;
+
+            // 1. Copy Prenode
+            tableint prenode = getPrenodeId(i);
+            size_t prenode_size = sizeof(tableint);
+            new_memory.resize(new_memory.size() + prenode_size);
+            *((tableint*)(new_memory.data() + new_start)) = prenode;
+
+            // 2. Copy Label
+            labeltype label = getExternalLabel(i);
+            size_t label_size = sizeof(labeltype);
+            new_memory.resize(new_memory.size() + label_size);
+            *((labeltype*)(new_memory.data() + new_start + prenode_size)) = label;
+
+            // 3. Copy LinkList
+            // Note: get_linklist0 uses offsetLevel0_ which is 0 in original layout.
+            // We are currently NOT compacted, so get_linklist0 works as expected (using offsetLevel0_).
+            
+            unsigned char* old_ll_ptr = (unsigned char*)get_linklist0(i);
+            linklistsizeint size = *((linklistsizeint*)old_ll_ptr);
+            
+            size_t ll_header_size = sizeof(linklistsizeint);
+            size_t neighbors_size = size * sizeof(tableint);
+            
+            new_memory.resize(new_memory.size() + ll_header_size + neighbors_size);
+            
+            // Copy size
+            *((linklistsizeint*)(new_memory.data() + new_start + prenode_size + label_size)) = size;
+            
+            // Copy neighbors
+            memcpy(new_memory.data() + new_start + prenode_size + label_size + ll_header_size, 
+                   old_ll_ptr + ll_header_size, 
+                   neighbors_size);
+
+            // 4. Copy Data
+            size_t old_data_start = old_start + offsetData_;
+            size_t old_data_end;
+            if (i + 1 < cur_element_count && level0_element_start_positions_[i+1] > 0) {
+                old_data_end = level0_element_start_positions_[i+1];
+            } else {
+                old_data_end = data_level0_memory_.size();
+            }
+            size_t data_len = old_data_end - old_data_start;
+            
+            new_memory.resize(new_memory.size() + data_len);
+            memcpy(new_memory.data() + new_start + prenode_size + label_size + ll_header_size + neighbors_size,
+                   data_level0_memory_.data() + old_data_start,
+                   data_len);
+        }
+
+        data_level0_memory_ = std::move(new_memory);
+        level0_element_start_positions_ = std::move(new_start_positions);
+        is_compacted_ = true;
+        
+        // Shrink to fit to release unused memory
+        data_level0_memory_.shrink_to_fit();
+    }
+
     void resizeIndex(size_t new_max_elements) {
         if (new_max_elements < cur_element_count)
             throw std::runtime_error("Cannot resize, max element is less than the current number of elements");
@@ -876,7 +999,10 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
         size += sizeof(mult_);
         size += sizeof(ef_construction_);
 
-        size += cur_element_count * size_data_per_element_;
+        size += cur_element_count * sizeof(size_t);
+
+        size += sizeof(size_t);
+        size += data_level0_memory_.size();
 
         for (size_t i = 0; i < cur_element_count; i++) {
             unsigned int linkListSize = element_levels_[i] > 0 ? size_links_per_element_ * element_levels_[i] : 0;
@@ -887,6 +1013,8 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
     }
 
     void saveIndex(const std::string &location) {
+        if (is_compacted_)
+            throw std::runtime_error("Cannot save compacted index");
         std::ofstream output(location, std::ios::binary);
         std::streampos position;
 
@@ -894,6 +1022,7 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
         writeBinaryPOD(output, max_elements_);
         writeBinaryPOD(output, cur_element_count);
         writeBinaryPOD(output, size_data_per_element_);
+        writeBinaryPOD(output, prenode_offset_);
         writeBinaryPOD(output, label_offset_);
         writeBinaryPOD(output, offsetData_);
         writeBinaryPOD(output, maxlevel_);
@@ -942,6 +1071,7 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
             max_elements = max_elements_;
         max_elements_ = max_elements;
         readBinaryPOD(input, size_data_per_element_);
+        readBinaryPOD(input, prenode_offset_);
         readBinaryPOD(input, label_offset_);
         readBinaryPOD(input, offsetData_);
         readBinaryPOD(input, maxlevel_);
@@ -1004,11 +1134,9 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
         if (linkLists_ == nullptr)
             throw std::runtime_error("Not enough memory: loadIndex failed to allocate linklists");
         element_levels_ = std::vector<int>(max_elements);
-        level0_element_start_positions_ = std::vector<size_t>(max_elements);
         revSize_ = 1.0 / mult_;
         ef_ = 10;
         for (size_t i = 0; i < cur_element_count; i++) {
-            // level0_element_start_positions_[i] = i * size_data_per_element_;
             label_lookup_[getExternalLabel(i)] = i;
             unsigned int linkListSize;
             readBinaryPOD(input, linkListSize);
@@ -1207,6 +1335,9 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
 
 
     void updatePoint(const void *dataPoint, tableint internalId, float updateNeighborProbability) {
+        if (is_compacted_)
+            throw std::runtime_error("Cannot update point in compacted index");
+
         // update the feature vector associated with existing point with new vector
         // memcpy(getDataByInternalId(internalId), dataPoint, data_size_);
 
@@ -1414,6 +1545,8 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
 
     // label是外部的id。存储在label_lookup_中的是外部id到内部id的映射
     tableint addPoint(const void *data_point, labeltype label, int level) {
+        if (is_compacted_)
+            throw std::runtime_error("Cannot add point in compacted index");
         tableint cur_c = 0;
         {
             // Checking if the element with the same label already exists
@@ -1885,18 +2018,30 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
 
     int getCompressedDataSize() const {
         // 返回压缩的所有element的data部分的总大小
-        int total_size = 0;
+        size_t total_size = 0;
         for (tableint i = 0; i < cur_element_count; i++) {
-            size_t start = level0_element_start_positions_[i] + offsetData_;
+            size_t start;
+            if (is_compacted_) {
+                size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
+                unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[i] + linklist_size_offset));
+                size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+                start = level0_element_start_positions_[i] + data_offset;
+            } else {
+                start = level0_element_start_positions_[i] + offsetData_;
+            }
+
             size_t end;
             if (i + 1 < cur_element_count && level0_element_start_positions_[i+1] > 0) {
                 end = level0_element_start_positions_[i+1];
             } else {
                 end = data_level0_memory_.size();
             }
-            total_size += (end - start);
+            
+            if (end > start) {
+                total_size += (end - start);
+            }
         }
-        return total_size;
+        return (int)total_size;
     }
 
     size_t getIndexSize() const {
@@ -1949,6 +2094,18 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
         return length;
     }
 
+    // 获取internal id的encoding chain
+    std::vector<tableint> getEncodingChain(tableint internalId) {
+        std::vector<tableint> chain;
+        tableint curr = internalId;
+        while (curr != (tableint)-1) {
+            chain.push_back(curr);
+            curr = getPrenodeId(curr);
+            if (chain.size() > 1000) break; 
+        }
+        return chain;
+    }
+
     void checkPreNodeInNeighbors() {
         for (tableint i = 0; i < cur_element_count; i++) {
             tableint prenode = getPrenodeId(i);
@@ -1980,6 +2137,14 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
 
     int getGetOriginalDataCallCount() const {
         return getOriginalData_call_count_;
+    }
+
+    std::vector<size_t> getLevel0ElementStartPositions() const {
+        return level0_element_start_positions_;
+    }
+
+    std::vector<char> getDataLevel0Memory() const {
+        return data_level0_memory_;
     }
 };
 }  // namespace hnswlib
