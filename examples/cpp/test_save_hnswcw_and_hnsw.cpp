@@ -9,14 +9,14 @@ namespace {
     const std::vector<std::string> file_names = {
         "winequality-red",
         "winequality-white",
-        "Stress-Lysis"
-        // "siftsmall_base",
-        // "SaYoPillow",
-        // "emotional_monitoring_dataset_with_target",
-        // "simulated_highdim_physical",
-        // "hair_loss",
-        // "fordTest",
-        // "fordTrain"
+        "Stress-Lysis",
+        "siftsmall_base",
+        "SaYoPillow",
+        "emotional_monitoring_dataset_with_target",
+        "simulated_highdim_physical",
+        "hair_loss",
+        "fordTest",
+        "fordTrain"
     };
 
 }

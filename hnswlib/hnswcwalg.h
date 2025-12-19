@@ -275,7 +275,7 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
     }
 
     std::vector<double> getOriginalDataByInternalId(tableint internal_id) const {
-        auto start_time = std::chrono::high_resolution_clock::now();
+        // auto start_time = std::chrono::high_resolution_clock::now();
 
         getOriginalData_call_count_++;
         if (cache_max_size_ > 0) {
@@ -283,8 +283,8 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
             auto it = getOriginalData_cache_.find(internal_id);
             if (it != getOriginalData_cache_.end()) {
                 lru_history_.splice(lru_history_.begin(), lru_history_, it->second.second);
-                auto end_time = std::chrono::high_resolution_clock::now();
-                getOriginalData_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+                // auto end_time = std::chrono::high_resolution_clock::now();
+                // getOriginalData_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
                 return it->second.first;
             }
         }
@@ -365,8 +365,8 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
             }
         }
 
-        auto end_time = std::chrono::high_resolution_clock::now();
-        getOriginalData_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+        // auto end_time = std::chrono::high_resolution_clock::now();
+        // getOriginalData_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
         return result;
     }
 
