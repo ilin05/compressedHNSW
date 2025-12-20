@@ -15,6 +15,7 @@ namespace {
         "emotional_monitoring_dataset_with_target",
         "simulated_highdim_physical",
         "hair_loss",
+        "sift1m",
         "fordTest",
         "fordTrain"
     };
@@ -133,6 +134,10 @@ void test_save_and_load_hnswcw(std::string data_path, std::string file_name) {
     // Serialize index
     std::string hnswcw_path = "storage/" + file_name + "_hnswcw.bin";
     alg_hnsw->saveIndex(hnswcw_path);
+
+    // 压缩的data部分总大小
+    size_t compressed_data_size = alg_hnsw->getCompressedDataSize();
+    std::cout << "Total compressed data size: " << compressed_data_size << " bytes." << std::endl;
 
     delete alg_hnsw;
     delete[] data_ptr;

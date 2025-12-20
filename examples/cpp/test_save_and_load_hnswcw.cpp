@@ -131,9 +131,9 @@ void test_save_and_load_hnswcw(std::string data_path, std::string file_name) {
 
     int dim = cols;               // Dimension of the elements
     int max_elements = rows;   // Maximum number of elements, should be known beforehand
-    int M = 32;                 // Tightly connected with internal dimensionality of the data
+    int M = 16;                 // Tightly connected with internal dimensionality of the data
                                 // strongly affects the memory consumption
-    int ef_construction = 300;  // Controls index search speed/build speed tradeoff
+    int ef_construction = 200;  // Controls index search speed/build speed tradeoff
 
     std::string encoding_algorithm_name = "DeXOR"; // Compression algorithm name
 
@@ -223,9 +223,9 @@ void test_save_and_load_hnswcw(std::string data_path, std::string file_name) {
         std::priority_queue<std::pair<double, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data_ptr + i * dim, 1);
         hnswlib::labeltype label = result.top().second;
         if (label == i) correct++;
-        if(label % 10000 == 0){
-            std::cout << "Queried " << i << " points." << std::endl;
-        }
+        // if(label % 10000 == 0){
+        //     std::cout << "Queried " << i << " points." << std::endl;
+        // }
     }
     query_end = std::chrono::high_resolution_clock::now();
     query_duration = query_end - query_start;
@@ -240,10 +240,10 @@ void test_save_and_load_hnswcw(std::string data_path, std::string file_name) {
 
 int main() {
 
-    std::string file_name = "winequality-red";
+    std::string file_name = "siftsmall_base";
     std::string file_path = "../datasets/";
     
-    // test_save_and_load_hnsw(file_path, file_name);
+    test_save_and_load_hnsw(file_path, file_name);
     test_save_and_load_hnswcw(file_path, file_name);
 
     return 0;

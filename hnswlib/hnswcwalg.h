@@ -1680,11 +1680,51 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
             }
         }
 
+        // 从candidates_cache[0]中选择prenode，找到距离待插入节点较近且chain较短的节点作为prenode
+
         // Compression Logic
         size_t dim = data_size_ / sizeof(double);
         tableint prenode = -1;
         if ((signed)currObj != -1) {
-            prenode = currObj; 
+            auto level0_candidates = candidates_cache[0];
+            std::vector<std::pair<tableint, std::pair<dist_t, int>>> candidate_infos; // (id, (distance, chain_length))
+            while (!level0_candidates.empty()) {
+                tableint candidate_id = level0_candidates.top().second;
+                dist_t candidate_dist = level0_candidates.top().first;
+                level0_candidates.pop();
+
+                // Build chain to root for candidate
+                int chain_length = 0;
+                tableint curr = candidate_id;
+                while (curr != (tableint)-1) {
+                    curr = getPrenodeId(curr);
+                    chain_length++;
+                    if (chain_length > 1000) break; 
+                }
+                candidate_infos.push_back({candidate_id, {candidate_dist, chain_length}});
+            }
+            // Select best candidate based on distance and chain length
+            std::sort(candidate_infos.begin(), candidate_infos.end(),
+                      [](const std::pair<tableint, std::pair<dist_t, int>>& a,
+                         const std::pair<tableint, std::pair<dist_t, int>>& b) {
+                          if (a.second.first != b.second.first)
+                              return a.second.first < b.second.first; // smaller distance first
+                          return a.second.second < b.second.second; // then smaller chain length
+                      });
+
+            // 限制chain length to be within a threshold (e.g., 10)
+            for(const auto& info : candidate_infos) {
+                if(info.second.second <= 10) { // threshold
+                    prenode = info.first;
+                    break;
+                }
+            }
+
+            if(prenode == -1) {
+                prenode = candidate_infos[0].first; // fallback to closest if none within threshold
+            }
+
+            // prenode = currObj;
         }
         
         // Build chain from prenode to root
@@ -1744,6 +1784,21 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
             encoders[i]->encode(data_arr[i]);
         }
         writer->align();
+
+        // 如果压缩后数据的大小超过2 * dim字节，则将此节点独立为新的压缩起始点，prenode设为-1
+        if (prenode != -1 && compressed_buffer.size() > 4 * dim * sizeof(double)) {
+            prenode = -1;
+            // Re-compress without prenode
+            compressed_buffer.clear();
+            for(size_t i=0; i<dim; ++i) {
+                encoders[i] = encoding_algorithm::AlgorithmsManager::getEncoder("Double", encoding_algorithm_name_, writer);
+            }
+            const double* data_arr = (const double*)data_point;
+            for(size_t i=0; i<dim; ++i) {
+                encoders[i]->encode(data_arr[i]);
+            }
+            writer->align();
+        }
 
         // std::cout << "compressed buffer size for point " << cur_c << " is " << compressed_buffer.size() << std::endl;
         
