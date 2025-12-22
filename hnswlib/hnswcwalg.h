@@ -92,6 +92,8 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
     // Flag to indicate if the index has been compacted
     bool is_compacted_ = false;
 
+    bool use_encoding_algorithm_ = true;
+
     HierarchicalNSWCW(SpaceInterface<dist_t> *s) {
     }
 
@@ -99,10 +101,12 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
     HierarchicalNSWCW(
         SpaceInterface<dist_t> *s,
         const std::string &location,
+        bool use_encoding_algorithm = true,
         bool nmslib = false,
         size_t max_elements = 0,
         bool allow_replace_deleted = false)
-        : allow_replace_deleted_(allow_replace_deleted) {
+        : allow_replace_deleted_(allow_replace_deleted),
+          use_encoding_algorithm_(use_encoding_algorithm) {
         loadIndex(location, s, max_elements);
     }
 
@@ -113,6 +117,7 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
         const std::string &encoding_algorithm_name = "DeXOR",
         size_t M = 16,
         size_t ef_construction = 200,
+        bool use_encoding_algorithm = true,
         size_t cache_max_size = 100,
         size_t random_seed = 100,
         bool allow_replace_deleted = false)
@@ -122,6 +127,7 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
             element_levels_(max_elements),
             allow_replace_deleted_(allow_replace_deleted),
             encoding_algorithm_name_(encoding_algorithm_name),
+            use_encoding_algorithm_(use_encoding_algorithm),
             cache_max_size_(cache_max_size) {
         max_elements_ = max_elements;
         num_deleted_ = 0;
@@ -277,6 +283,14 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
     std::vector<double> getOriginalDataByInternalId(tableint internal_id) const {
         // auto start_time = std::chrono::high_resolution_clock::now();
 
+        if(!use_encoding_algorithm_) {
+            size_t dim = data_size_ / sizeof(double);
+            std::vector<double> result(dim);
+            char* data_ptr = getDataByInternalId(internal_id);
+            memcpy(result.data(), data_ptr, dim * sizeof(double));
+            return result;
+        }
+        
         getOriginalData_call_count_++;
         if (cache_max_size_ > 0) {
             // std::lock_guard<std::mutex> lock(cache_lock_);
@@ -1682,125 +1696,139 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
 
         // 从candidates_cache[0]中选择prenode，找到距离待插入节点较近且chain较短的节点作为prenode
 
-        // Compression Logic
-        size_t dim = data_size_ / sizeof(double);
-        tableint prenode = -1;
-        if ((signed)currObj != -1) {
-            auto level0_candidates = candidates_cache[0];
-            std::vector<std::pair<tableint, std::pair<dist_t, int>>> candidate_infos; // (id, (distance, chain_length))
-            while (!level0_candidates.empty()) {
-                tableint candidate_id = level0_candidates.top().second;
-                dist_t candidate_dist = level0_candidates.top().first;
-                level0_candidates.pop();
-
-                // Build chain to root for candidate
-                int chain_length = 0;
-                tableint curr = candidate_id;
-                while (curr != (tableint)-1) {
-                    curr = getPrenodeId(curr);
-                    chain_length++;
-                    if (chain_length > 1000) break; 
-                }
-                candidate_infos.push_back({candidate_id, {candidate_dist, chain_length}});
-            }
-            // Select best candidate based on distance and chain length
-            std::sort(candidate_infos.begin(), candidate_infos.end(),
-                      [](const std::pair<tableint, std::pair<dist_t, int>>& a,
-                         const std::pair<tableint, std::pair<dist_t, int>>& b) {
-                          if (a.second.first != b.second.first)
-                              return a.second.first < b.second.first; // smaller distance first
-                          return a.second.second < b.second.second; // then smaller chain length
-                      });
-
-            // 限制chain length to be within a threshold (e.g., 10)
-            for(const auto& info : candidate_infos) {
-                if(info.second.second <= 10) { // threshold
-                    prenode = info.first;
-                    break;
-                }
-            }
-
-            if(prenode == -1) {
-                prenode = candidate_infos[0].first; // fallback to closest if none within threshold
-            }
-
-            // prenode = currObj;
-        }
-        
-        // Build chain from prenode to root
-        std::vector<tableint> chain;
-        tableint curr = prenode;
-        while (curr != (tableint)-1) {
-            chain.push_back(curr);
-            curr = getPrenodeId(curr);
-            if (chain.size() > 1000) break; 
-        }
-        std::reverse(chain.begin(), chain.end());
-
-        // Prepare Encoders
         std::vector<char> compressed_buffer;
-        std::vector<char> dummy_buffer; 
-        auto writer = std::make_shared<utils::MemoryStreamWriter>(&dummy_buffer);
-        
-        std::vector<std::unique_ptr<encoding_algorithm::Encoder>> encoders;
-        for(size_t i=0; i<dim; ++i) {
-            encoders.push_back(encoding_algorithm::AlgorithmsManager::getEncoder("Double", encoding_algorithm_name_, writer));
-        }
+        tableint prenode = -1;
+        if(use_encoding_algorithm_){
+            // Compression Logic
+            size_t dim = data_size_ / sizeof(double);
+            // tableint prenode = -1;
+            if ((signed)currObj != -1) {
+                // auto level0_candidates = candidates_cache[0];
+                // std::vector<std::pair<tableint, std::pair<dist_t, int>>> candidate_infos; // (id, (distance, chain_length))
+                // while (!level0_candidates.empty()) {
+                //     tableint candidate_id = level0_candidates.top().second;
+                //     dist_t candidate_dist = level0_candidates.top().first;
+                //     level0_candidates.pop();
 
-        // Prepare Decoders for reading chain
-        auto reader = std::make_shared<utils::MemoryBlockStreamReader>((const unsigned char*)data_level0_memory_.data());
-        std::vector<std::unique_ptr<encoding_algorithm::Decoder>> decoders;
-        for(size_t i=0; i<dim; ++i) {
-            decoders.push_back(encoding_algorithm::AlgorithmsManager::getDecoder("Double", encoding_algorithm_name_, reader));
-        }
+                //     // Build chain to root for candidate
+                //     int chain_length = 0;
+                //     tableint curr = candidate_id;
+                //     while (curr != (tableint)-1) {
+                //         curr = getPrenodeId(curr);
+                //         chain_length++;
+                //         if (chain_length > 1000) break; 
+                //     }
+                //     candidate_infos.push_back({candidate_id, {candidate_dist, chain_length}});
+                // }
+                // // Select best candidate based on distance and chain length
+                // std::sort(candidate_infos.begin(), candidate_infos.end(),
+                //           [](const std::pair<tableint, std::pair<dist_t, int>>& a,
+                //              const std::pair<tableint, std::pair<dist_t, int>>& b) {
+                //               if (a.second.first != b.second.first)
+                //                   return a.second.first < b.second.first; // smaller distance first
+                //               return a.second.second < b.second.second; // then smaller chain length
+                //           });
 
-        // Process chain: Decode -> Encode (to update state)
-        for (tableint id : chain) {
-            size_t start = level0_element_start_positions_[id] + offsetData_;
-            size_t end;
-            if (id + 1 < cur_element_count && level0_element_start_positions_[id+1] > 0) {
-            end = level0_element_start_positions_[id+1];
-            } else {
-            end = data_level0_memory_.size();
+                // // 限制chain length to be within a threshold (e.g., 10)
+                // for(const auto& info : candidate_infos) {
+                //     if(info.second.second <= 10) { // threshold
+                //         prenode = info.first;
+                //         break;
+                //     }
+                // }
+
+                // if(prenode == -1) {
+                //     prenode = candidate_infos[0].first; // fallback to closest if none within threshold
+                // }
+
+                prenode = currObj;
+                // prenode = 0;
             }
             
-            reader->resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
+            // Build chain from prenode to root
+            std::vector<tableint> chain;
+            tableint curr = prenode;
+            while (curr != (tableint)-1) {
+                chain.push_back(curr);
+                curr = getPrenodeId(curr);
+                if (chain.size() > 1000) break; 
+            }
+            std::reverse(chain.begin(), chain.end());
+
+            // Prepare Encoders
+            // std::vector<char> compressed_buffer;
+            std::vector<char> dummy_buffer; 
+            auto writer = std::make_shared<utils::MemoryStreamWriter>(&dummy_buffer);
             
+            std::vector<std::unique_ptr<encoding_algorithm::Encoder>> encoders;
             for(size_t i=0; i<dim; ++i) {
-                double val = decoders[i]->decodeDouble();
-                encoders[i]->encode(val);
+                encoders.push_back(encoding_algorithm::AlgorithmsManager::getEncoder("Double", encoding_algorithm_name_, writer));
             }
-            writer->align(); 
-            // Clear dummy buffer to avoid growing indefinitely
-            dummy_buffer.clear();
-            writer->setBuffer(&dummy_buffer);
-        }
 
-        // Switch to real buffer for the new point
-        writer->setBuffer(&compressed_buffer);
-        
-        const double* data_arr = (const double*)data_point;
-        for(size_t i=0; i<dim; ++i) {
-            encoders[i]->encode(data_arr[i]);
-        }
-        writer->align();
-
-        // 如果压缩后数据的大小超过2 * dim字节，则将此节点独立为新的压缩起始点，prenode设为-1
-        if (prenode != -1 && compressed_buffer.size() > 4 * dim * sizeof(double)) {
-            prenode = -1;
-            // Re-compress without prenode
-            compressed_buffer.clear();
+            // Prepare Decoders for reading chain
+            auto reader = std::make_shared<utils::MemoryBlockStreamReader>((const unsigned char*)data_level0_memory_.data());
+            std::vector<std::unique_ptr<encoding_algorithm::Decoder>> decoders;
             for(size_t i=0; i<dim; ++i) {
-                encoders[i] = encoding_algorithm::AlgorithmsManager::getEncoder("Double", encoding_algorithm_name_, writer);
+                decoders.push_back(encoding_algorithm::AlgorithmsManager::getDecoder("Double", encoding_algorithm_name_, reader));
             }
+
+            // Process chain: Decode -> Encode (to update state)
+            for (tableint id : chain) {
+                size_t start = level0_element_start_positions_[id] + offsetData_;
+                size_t end;
+                if (id + 1 < cur_element_count && level0_element_start_positions_[id+1] > 0) {
+                end = level0_element_start_positions_[id+1];
+                } else {
+                end = data_level0_memory_.size();
+                }
+                
+                reader->resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
+                
+                for(size_t i=0; i<dim; ++i) {
+                    double val = decoders[i]->decodeDouble();
+                    encoders[i]->encode(val);
+                }
+                writer->align(); 
+                // Clear dummy buffer to avoid growing indefinitely
+                dummy_buffer.clear();
+                writer->setBuffer(&dummy_buffer);
+            }
+
+            // Switch to real buffer for the new point
+            writer->setBuffer(&compressed_buffer);
+            
             const double* data_arr = (const double*)data_point;
             for(size_t i=0; i<dim; ++i) {
                 encoders[i]->encode(data_arr[i]);
             }
             writer->align();
-        }
 
-        // std::cout << "compressed buffer size for point " << cur_c << " is " << compressed_buffer.size() << std::endl;
+            // 如果压缩后数据的大小超过2 * dim字节，则将此节点独立为新的压缩起始点，prenode设为-1
+            if (prenode != -1 && compressed_buffer.size() > 4 * dim * sizeof(double)) {
+                prenode = -1;
+                // Re-compress without prenode
+                compressed_buffer.clear();
+                for(size_t i=0; i<dim; ++i) {
+                    encoders[i] = encoding_algorithm::AlgorithmsManager::getEncoder("Double", encoding_algorithm_name_, writer);
+                }
+                const double* data_arr = (const double*)data_point;
+                for(size_t i=0; i<dim; ++i) {
+                    encoders[i]->encode(data_arr[i]);
+                }
+                writer->align();
+            }
+
+            // std::cout << "compressed buffer size for point " << cur_c << " is " << compressed_buffer.size() << std::endl;
+        } else {
+            // No Compression Logic
+            size_t dim = data_size_ / sizeof(double);
+
+            // Directly store raw data
+            const double* data_arr = (const double*)data_point;
+            // std::vector<char> compressed_buffer;
+            compressed_buffer.resize(dim * sizeof(double));
+            memcpy(compressed_buffer.data(), data_arr, dim * sizeof(double));
+        }
         
         size_t start_pos = data_level0_memory_.size();
         level0_element_start_positions_[cur_c] = start_pos;

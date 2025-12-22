@@ -7,17 +7,17 @@ namespace {
 
     // file names list
     const std::vector<std::string> file_names = {
-        "winequality-red",
-        "winequality-white",
-        "Stress-Lysis",
-        "siftsmall_base",
-        "SaYoPillow",
-        "emotional_monitoring_dataset_with_target",
-        "simulated_highdim_physical",
-        "hair_loss",
-        "sift1m",
-        "fordTest",
-        "fordTrain"
+        // "winequality-red",
+        // "winequality-white",
+        // "Stress-Lysis",
+        "siftsmall_base"
+        // "SaYoPillow",
+        // "emotional_monitoring_dataset_with_target",
+        // "simulated_highdim_physical",
+        // "hair_loss"
+        // "sift1m",
+        // "fordTest",
+        // "fordTrain"
     };
 
 }
@@ -109,7 +109,7 @@ void test_save_and_load_hnswcw(std::string data_path, std::string file_name) {
 
     // Initing index
     hnswlib::L2SpaceDouble space(dim);
-    hnswlib::HierarchicalNSWCW<double>* alg_hnsw = new hnswlib::HierarchicalNSWCW<double>(&space, max_elements, encoding_algorithm_name, M, ef_construction);
+    hnswlib::HierarchicalNSWCW<double>* alg_hnsw = new hnswlib::HierarchicalNSWCW<double>(&space, max_elements, encoding_algorithm_name, M, ef_construction, true);
 
     double* data_ptr = new double[dim * max_elements];
     for (int i = 0; i < std::min(rows, max_elements); i++) {
@@ -135,9 +135,13 @@ void test_save_and_load_hnswcw(std::string data_path, std::string file_name) {
     std::string hnswcw_path = "storage/" + file_name + "_hnswcw.bin";
     alg_hnsw->saveIndex(hnswcw_path);
 
+    // 原始大小
+    size_t original_data_size = static_cast<size_t>(max_elements) * static_cast<size_t>(dim) * sizeof(double);
     // 压缩的data部分总大小
     size_t compressed_data_size = alg_hnsw->getCompressedDataSize();
     std::cout << "Total compressed data size: " << compressed_data_size << " bytes." << std::endl;
+    double compression_ratio = static_cast<double>(original_data_size) / static_cast<double>(compressed_data_size);
+    std::cout << "Compression ratio: " << compression_ratio << std::endl;
 
     delete alg_hnsw;
     delete[] data_ptr;
@@ -148,7 +152,7 @@ int main() {
     
     for(const auto& file_name : file_names){
         std::cout << "Processing file: " << file_name << std::endl;
-        test_save_and_load_hnsw(file_path, file_name);
+        // test_save_and_load_hnsw(file_path, file_name);
         test_save_and_load_hnswcw(file_path, file_name);
     }
     return 0;

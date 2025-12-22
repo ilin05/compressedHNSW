@@ -14,10 +14,10 @@ namespace {
         "SaYoPillow",
         "emotional_monitoring_dataset_with_target",
         "simulated_highdim_physical",
-        "hair_loss",
-        "sift1m",
-        "fordTest",
-        "fordTrain"
+        "hair_loss"
+        // "sift1m",
+        // "fordTest",
+        // "fordTrain"
     };
 
 }
@@ -62,7 +62,7 @@ void test_load_and_load_hnsw(std::string data_path, std::string file_name){
     hnswlib::L2SpaceDouble space(dim);
     // hnswlib::HierarchicalNSWCW<double>* alg_hnsw = new hnswlib::HierarchicalNSWCW<double>(&space, max_elements, encoding_algorithm_name, M, ef_construction);
     std::string hnsw_path = "storage/" + file_name + "_hnsw.bin";
-    hnswlib::HierarchicalNSW<double>* alg_hnsw = new hnswlib::HierarchicalNSW<double>(&space, hnsw_path, false, max_elements);
+    hnswlib::HierarchicalNSW<double>* alg_hnsw = new hnswlib::HierarchicalNSW<double>(&space, hnsw_path, false, false, max_elements);
 
     double* data_ptr = new double[dim * max_elements];
     for (int i = 0; i < std::min(rows, max_elements); i++) {
@@ -83,8 +83,8 @@ void test_load_and_load_hnsw(std::string data_path, std::string file_name){
     std::chrono::duration<double, std::milli> query_duration = query_end - query_start;
     float avg_query_time = query_duration.count() / max_elements; // milliseconds per query
     float recall = correct / max_elements;
-    std::cout << "Recall: " << recall << "\n";
-    std::cout << "Average query time: " << avg_query_time << " ms" << std::endl;
+    std::cout << "HNSW recall: " << recall << "\n";
+    std::cout << "HNSW average query time: " << avg_query_time << " ms" << std::endl;
     
     delete alg_hnsw;
     delete[] data_ptr;
@@ -133,8 +133,8 @@ void test_load_and_load_hnswcw(std::string data_path, std::string file_name) {
     std::chrono::duration<double, std::milli> query_duration = query_end - query_start;
     float avg_query_time = query_duration.count() / max_elements; // milliseconds per query
     float recall = correct / max_elements;
-    std::cout << "Recall: " << recall << "\n";
-    std::cout << "Average query time: " << avg_query_time << " ms" << std::endl;
+    std::cout << "HNSWCW recall: " << recall << "\n";
+    std::cout << "HNSWCW average query time: " << avg_query_time << " ms" << std::endl;
 
     delete alg_hnsw;
     delete[] data_ptr;
