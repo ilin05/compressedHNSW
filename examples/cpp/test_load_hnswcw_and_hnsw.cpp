@@ -7,10 +7,13 @@ namespace {
 
     // file names list
     const std::vector<std::string> file_names = {
-        // "winequality-red",
-        // "winequality-white",
+        "winequality-red",
+        "winequality-white",
         // "Stress-Lysis",
-        "siftsmall_base"
+        "siftsmall_base",
+        "gist_small_base",
+        "mnist-784-euclidean_small_base",
+        "fashion-mnist-784-euclidean_small_base"
         // "SaYoPillow",
         // "emotional_monitoring_dataset_with_target",
         // "simulated_highdim_physical"
@@ -25,6 +28,9 @@ namespace {
         48, // winequality-white: cahce_size = rows * 1%
         20, // Stress-Lysis: cahce_size = rows * 1%
         100, // siftsmall_base: cahce_size = rows * 1%
+        100, // gist_small_base: cahce_size = rows * 1%
+        100, // mnist-784-euclidean_small_base: cahce_size = rows * 1%
+        100, // fashion-mnist-784-euclidean_small_base: cahce_size = rows * 1%
         6, // SaYoPillow: cahce_size = rows * 1%
         10, // emotional_monitoring_dataset_with_target: cahce_size = rows * 1%
         50, // simulated_highdim_physical: cahce_size = rows * 1%

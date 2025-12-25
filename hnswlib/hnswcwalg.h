@@ -119,6 +119,8 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
 
     bool use_encoding_algorithm_ = true;
 
+    int max_encoding_tree_depth_ = 1;
+
     // Inline DeXOR Encoding Logic
     void dexor_encode(double value, DeXORState& state, utils::MemoryStreamWriter& writer) const {
         using namespace encoding_algorithm::dexor;
@@ -314,6 +316,7 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
         size_t ef_construction = 200,
         bool use_encoding_algorithm = true,
         size_t cache_max_size = 0,
+        int max_encoding_tree_depth = 1,
         size_t random_seed = 100,
         bool allow_replace_deleted = false)
         : label_op_locks_(MAX_LABEL_OPERATION_LOCKS),
@@ -323,7 +326,8 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
             allow_replace_deleted_(allow_replace_deleted),
             encoding_algorithm_name_(encoding_algorithm_name),
             use_encoding_algorithm_(use_encoding_algorithm),
-            cache_max_size_(cache_max_size) {
+            cache_max_size_(cache_max_size),
+            max_encoding_tree_depth_(max_encoding_tree_depth) {
         max_elements_ = max_elements;
         num_deleted_ = 0;
         data_size_ = s->get_data_size();
@@ -1927,7 +1931,7 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
 
                 // 限制chain length to be within a threshold (e.g., 10)
                 for(const auto& info : candidate_infos) {
-                    if(info.second.second <= 10) { // threshold
+                    if(info.second.second <= max_encoding_tree_depth_) { // threshold
                         prenode = info.first;
                         break;
                     }
