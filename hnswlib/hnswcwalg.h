@@ -9,9 +9,10 @@
 #include <unordered_set>
 #include <list>
 #include <memory>
+#include <functional>
 #include "../examples/utils/memory_block_stream_reader.h"
 #include "../examples/utils/memory_stream_writer.h"
-#include "../encoding_algorithms/algorithms_manager.h"
+#include "../encoding_algorithms/dexor/dexor_tools.h"
 
 namespace hnswlib {
 typedef unsigned int tableint;
@@ -22,6 +23,26 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
  public:
     static const tableint MAX_LABEL_OPERATION_LOCKS = 65536;
     static const unsigned char DELETE_MARK = 0x01;
+
+    // DeXOR State Structure
+    struct DeXORState {
+        double previous_value = 0.0;
+        int previous_q = 0;
+        int previous_delta = 0;
+        long long previous_exp = 1023; // Bias for double (1023)
+        int EL = 1;
+        int contract_step = 0;
+        int rho = 1; // Default rho
+        
+        void reset() {
+            previous_value = 0.0;
+            previous_q = 0;
+            previous_delta = 0;
+            previous_exp = 1023;
+            EL = 1;
+            contract_step = 0;
+        }
+    };
 
     size_t max_elements_{0};
     mutable std::atomic<size_t> cur_element_count{0};  // current number of elements
@@ -81,10 +102,14 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
     // 记录getOriginalData消耗的时间
     mutable std::atomic<long> getOriginalData_time{0};
 
+    // 记录decoding消耗的时间
+    mutable std::atomic<long> decoding_time{0};
+
     // data cache for getOriginalDataByInternalId
     size_t cache_max_size_ = 0;
     mutable std::list<tableint> lru_history_;
-    mutable std::unordered_map<tableint, std::pair<std::vector<double>, std::list<tableint>::iterator>> getOriginalData_cache_;
+    // mutable std::unordered_map<tableint, std::pair<std::vector<double>, std::list<tableint>::iterator>> getOriginalData_cache_;
+    mutable std::unordered_map<tableint, std::vector<double>> getOriginalData_cache_;
     mutable std::mutex cache_lock_;
     mutable std::atomic<int> cache_pop_count_{0};
     mutable std::atomic<int> getOriginalData_call_count_{0};
@@ -94,6 +119,174 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
 
     bool use_encoding_algorithm_ = true;
 
+    // Inline DeXOR Encoding Logic
+    void dexor_encode(double value, DeXORState& state, utils::MemoryStreamWriter& writer) const {
+        using namespace encoding_algorithm::dexor;
+        
+        // Decimal_XOR Logic
+        int q = DeXORTools::getEnd(value, state.previous_q);
+
+        int delta = 0;
+        double alpha = 0;
+        while (delta < 16) {
+            double pow = DeXORTools::getP10(q + delta);
+            long long a = DeXORTools::truncate(value / pow);
+            long long b = DeXORTools::truncate(state.previous_value / pow);
+            if (a == b) {
+                alpha = a * pow;
+                break;
+            }
+            delta++;
+        }
+
+        double pow = DeXORTools::getP10(q);
+        double residual = value - alpha;
+        long long beta = std::llround(residual / pow);
+
+        if (delta >= 16 || DeXORTools::comp(alpha + beta * pow, value, pow) != 0) {
+            writer.write(true);
+            writer.write(true);
+            dexor_exception_handle(value, state, writer);
+            return;
+        }
+
+        beta = std::llabs(beta);
+        bool flag = q == state.previous_q;
+        if (flag && delta == state.previous_delta) {
+            writer.write(true);
+            writer.write(false);
+        } else {
+            writer.write(false);
+            writer.write(flag);
+            if (!flag) {
+                writer.write(q + 20, 5);
+                state.previous_q = q;
+            }
+            writer.write(delta, 4);
+            state.previous_delta = delta;
+        }
+
+        if (DeXORTools::comp(alpha, 0) == 0) {
+            writer.write(value > 0); // sign bit
+        }
+
+        writer.write(beta, DeXORTools::decimalBits(delta));
+        state.previous_value = value;
+    }
+
+    void dexor_exception_handle(double value, DeXORState& state, utils::MemoryStreamWriter& writer) const {
+        using namespace encoding_algorithm::dexor;
+        union { double d; long long l; } u;
+        u.d = value;
+        long long exp = DeXORTools::segment(u.l, 2, 12);
+        long long delta = exp - state.previous_exp;
+        int bias = DeXORTools::getP2(state.EL - 1) - 1;
+
+        if (delta >= -bias && delta <= bias) {
+            writer.write(delta + bias, state.EL);
+            writer.write(u.l < 0); // sign bit
+            writer.write(u.l, 52); // mantissa
+
+            if (state.EL > 1) {
+                int su_bias = DeXORTools::getP2(state.EL - 2) - 1;
+                if(delta >= -su_bias && delta <= su_bias) {
+                    state.contract_step++;
+                }else{
+                    state.contract_step = 0;
+                }
+                if (state.contract_step == state.rho) {
+                    state.EL--;
+                    state.contract_step = 0;
+                }
+            }
+        } else {
+            writer.write(DeXORTools::getP2(state.EL) - 1, state.EL);
+            writer.write(u.l, 64);
+            state.contract_step = 0;
+
+            if (state.EL < 10) {
+                state.EL++;
+            }
+        }
+        state.previous_exp = exp;
+    }
+
+    // Inline DeXOR Decoding Logic
+    double dexor_decode(DeXORState& state, utils::MemoryBlockStreamReader& reader) const {
+        using namespace encoding_algorithm::dexor;
+        
+        int con = reader.readInt(2);
+        if (con == 3) {
+            return dexor_exception_decode(state, reader);
+        }
+
+        if (con == 0 || con == 1) {
+            if (con == 0) {
+                state.previous_q = reader.readInt(5) - 20;
+            }
+            state.previous_delta = reader.readInt(4);
+        }
+        
+        // Reconstruct alpha
+        const double pow = DeXORTools::getP10(state.previous_q + state.previous_delta);
+        const double truncated = static_cast<double>(DeXORTools::truncate(state.previous_value / pow));
+        double previous_alpha = truncated * pow;
+
+        long long sign = previous_alpha > 0 ? 1LL : -1LL;
+        if (DeXORTools::comp(previous_alpha, 0) == 0) {
+            sign = reader.readBoolean() ? 1LL : -1LL;
+        }
+
+        const int bits = DeXORTools::decimalBits(state.previous_delta);
+        long long magnitude = bits > 0 ? reader.readLong(bits) : 0;
+        const double beta = static_cast<double>(sign * magnitude) * DeXORTools::getP10(state.previous_q);
+
+        state.previous_value = previous_alpha + beta;
+        return state.previous_value;
+    }
+
+    double dexor_exception_decode(DeXORState& state, utils::MemoryBlockStreamReader& reader) const {
+        using namespace encoding_algorithm::dexor;
+        const int bias = DeXORTools::getP2(state.EL - 1) - 1;
+        const long long delta = reader.readLong(state.EL) - bias;
+        uint64_t lv = 0;
+
+        if (delta >= -bias && delta <= bias) {
+            state.previous_exp += delta;
+            const uint64_t sign = static_cast<uint64_t>(reader.readLong(1));
+            const uint64_t mantissa = static_cast<uint64_t>(reader.readLong(52));
+            lv = (sign << 63) | (static_cast<uint64_t>(state.previous_exp) << 52) | mantissa;
+
+            if (state.EL > 1) {
+                const int su_bias = DeXORTools::getP2(state.EL - 2) - 1;
+                if (delta >= -su_bias && delta <= su_bias) {
+                    state.contract_step++;
+                } else {
+                    state.contract_step = 0;
+                }
+                if (state.contract_step == state.rho) {
+                    state.EL--;
+                    state.contract_step = 0;
+                }
+            }
+        } else {
+            lv = static_cast<uint64_t>(reader.readLong(64));
+            state.previous_exp = DeXORTools::segment(static_cast<long long>(lv), 2, 12);
+
+            if (state.EL < 10) {
+                state.EL++;
+                state.contract_step = 0;
+            }
+        }
+
+        union {
+            uint64_t bits;
+            double value;
+        } converter{};
+        converter.bits = lv;
+        return converter.value;
+    }
+
     HierarchicalNSWCW(SpaceInterface<dist_t> *s) {
     }
 
@@ -102,11 +295,13 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
         SpaceInterface<dist_t> *s,
         const std::string &location,
         bool use_encoding_algorithm = true,
+        size_t cache_max_size = 0,
         bool nmslib = false,
         size_t max_elements = 0,
         bool allow_replace_deleted = false)
         : allow_replace_deleted_(allow_replace_deleted),
-          use_encoding_algorithm_(use_encoding_algorithm) {
+          use_encoding_algorithm_(use_encoding_algorithm),
+          cache_max_size_(cache_max_size){
         loadIndex(location, s, max_elements);
     }
 
@@ -118,7 +313,7 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
         size_t M = 16,
         size_t ef_construction = 200,
         bool use_encoding_algorithm = true,
-        size_t cache_max_size = 100,
+        size_t cache_max_size = 0,
         size_t random_seed = 100,
         bool allow_replace_deleted = false)
         : label_op_locks_(MAX_LABEL_OPERATION_LOCKS),
@@ -175,7 +370,10 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
         revSize_ = 1.0 / mult_;
 
         // 为getOriginalData缓存预留空间
-        getOriginalData_cache_.reserve(cache_max_size_);
+        if(cache_max_size_ > 0){
+            getOriginalData_cache_.reserve(cache_max_size_);
+            loadCache();
+        }
     }
 
 
@@ -291,15 +489,15 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
             return result;
         }
         
-        getOriginalData_call_count_++;
+        // getOriginalData_call_count_++;
         if (cache_max_size_ > 0) {
             // std::lock_guard<std::mutex> lock(cache_lock_);
             auto it = getOriginalData_cache_.find(internal_id);
             if (it != getOriginalData_cache_.end()) {
-                lru_history_.splice(lru_history_.begin(), lru_history_, it->second.second);
+                // lru_history_.splice(lru_history_.begin(), lru_history_, it->second.second);
                 // auto end_time = std::chrono::high_resolution_clock::now();
                 // getOriginalData_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
-                return it->second.first;
+                return it->second;
             }
         }
 
@@ -318,12 +516,8 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
         
         std::reverse(chain.begin(), chain.end());
         
-        auto reader = std::make_shared<utils::MemoryBlockStreamReader>((const unsigned char*)data_level0_memory_.data());
-        
-        std::vector<std::unique_ptr<encoding_algorithm::Decoder>> decoders;
-        for(size_t i=0; i<dim; ++i) {
-            decoders.push_back(encoding_algorithm::AlgorithmsManager::getDecoder("Double", encoding_algorithm_name_, reader));
-        }
+        utils::MemoryBlockStreamReader reader((const unsigned char*)data_level0_memory_.data());
+        std::vector<DeXORState> states(dim);
         
         for (tableint id : chain) {
             // std::cout << "Decoding id: " << id << "cur_element_count" << cur_element_count << std::endl;
@@ -353,31 +547,31 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
                     end = data_level0_memory_.size();
                 }
             }
-
-            // std::cout << "Data range in memory: " << start << " to " << end << std::endl;
             
-            reader->resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
+            reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
             
+            auto decode_start = std::chrono::high_resolution_clock::now();
             for(size_t i=0; i<dim; ++i) {
-                // std::cout << "Decoding dimension: " << i << std::endl;
-                result[i] = decoders[i]->decodeDouble();
+                result[i] = dexor_decode(states[i], reader);
             }
+            auto decode_end = std::chrono::high_resolution_clock::now();
+            decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
         }
 
-        if (cache_max_size_ > 0) {
-            // std::lock_guard<std::mutex> lock(cache_lock_);
-            auto it = getOriginalData_cache_.find(internal_id);
-            if (it == getOriginalData_cache_.end()) {
-                if (getOriginalData_cache_.size() >= cache_max_size_) {
-                    tableint evict_id = lru_history_.back();
-                    lru_history_.pop_back();
-                    getOriginalData_cache_.erase(evict_id);
-                    cache_pop_count_++;
-                }
-                lru_history_.push_front(internal_id);
-                getOriginalData_cache_[internal_id] = {result, lru_history_.begin()};
-            }
-        }
+        // if (cache_max_size_ > 0) {
+        //     // std::lock_guard<std::mutex> lock(cache_lock_);
+        //     auto it = getOriginalData_cache_.find(internal_id);
+        //     if (it == getOriginalData_cache_.end()) {
+        //         if (getOriginalData_cache_.size() >= cache_max_size_) {
+        //             tableint evict_id = lru_history_.back();
+        //             lru_history_.pop_back();
+        //             getOriginalData_cache_.erase(evict_id);
+        //             cache_pop_count_++;
+        //         }
+        //         lru_history_.push_front(internal_id);
+        //         getOriginalData_cache_[internal_id] = {result, lru_history_.begin()};
+        //     }
+        // }
 
         // auto end_time = std::chrono::high_resolution_clock::now();
         // getOriginalData_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
@@ -1175,6 +1369,12 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
 
         input.close();
 
+        // 加载cache
+        if( cache_max_size_ > 0){
+            getOriginalData_cache_.reserve(cache_max_size_);
+            loadCache();
+        }
+
         return;
     }
 
@@ -1364,28 +1564,24 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
         }
         
         std::vector<char> compressed_buffer;
-        auto writer = std::make_shared<utils::MemoryStreamWriter>(&compressed_buffer);
+        utils::MemoryStreamWriter writer(&compressed_buffer);
         
-        std::vector<std::unique_ptr<encoding_algorithm::Encoder>> encoders;
-        for(size_t i=0; i<dim; ++i) {
-            encoders.push_back(encoding_algorithm::AlgorithmsManager::getEncoder("Double", encoding_algorithm_name_, writer));
-        }
+        std::vector<DeXORState> states(dim);
         
         if (prenode != (tableint)-1) {
             std::vector<char> dummy_buffer;
-            writer->setBuffer(&dummy_buffer);
+            utils::MemoryStreamWriter dummy_writer(&dummy_buffer);
             for(size_t i=0; i<dim; ++i) {
-                encoders[i]->encode(prenode_data[i]);
+                dexor_encode(prenode_data[i], states[i], dummy_writer);
             }
-            writer->align();
-            writer->setBuffer(&compressed_buffer);
+            dummy_writer.align();
         }
         
         const double* data_arr = (const double*)dataPoint;
         for(size_t i=0; i<dim; ++i) {
-            encoders[i]->encode(data_arr[i]);
+            dexor_encode(data_arr[i], states[i], writer);
         }
-        writer->align();
+        writer.align();
         
         size_t old_pos = level0_element_start_positions_[internalId];
         size_t new_pos = data_level0_memory_.size();
@@ -1703,45 +1899,45 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
             size_t dim = data_size_ / sizeof(double);
             // tableint prenode = -1;
             if ((signed)currObj != -1) {
-                // auto level0_candidates = candidates_cache[0];
-                // std::vector<std::pair<tableint, std::pair<dist_t, int>>> candidate_infos; // (id, (distance, chain_length))
-                // while (!level0_candidates.empty()) {
-                //     tableint candidate_id = level0_candidates.top().second;
-                //     dist_t candidate_dist = level0_candidates.top().first;
-                //     level0_candidates.pop();
+                auto level0_candidates = candidates_cache[0];
+                std::vector<std::pair<tableint, std::pair<dist_t, int>>> candidate_infos; // (id, (distance, chain_length))
+                while (!level0_candidates.empty()) {
+                    tableint candidate_id = level0_candidates.top().second;
+                    dist_t candidate_dist = level0_candidates.top().first;
+                    level0_candidates.pop();
 
-                //     // Build chain to root for candidate
-                //     int chain_length = 0;
-                //     tableint curr = candidate_id;
-                //     while (curr != (tableint)-1) {
-                //         curr = getPrenodeId(curr);
-                //         chain_length++;
-                //         if (chain_length > 1000) break; 
-                //     }
-                //     candidate_infos.push_back({candidate_id, {candidate_dist, chain_length}});
-                // }
-                // // Select best candidate based on distance and chain length
-                // std::sort(candidate_infos.begin(), candidate_infos.end(),
-                //           [](const std::pair<tableint, std::pair<dist_t, int>>& a,
-                //              const std::pair<tableint, std::pair<dist_t, int>>& b) {
-                //               if (a.second.first != b.second.first)
-                //                   return a.second.first < b.second.first; // smaller distance first
-                //               return a.second.second < b.second.second; // then smaller chain length
-                //           });
+                    // Build chain to root for candidate
+                    int chain_length = 0;
+                    tableint curr = candidate_id;
+                    while (curr != (tableint)-1) {
+                        curr = getPrenodeId(curr);
+                        chain_length++;
+                        if (chain_length > 1000) break; 
+                    }
+                    candidate_infos.push_back({candidate_id, {candidate_dist, chain_length}});
+                }
+                // Select best candidate based on distance and chain length
+                std::sort(candidate_infos.begin(), candidate_infos.end(),
+                          [](const std::pair<tableint, std::pair<dist_t, int>>& a,
+                             const std::pair<tableint, std::pair<dist_t, int>>& b) {
+                              if (a.second.first != b.second.first)
+                                  return a.second.first < b.second.first; // smaller distance first
+                              return a.second.second < b.second.second; // then smaller chain length
+                          });
 
-                // // 限制chain length to be within a threshold (e.g., 10)
-                // for(const auto& info : candidate_infos) {
-                //     if(info.second.second <= 10) { // threshold
-                //         prenode = info.first;
-                //         break;
-                //     }
-                // }
+                // 限制chain length to be within a threshold (e.g., 10)
+                for(const auto& info : candidate_infos) {
+                    if(info.second.second <= 10) { // threshold
+                        prenode = info.first;
+                        break;
+                    }
+                }
 
                 // if(prenode == -1) {
                 //     prenode = candidate_infos[0].first; // fallback to closest if none within threshold
                 // }
 
-                prenode = currObj;
+                // prenode = currObj;
                 // prenode = 0;
             }
             
@@ -1755,67 +1951,51 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
             }
             std::reverse(chain.begin(), chain.end());
 
-            // Prepare Encoders
-            // std::vector<char> compressed_buffer;
-            std::vector<char> dummy_buffer; 
-            auto writer = std::make_shared<utils::MemoryStreamWriter>(&dummy_buffer);
+            // Prepare State
+            std::vector<DeXORState> states(dim);
             
-            std::vector<std::unique_ptr<encoding_algorithm::Encoder>> encoders;
-            for(size_t i=0; i<dim; ++i) {
-                encoders.push_back(encoding_algorithm::AlgorithmsManager::getEncoder("Double", encoding_algorithm_name_, writer));
-            }
+            // Prepare Reader for chain replay
+            utils::MemoryBlockStreamReader reader((const unsigned char*)data_level0_memory_.data());
 
-            // Prepare Decoders for reading chain
-            auto reader = std::make_shared<utils::MemoryBlockStreamReader>((const unsigned char*)data_level0_memory_.data());
-            std::vector<std::unique_ptr<encoding_algorithm::Decoder>> decoders;
-            for(size_t i=0; i<dim; ++i) {
-                decoders.push_back(encoding_algorithm::AlgorithmsManager::getDecoder("Double", encoding_algorithm_name_, reader));
-            }
-
-            // Process chain: Decode -> Encode (to update state)
+            // Process chain: Decode -> Update State
             for (tableint id : chain) {
                 size_t start = level0_element_start_positions_[id] + offsetData_;
                 size_t end;
                 if (id + 1 < cur_element_count && level0_element_start_positions_[id+1] > 0) {
-                end = level0_element_start_positions_[id+1];
+                    end = level0_element_start_positions_[id+1];
                 } else {
-                end = data_level0_memory_.size();
+                    end = data_level0_memory_.size();
                 }
                 
-                reader->resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
+                reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
                 
                 for(size_t i=0; i<dim; ++i) {
-                    double val = decoders[i]->decodeDouble();
-                    encoders[i]->encode(val);
+                    // Decode updates the state automatically
+                    dexor_decode(states[i], reader);
                 }
-                writer->align(); 
-                // Clear dummy buffer to avoid growing indefinitely
-                dummy_buffer.clear();
-                writer->setBuffer(&dummy_buffer);
             }
 
-            // Switch to real buffer for the new point
-            writer->setBuffer(&compressed_buffer);
-            
+            // Encode the new point
+            utils::MemoryStreamWriter writer(&compressed_buffer);
             const double* data_arr = (const double*)data_point;
             for(size_t i=0; i<dim; ++i) {
-                encoders[i]->encode(data_arr[i]);
+                dexor_encode(data_arr[i], states[i], writer);
             }
-            writer->align();
+            writer.align();
 
-            // 如果压缩后数据的大小超过2 * dim字节，则将此节点独立为新的压缩起始点，prenode设为-1
+            // If compressed size is too large, reset prenode and re-encode
             if (prenode != -1 && compressed_buffer.size() > 4 * dim * sizeof(double)) {
                 prenode = -1;
-                // Re-compress without prenode
+                // Reset states
+                states.assign(dim, DeXORState());
                 compressed_buffer.clear();
+                
+                // Re-encode
+                utils::MemoryStreamWriter writer2(&compressed_buffer);
                 for(size_t i=0; i<dim; ++i) {
-                    encoders[i] = encoding_algorithm::AlgorithmsManager::getEncoder("Double", encoding_algorithm_name_, writer);
+                    dexor_encode(data_arr[i], states[i], writer2);
                 }
-                const double* data_arr = (const double*)data_point;
-                for(size_t i=0; i<dim; ++i) {
-                    encoders[i]->encode(data_arr[i]);
-                }
-                writer->align();
+                writer2.align();
             }
 
             // std::cout << "compressed buffer size for point " << cur_c << " is " << compressed_buffer.size() << std::endl;
@@ -2228,6 +2408,49 @@ class HierarchicalNSWCW : public AlgorithmInterface<dist_t> {
 
     std::vector<char> getDataLevel0Memory() const {
         return data_level0_memory_;
+    }
+
+    // 获取decoding消耗的时间
+    long getTotalTimeDecoding() const {
+        return decoding_time;
+    }
+
+    // 加载cache，根据max_cache_size设置cache大小，cache中固定存储热门数据，不使用lru
+    void loadCache() {
+        if (cache_max_size_ > 0) {
+            // 这里实现加载热门数据到cache的逻辑
+            // 根据作为prenode的频率来决定哪些数据是热门数据
+
+            std::vector<int> prenode_frequency(cur_element_count, 0);
+            for (tableint i = 0; i < cur_element_count; i++) {
+                std::vector<tableint> chain = getEncodingChain(i);
+                for (tableint id : chain) {
+                    prenode_frequency[id]++;
+                }
+            }
+            // 获取频率最高的前cache_max_size_个prenode
+            std::vector<std::pair<int, tableint>> freq_id_pairs;
+            for (tableint i = 0; i < cur_element_count; i++) {
+                if (prenode_frequency[i] > 0) {
+                    freq_id_pairs.emplace_back(prenode_frequency[i], i);
+                }
+            }
+            std::sort(freq_id_pairs.begin(), freq_id_pairs.end(),
+                      [](const std::pair<int, tableint>& a, const std::pair<int, tableint>& b) {
+                          return a.first > b.first;
+                      });
+            size_t to_load = std::min((size_t)cache_max_size_, freq_id_pairs.size());
+            for (size_t i = 0; i < to_load; i++) {
+                tableint id = freq_id_pairs[i].second;
+                // Load data into cache
+                std::vector<double> data = getOriginalDataByInternalId(id);
+                {
+                    getOriginalData_cache_[id] = data;
+                }
+            }
+
+            std::cout << "Cache loaded with " << to_load << " elements." << std::endl;
+        }
     }
 };
 }  // namespace hnswlib

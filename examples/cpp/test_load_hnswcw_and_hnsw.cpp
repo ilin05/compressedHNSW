@@ -7,17 +7,28 @@ namespace {
 
     // file names list
     const std::vector<std::string> file_names = {
-        "winequality-red",
-        "winequality-white",
-        "Stress-Lysis",
-        "siftsmall_base",
-        "SaYoPillow",
-        "emotional_monitoring_dataset_with_target",
-        "simulated_highdim_physical",
-        "hair_loss"
-        // "sift1m",
+        // "winequality-red",
+        // "winequality-white",
+        // "Stress-Lysis",
+        "siftsmall_base"
+        // "SaYoPillow",
+        // "emotional_monitoring_dataset_with_target",
+        // "simulated_highdim_physical"
+        // "hair_loss"
+        // "sift1m"
         // "fordTest",
         // "fordTrain"
+    };
+
+    const std::vector<size_t> cache_sizes = {
+        16, // winequality-red: cahce_size = rows * 1%
+        48, // winequality-white: cahce_size = rows * 1%
+        20, // Stress-Lysis: cahce_size = rows * 1%
+        100, // siftsmall_base: cahce_size = rows * 1%
+        6, // SaYoPillow: cahce_size = rows * 1%
+        10, // emotional_monitoring_dataset_with_target: cahce_size = rows * 1%
+        50, // simulated_highdim_physical: cahce_size = rows * 1%
+        500 // hair_loss: cahce_size = rows * 0.5%
     };
 
 }
@@ -90,7 +101,7 @@ void test_load_and_load_hnsw(std::string data_path, std::string file_name){
     delete[] data_ptr;
 }
 
-void test_load_and_load_hnswcw(std::string data_path, std::string file_name) {
+void test_load_and_load_hnswcw(std::string data_path, std::string file_name, size_t cache_size = 0) {
     std::string file_path = data_path + "/" + file_name + ".csv";
     std::vector<std::vector<double>> data = data_loader::loadData(file_path);
     if (data.empty()) {
@@ -112,7 +123,7 @@ void test_load_and_load_hnswcw(std::string data_path, std::string file_name) {
     // Initing index
     hnswlib::L2SpaceDouble space(dim);
     std::string hnswcw_path = "storage/" + file_name + "_hnswcw.bin";
-    hnswlib::HierarchicalNSWCW<double>* alg_hnsw = new hnswlib::HierarchicalNSWCW<double>(&space, hnswcw_path, false, max_elements);
+    hnswlib::HierarchicalNSWCW<double>* alg_hnsw = new hnswlib::HierarchicalNSWCW<double>(&space, hnswcw_path, true, cache_size, max_elements);
 
     double* data_ptr = new double[dim * max_elements];
     for (int i = 0; i < std::min(rows, max_elements); i++) {
@@ -136,6 +147,10 @@ void test_load_and_load_hnswcw(std::string data_path, std::string file_name) {
     std::cout << "HNSWCW recall: " << recall << "\n";
     std::cout << "HNSWCW average query time: " << avg_query_time << " ms" << std::endl;
 
+    long total_decoding_time = alg_hnsw->getTotalTimeDecoding();
+    float avg_decoding_time = static_cast<float>(total_decoding_time) / max_elements / 1e3; // milliseconds per query
+    std::cout << "HNSWCW average decoding time: " << avg_decoding_time << " ms" << std::endl;
+
     delete alg_hnsw;
     delete[] data_ptr;
 }
@@ -145,7 +160,8 @@ int main() {
     
     for(const auto& file_name : file_names){
         std::cout << "Processing file: " << file_name << std::endl;
-        test_load_and_load_hnsw(file_path, file_name);
+        // test_load_and_load_hnsw(file_path, file_name);
+        // test_load_and_load_hnswcw(file_path, file_name, cache_sizes[&file_name - &file_names[0]]);
         test_load_and_load_hnswcw(file_path, file_name);
     }
     return 0;

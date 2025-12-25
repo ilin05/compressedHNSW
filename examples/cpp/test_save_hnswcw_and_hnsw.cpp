@@ -13,9 +13,9 @@ namespace {
         "siftsmall_base"
         // "SaYoPillow",
         // "emotional_monitoring_dataset_with_target",
-        // "simulated_highdim_physical",
+        // "simulated_highdim_physical"
         // "hair_loss"
-        // "sift1m",
+        // "sift1m"
         // "fordTest",
         // "fordTrain"
     };
@@ -73,7 +73,7 @@ void test_save_and_load_hnsw(std::string data_path, std::string file_name){
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < max_elements; i++) {
         alg_hnsw->addPoint(data_ptr + i * dim, i);
-        if(i > 0 && i % 500 == 0){
+        if(i > 0 && i % 5000 == 0){
             std::cout << "Added " << i << " points." << std::endl;
         }
     }
