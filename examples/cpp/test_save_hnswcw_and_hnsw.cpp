@@ -164,7 +164,7 @@ std::vector<double> test_save_hnswcw(std::string data_path, std::string file_nam
     std::cout << "Index built in " << build_duration.count() << " seconds." << std::endl;
     results.push_back(build_duration.count());
 
-    alg_hnsw -> printCompressionTree("storage/" + file_name + "_encoding_tree.txt");
+    alg_hnsw -> printCompressionTree("storage/" + file_name + "_" + std::to_string(max_encoding_tree_depth) + "_encoding_tree.txt");
 
     // Serialize index
     std::string hnswcw_path = "storage/" + file_name + "_hnswcw.bin";
@@ -286,9 +286,9 @@ std::vector<double> test_load_hnswcw(std::string data_path, std::string file_nam
     results.push_back(recall);
     results.push_back(avg_query_time);
 
-    long total_decoding_time = alg_hnsw->getTotalTimeDecoding();
-    float avg_decoding_time = static_cast<float>(total_decoding_time) / max_elements / 1e3; // milliseconds per query
-    std::cout << "HNSWCW average decoding time: " << avg_decoding_time << " ms" << std::endl;
+    // long total_decoding_time = alg_hnsw->getTotalTimeDecoding();
+    // float avg_decoding_time = static_cast<float>(total_decoding_time) / max_elements / 1e3; // milliseconds per query
+    // std::cout << "HNSWCW average decoding time: " << avg_decoding_time << " ms" << std::endl;
 
     delete alg_hnsw;
     delete[] data_ptr;
