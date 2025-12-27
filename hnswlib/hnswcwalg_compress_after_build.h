@@ -111,7 +111,7 @@ class HierarchicalNSWCAB : public AlgorithmInterface<dist_t> {
     size_t cache_max_size_ = 0;
     mutable std::list<tableint> lru_history_;
     // mutable std::unordered_map<tableint, std::pair<std::vector<double>, std::list<tableint>::iterator>> getOriginalData_cache_;
-    mutable std::unordered_map<tableint, std::vector<double>> getOriginalData_cache_;
+    mutable std::unordered_map<tableint, std::vector<DeXORState>> root_state_cache_;
     mutable std::mutex cache_lock_;
     mutable std::atomic<int> cache_pop_count_{0};
     mutable std::atomic<int> getOriginalData_call_count_{0};
@@ -371,11 +371,11 @@ class HierarchicalNSWCAB : public AlgorithmInterface<dist_t> {
         mult_ = 1 / log(1.0 * M_);
         revSize_ = 1.0 / mult_;
 
-        // 为getOriginalData缓存预留空间
-        if(cache_max_size_ > 0){
-            getOriginalData_cache_.reserve(cache_max_size_);
-            loadCache();
-        }
+        // // 为getOriginalData缓存预留空间
+        // if(cache_max_size_ > 0){
+        //     getOriginalData_cache_.reserve(cache_max_size_);
+        //     loadCache();
+        // }
     }
 
 
@@ -386,7 +386,7 @@ class HierarchicalNSWCAB : public AlgorithmInterface<dist_t> {
     void clear() {
         data_level0_memory_.clear();
         data_level0_memory_.shrink_to_fit();
-        getOriginalData_cache_.clear();
+        root_state_cache_.clear();
         lru_history_.clear();
         for (tableint i = 0; i < cur_element_count; i++) {
             if (element_levels_[i] > 0)
@@ -491,92 +491,115 @@ class HierarchicalNSWCAB : public AlgorithmInterface<dist_t> {
             return result;
         }
         
-        // getOriginalData_call_count_++;
-        if (cache_max_size_ > 0) {
-            // std::lock_guard<std::mutex> lock(cache_lock_);
-            auto it = getOriginalData_cache_.find(internal_id);
-            if (it != getOriginalData_cache_.end()) {
-                // lru_history_.splice(lru_history_.begin(), lru_history_, it->second.second);
-                // auto end_time = std::chrono::high_resolution_clock::now();
-                // getOriginalData_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
-                return it->second;
-            }
-        }
-
         size_t dim = *((size_t *) dist_func_param_);
         std::vector<double> result(dim);
         
-        std::vector<tableint> chain;
-        tableint curr = internal_id;
-        while (curr != (tableint)-1) {
-            chain.push_back(curr);
-            curr = getPrenodeId(curr);
-            if (chain.size() > 1000) break; 
-        }
-
-        // std::cout << "Decompression chain length: " << chain.size() << std::endl;
+        tableint prenode = getPrenodeId(internal_id);
         
-        std::reverse(chain.begin(), chain.end());
-        
-        utils::MemoryBlockStreamReader reader((const unsigned char*)data_level0_memory_.data());
-        std::vector<DeXORState> states(dim);
-        
-        for (tableint id : chain) {
-            // std::cout << "Decoding id: " << id << "cur_element_count" << cur_element_count << std::endl;
-            size_t start;
-            size_t end;
+        // Case 1: Node is a Root (prenode == -1)
+        if (prenode == (tableint)-1) {
+            // Check cache for state
+            if (cache_max_size_ > 0) {
+                auto it = root_state_cache_.find(internal_id);
+                if (it != root_state_cache_.end()) {
+                    // Reconstruct data from state
+                    const std::vector<DeXORState>& states = it->second;
+                    for(size_t i=0; i<dim; ++i) {
+                        result[i] = states[i].previous_value;
+                    }
+                    return result;
+                }
+            }
             
-            if (is_compacted_) {
-                // In compacted mode, we need to calculate start offset dynamically
-                // Layout: [Prenode] [Label] [LinkListSize] [Neighbors] [Data]
-                size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
-                unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[id] + linklist_size_offset));
-                size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
-                
-                start = level0_element_start_positions_[id] + data_offset;
-                
-                // End is the start of the next element (or end of memory)
-                if (id + 1 < cur_element_count && level0_element_start_positions_[id+1] > 0) {
-                    end = level0_element_start_positions_[id+1];
-                } else {
-                    end = data_level0_memory_.size();
-                }
+            // Not in cache, decode normally (against default state)
+            utils::MemoryBlockStreamReader reader((const unsigned char*)data_level0_memory_.data());
+            
+            // Calculate start/end for this node
+            size_t start, end;
+            // ... (Same offset calculation logic as before) ...
+            size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
+            unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + linklist_size_offset));
+            size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+            start = level0_element_start_positions_[internal_id] + data_offset;
+            
+            if (internal_id + 1 < cur_element_count && level0_element_start_positions_[internal_id+1] > 0) {
+                end = level0_element_start_positions_[internal_id+1];
             } else {
-                start = level0_element_start_positions_[id] + offsetData_;
-                if (id + 1 < cur_element_count && level0_element_start_positions_[id+1] > 0) {
-                    end = level0_element_start_positions_[id+1];
-                } else {
-                    end = data_level0_memory_.size();
-                }
+                end = data_level0_memory_.size();
             }
             
             reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
             
-            // auto decode_start = std::chrono::high_resolution_clock::now();
+            std::vector<DeXORState> states(dim); // Default states
             for(size_t i=0; i<dim; ++i) {
                 result[i] = dexor_decode(states[i], reader);
             }
-            // auto decode_end = std::chrono::high_resolution_clock::now();
-            // decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
+            
+            // Optional: Cache this root state if we have space? 
+            // For now, we rely on loadCache to populate cache.
+            return result;
+        }
+        
+        // Case 2: Node is a Child (prenode != -1)
+        // We need the state AFTER decoding the Root (prenode)
+        
+        std::vector<DeXORState> states(dim);
+        bool cache_hit = false;
+        
+        if (cache_max_size_ > 0) {
+            auto it = root_state_cache_.find(prenode);
+            if (it != root_state_cache_.end()) {
+                states = it->second; // Copy state
+                cache_hit = true;
+            }
+        }
+        
+        if (!cache_hit) {
+            // Decode Root to get state
+            utils::MemoryBlockStreamReader reader((const unsigned char*)data_level0_memory_.data());
+            
+            // Calculate start/end for Root
+            size_t start, end;
+            size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
+            unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[prenode] + linklist_size_offset));
+            size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+            start = level0_element_start_positions_[prenode] + data_offset;
+            
+            if (prenode + 1 < cur_element_count && level0_element_start_positions_[prenode+1] > 0) {
+                end = level0_element_start_positions_[prenode+1];
+            } else {
+                end = data_level0_memory_.size();
+            }
+            
+            reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
+            
+            for(size_t i=0; i<dim; ++i) {
+                dexor_decode(states[i], reader);
+            }
+        }
+        
+        // Now decode Child using the state
+        utils::MemoryBlockStreamReader reader((const unsigned char*)data_level0_memory_.data());
+        
+        // Calculate start/end for Child
+        size_t start, end;
+        size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
+        unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + linklist_size_offset));
+        size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+        start = level0_element_start_positions_[internal_id] + data_offset;
+        
+        if (internal_id + 1 < cur_element_count && level0_element_start_positions_[internal_id+1] > 0) {
+            end = level0_element_start_positions_[internal_id+1];
+        } else {
+            end = data_level0_memory_.size();
+        }
+        
+        reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
+        
+        for(size_t i=0; i<dim; ++i) {
+            result[i] = dexor_decode(states[i], reader);
         }
 
-        // if (cache_max_size_ > 0) {
-        //     // std::lock_guard<std::mutex> lock(cache_lock_);
-        //     auto it = getOriginalData_cache_.find(internal_id);
-        //     if (it == getOriginalData_cache_.end()) {
-        //         if (getOriginalData_cache_.size() >= cache_max_size_) {
-        //             tableint evict_id = lru_history_.back();
-        //             lru_history_.pop_back();
-        //             getOriginalData_cache_.erase(evict_id);
-        //             cache_pop_count_++;
-        //         }
-        //         lru_history_.push_front(internal_id);
-        //         getOriginalData_cache_[internal_id] = {result, lru_history_.begin()};
-        //     }
-        // }
-
-        // auto end_time = std::chrono::high_resolution_clock::now();
-        // getOriginalData_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
         return result;
     }
 
@@ -1287,7 +1310,7 @@ class HierarchicalNSWCAB : public AlgorithmInterface<dist_t> {
         
         {
              std::lock_guard<std::mutex> lock(cache_lock_);
-             getOriginalData_cache_.clear();
+             root_state_cache_.clear();
         }
         
         for (size_t i = 0; i < cur_element_count; ++i) {
@@ -1328,11 +1351,11 @@ class HierarchicalNSWCAB : public AlgorithmInterface<dist_t> {
             // --- Compress Data ---
             const double* my_data_ptr = (const double*)getDataByInternalId(i);
             
-            if (i == root) {
-                std::vector<double> my_data_vec(my_data_ptr, my_data_ptr + dim);
-                std::lock_guard<std::mutex> lock(cache_lock_);
-                getOriginalData_cache_[i] = my_data_vec;
-            }
+            // if (i == root) {
+            //     std::vector<double> my_data_vec(my_data_ptr, my_data_ptr + dim);
+            //     std::lock_guard<std::mutex> lock(cache_lock_);
+            //     getOriginalData_cache_[i] = my_data_vec;
+            // }
             
             std::vector<char> compressed_buffer;
             utils::MemoryStreamWriter writer(&compressed_buffer);
@@ -1574,7 +1597,7 @@ class HierarchicalNSWCAB : public AlgorithmInterface<dist_t> {
 
         // 加载cache
         if( cache_max_size_ > 0){
-            getOriginalData_cache_.reserve(cache_max_size_);
+            root_state_cache_.reserve(cache_max_size_);
             loadCache();
         }
 
@@ -2519,16 +2542,41 @@ class HierarchicalNSWCAB : public AlgorithmInterface<dist_t> {
                 }
             }
             size_t to_load = std::min((size_t)cache_max_size_, root_nodes.size());
+            
+            size_t dim = *((size_t *) dist_func_param_);
+            utils::MemoryBlockStreamReader reader((const unsigned char*)data_level0_memory_.data());
+
             for (size_t i = 0; i < to_load; i++) {
                 tableint id = root_nodes[i];
-                // Load data into cache
-                std::vector<double> data = getOriginalDataByInternalId(id);
+                
+                // Decode Root to get state
+                std::vector<DeXORState> states(dim);
+                
+                size_t start, end;
+                size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
+                unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[id] + linklist_size_offset));
+                size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+                start = level0_element_start_positions_[id] + data_offset;
+                
+                if (id + 1 < cur_element_count && level0_element_start_positions_[id+1] > 0) {
+                    end = level0_element_start_positions_[id+1];
+                } else {
+                    end = data_level0_memory_.size();
+                }
+                
+                reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
+                
+                for(size_t k=0; k<dim; ++k) {
+                    dexor_decode(states[k], reader);
+                }
+                
                 {
-                    getOriginalData_cache_[id] = data;
+                    // std::lock_guard<std::mutex> lock(cache_lock_);
+                    root_state_cache_[id] = states;
                 }
             }
 
-            std::cout << "Cache loaded with " << to_load << " elements." << std::endl;
+            std::cout << "Cache loaded with " << to_load << " root states." << std::endl;
         }
     }
 };
