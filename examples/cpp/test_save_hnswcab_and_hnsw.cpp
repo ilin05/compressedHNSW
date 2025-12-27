@@ -44,9 +44,10 @@ namespace {
     // 2. hnswcab compression ratio
     // 3. hnswcab recall
     // 4. hnswcab query time per query (milliseconds)
-    // 5. hnsw index build time (seconds)
-    // 6. hnsw recall
-    // 7. hnsw query time per query (milliseconds)
+    // 5. hnswcab decoding time per query (milliseconds)
+    // 6. hnsw index build time (seconds)
+    // 7. hnsw recall
+    // 8. hnsw query time per query (milliseconds)
     std::map<std::string, std::vector<double>> test_results;
 }
 
@@ -280,10 +281,13 @@ std::vector<double> test_load_hnswcab(std::string data_path, std::string file_na
     std::chrono::duration<double, std::milli> query_duration = query_end - query_start;
     float avg_query_time = query_duration.count() / max_elements; // milliseconds per query
     float recall = correct / max_elements;
+    float decoding_time_per_query = static_cast<float>(alg_hnsw->getTotalTimeDecoding()) / max_elements / 1e3; // milliseconds per query
     std::cout << "HNSWCW recall: " << recall << "\n";
     std::cout << "HNSWCW average query time: " << avg_query_time << " ms" << std::endl;
+    std::cout << "HNSWCW average decoding time: " << decoding_time_per_query << " ms" << std::endl;
     results.push_back(recall);
     results.push_back(avg_query_time);
+    results.push_back(decoding_time_per_query);
 
     // long total_decoding_time = alg_hnsw->getTotalTimeDecoding();
     // float avg_decoding_time = static_cast<float>(total_decoding_time) / max_elements / 1e3; // milliseconds per query
@@ -303,6 +307,7 @@ void test_save_and_load_hnswcab(){
         test_results[file_name][1] = save_results[1]; // hnswcab compression ratio
         test_results[file_name][2] = load_results[0]; // hnswcab recall
         test_results[file_name][3] = load_results[1]; // hnswcab query time
+        test_results[file_name][4] = load_results[2]; // hnswcab decoding time
     }
 }
 
@@ -311,15 +316,15 @@ void test_save_and_load_hnsw(){
         std::cout << "Processing file: " << file_name << std::endl;
         std::vector<double> save_results = test_save_hnsw("../datasets/", file_name);
         std::vector<double> load_results = test_load_hnsw("../datasets/", file_name);
-        test_results[file_name][4] = save_results[0]; // hnsw index build time
-        test_results[file_name][5] = load_results[0]; // hnsw recall
-        test_results[file_name][6] = load_results[1]; // hnsw query
+        test_results[file_name][5] = save_results[0]; // hnsw index build time
+        test_results[file_name][6] = load_results[0]; // hnsw recall
+        test_results[file_name][7] = load_results[1]; // hnsw query
     }
 }
 
 void initialize_test_results(){
     for(const auto& file_name : file_names){
-        test_results[file_name] = std::vector<double>(7, 0.0); // 0: hnswcab build time, 1: hnswcab compression ratio, 2: hnswcab recall, 3: hnswcab query time, 4: hnsw build time, 5: hnsw recall, 6: hnsw query time
+        test_results[file_name] = std::vector<double>(8, 0.0); // 0: hnswcab build time, 1: hnswcab compression ratio, 2: hnswcab recall, 3: hnswcab query time, 4: hnswcab decoding time, 5: hnsw build time, 6: hnsw recall, 7: hnsw query time
     }
 }
 
