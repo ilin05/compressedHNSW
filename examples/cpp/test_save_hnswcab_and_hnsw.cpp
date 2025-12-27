@@ -38,16 +38,16 @@ namespace {
         // {"hair_loss", 500} // hair_loss: cahce_size = rows * 0.5%
     };
 
-    // 结果以csv表格形式保存。每个数据集对应一个csv表，表中每一行记录一种encoding最大树深在该数据集上的测试结果。列包括：
-    // 0. max tree depth
-    // 1. hnswcw index build time (seconds)
-    // 2. hnswcw compression ratio
-    // 3. hnswcw recall
-    // 4. hnswcw query time per query (milliseconds)
+    // 结果以csv表格形式保存。表中每一行记录一种数据集的测试结果。列包括：
+    // 0. file name
+    // 1. hnswcab index build time (seconds)
+    // 2. hnswcab compression ratio
+    // 3. hnswcab recall
+    // 4. hnswcab query time per query (milliseconds)
     // 5. hnsw index build time (seconds)
     // 6. hnsw recall
     // 7. hnsw query time per query (milliseconds)
-    std::map<std::string, std::map<int, std::vector<double>>> test_results;
+    std::map<std::string, std::vector<double>> test_results;
 }
 
 static int getDecimalPlace(double value) {
@@ -157,12 +157,11 @@ std::vector<double> test_save_hnswcab(std::string data_path, std::string file_na
             std::cout << "Added " << i << " points." << std::endl;
         }
     }
+    alg_hnsw->compress_dataset();
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> build_duration = end - start;
     std::cout << "Index built in " << build_duration.count() << " seconds." << std::endl;
     results.push_back(build_duration.count());
-
-    alg_hnsw->compress_dataset();
 
     alg_hnsw -> printCompressionTree("storage/" + file_name + "_encoding_tree.txt");
 
@@ -295,35 +294,69 @@ std::vector<double> test_load_hnswcab(std::string data_path, std::string file_na
     return results;
 }
 
-void test_save_and_load_hnswcab(const std::string& target_file_name = ""){
+void test_save_and_load_hnswcab(){
     for(const auto& file_name : file_names){
-        if (!target_file_name.empty() && file_name != target_file_name) continue;
         std::cout << "Processing file: " << file_name << std::endl;
         std::vector<double> save_results = test_save_hnswcab("../datasets/", file_name);
         std::vector<double> load_results = test_load_hnswcab("../datasets/", file_name, cache_sizes.at(file_name));
+        test_results[file_name][0] = save_results[0]; // hnswcab index build time
+        test_results[file_name][1] = save_results[1]; // hnswcab compression ratio
+        test_results[file_name][2] = load_results[0]; // hnswcab recall
+        test_results[file_name][3] = load_results[1]; // hnswcab query time
     }
 }
 
-void test_save_and_load_hnsw(const std::string& target_file_name = ""){
+void test_save_and_load_hnsw(){
     for(const auto& file_name : file_names){
-        if (!target_file_name.empty() && file_name != target_file_name) continue;
         std::cout << "Processing file: " << file_name << std::endl;
         std::vector<double> save_results = test_save_hnsw("../datasets/", file_name);
         std::vector<double> load_results = test_load_hnsw("../datasets/", file_name);
+        test_results[file_name][4] = save_results[0]; // hnsw index build time
+        test_results[file_name][5] = load_results[0]; // hnsw recall
+        test_results[file_name][6] = load_results[1]; // hnsw query
     }
 }
 
-int main(int argc, char* argv[]) {
-    std::string target_file_name = "";
-    if (argc > 1) {
-        target_file_name = argv[1];
-        std::cout << "Target file name: " << target_file_name << std::endl;
+void initialize_test_results(){
+    for(const auto& file_name : file_names){
+        test_results[file_name] = std::vector<double>(7, 0.0); // 0: hnswcab build time, 1: hnswcab compression ratio, 2: hnswcab recall, 3: hnswcab query time, 4: hnsw build time, 5: hnsw recall, 6: hnsw query time
     }
+}
+
+void write_results_to_csv(const std::string& csv_file_path){
+    std::ofstream csv_file(csv_file_path);
+    if (!csv_file.is_open()) {
+        std::cerr << "Failed to open CSV file for writing: " << csv_file_path << std::endl;
+        return;
+    }
+
+    // Write header
+    csv_file << "file_name,hnswcab_build_time(s),hnswcab_compression_ratio,hnswcab_recall,hnswcab_query_time(ms),"
+             << "hnsw_build_time(s),hnsw_recall,hnsw_query_time(ms)\n";
+
+    // Write data
+    for (const auto& entry : test_results) {
+        const std::string& file_name = entry.first;
+        const std::vector<double>& results = entry.second;
+        csv_file << file_name;
+        for (const auto& value : results) {
+            csv_file << "," << value;
+        }
+        csv_file << "\n";
+    }
+
+    csv_file.close();
+    std::cout << "Results written to " << csv_file_path << std::endl;
+}
+
+int main() {
 
     std::string file_path = "../datasets/";
 
-    test_save_and_load_hnswcab(target_file_name);
-    test_save_and_load_hnsw(target_file_name);
+    test_save_and_load_hnswcab();
+    test_save_and_load_hnsw();
+
+    write_results_to_csv("hnswcab_hnsw_test_results.csv");
 
     return 0;
 }
