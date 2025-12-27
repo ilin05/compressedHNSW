@@ -352,7 +352,7 @@ void write_results_to_csv(const std::string& csv_file_path){
 int main() {
 
     std::string file_path = "../datasets/";
-
+    initialize_test_results();
     test_save_and_load_hnswcab();
     test_save_and_load_hnsw();
 
