@@ -2510,29 +2510,17 @@ class HierarchicalNSWCAB : public AlgorithmInterface<dist_t> {
     void loadCache() {
         if (cache_max_size_ > 0) {
             // 这里实现加载热门数据到cache的逻辑
-            // 根据作为prenode的频率来决定哪些数据是热门数据
-
-            std::vector<int> prenode_frequency(cur_element_count, 0);
+            // 加載作为root的点为热门点
+            std::vector<tableint> root_nodes;
             for (tableint i = 0; i < cur_element_count; i++) {
-                std::vector<tableint> chain = getEncodingChain(i);
-                for (tableint id : chain) {
-                    prenode_frequency[id]++;
+                tableint prenode = getPrenodeId(i);
+                if (prenode == (tableint)-1) {
+                    root_nodes.push_back(i);
                 }
             }
-            // 获取频率最高的前cache_max_size_个prenode
-            std::vector<std::pair<int, tableint>> freq_id_pairs;
-            for (tableint i = 0; i < cur_element_count; i++) {
-                if (prenode_frequency[i] > 0) {
-                    freq_id_pairs.emplace_back(prenode_frequency[i], i);
-                }
-            }
-            std::sort(freq_id_pairs.begin(), freq_id_pairs.end(),
-                      [](const std::pair<int, tableint>& a, const std::pair<int, tableint>& b) {
-                          return a.first > b.first;
-                      });
-            size_t to_load = std::min((size_t)cache_max_size_, freq_id_pairs.size());
+            size_t to_load = std::min((size_t)cache_max_size_, root_nodes.size());
             for (size_t i = 0; i < to_load; i++) {
-                tableint id = freq_id_pairs[i].second;
+                tableint id = root_nodes[i];
                 // Load data into cache
                 std::vector<double> data = getOriginalDataByInternalId(id);
                 {
