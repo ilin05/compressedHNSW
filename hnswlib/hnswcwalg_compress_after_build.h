@@ -107,6 +107,9 @@ class HierarchicalNSWCAB : public AlgorithmInterface<dist_t> {
     // 记录decoding消耗的时间
     mutable std::atomic<long> decoding_time{0};
 
+    // 记录decoding的次数
+    mutable std::atomic<long> decoding_count{0};
+
     // data cache for getOriginalDataByInternalId
     size_t cache_max_size_ = 0;
     mutable std::list<tableint> lru_history_;
@@ -535,6 +538,7 @@ class HierarchicalNSWCAB : public AlgorithmInterface<dist_t> {
             for(size_t i=0; i<dim; ++i) {
                 result[i] = dexor_decode(states[i], reader);
             }
+            decoding_count ++;
             // auto decode_end = std::chrono::high_resolution_clock::now();
             // decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
             
@@ -580,6 +584,7 @@ class HierarchicalNSWCAB : public AlgorithmInterface<dist_t> {
             for(size_t i=0; i<dim; ++i) {
                 dexor_decode(states[i], reader);
             }
+            decoding_count ++;
             // auto decode_end = std::chrono::high_resolution_clock::now();
             // decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
         }
@@ -606,6 +611,7 @@ class HierarchicalNSWCAB : public AlgorithmInterface<dist_t> {
         for(size_t i=0; i<dim; ++i) {
             result[i] = dexor_decode(states[i], reader);
         }
+        decoding_count ++;
         // auto decode_end = std::chrono::high_resolution_clock::now();
         // decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
 
@@ -2536,6 +2542,11 @@ class HierarchicalNSWCAB : public AlgorithmInterface<dist_t> {
     // 获取decoding消耗的时间
     long getTotalTimeDecoding() const {
         return decoding_time;
+    }
+
+    // 获取decoding调用次数
+    int getDecodingCallCount() const {
+        return decoding_call_count_;
     }
 
     // 加载cache，根据max_cache_size设置cache大小，cache中固定存储热门数据，不使用lru
