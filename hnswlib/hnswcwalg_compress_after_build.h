@@ -530,13 +530,13 @@ class HierarchicalNSWCAB : public AlgorithmInterface<dist_t> {
             
             reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
             
-            std::vector<DeXORState> states(dim); // Default states
-            auto decode_start = std::chrono::high_resolution_clock::now();
+            // std::vector<DeXORState> states(dim); // Default states
+            // auto decode_start = std::chrono::high_resolution_clock::now();
             for(size_t i=0; i<dim; ++i) {
                 result[i] = dexor_decode(states[i], reader);
             }
-            auto decode_end = std::chrono::high_resolution_clock::now();
-            decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
+            // auto decode_end = std::chrono::high_resolution_clock::now();
+            // decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
             
             // Optional: Cache this root state if we have space? 
             // For now, we rely on loadCache to populate cache.
@@ -576,12 +576,12 @@ class HierarchicalNSWCAB : public AlgorithmInterface<dist_t> {
             
             reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
             
-            auto decode_start = std::chrono::high_resolution_clock::now();
+            // auto decode_start = std::chrono::high_resolution_clock::now();
             for(size_t i=0; i<dim; ++i) {
                 dexor_decode(states[i], reader);
             }
-            auto decode_end = std::chrono::high_resolution_clock::now();
-            decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
+            // auto decode_end = std::chrono::high_resolution_clock::now();
+            // decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
         }
         
         // Now decode Child using the state
@@ -602,12 +602,12 @@ class HierarchicalNSWCAB : public AlgorithmInterface<dist_t> {
         
         reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
         
-        auto decode_start = std::chrono::high_resolution_clock::now();
+        // auto decode_start = std::chrono::high_resolution_clock::now();
         for(size_t i=0; i<dim; ++i) {
             result[i] = dexor_decode(states[i], reader);
         }
-        auto decode_end = std::chrono::high_resolution_clock::now();
-        decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
+        // auto decode_end = std::chrono::high_resolution_clock::now();
+        // decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
 
         return result;
     }
