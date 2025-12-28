@@ -336,7 +336,7 @@ void write_results_to_csv(const std::string& csv_file_path){
     }
 
     // Write header
-    csv_file << "file_name,hnswcab_build_time(s),hnswcab_compression_ratio,hnswcab_recall,hnswcab_query_time(ms),"
+    csv_file << "file_name,hnswcab_build_time(s),hnswcab_compression_ratio,hnswcab_recall,hnswcab_query_time(ms),hnswcab_decoding_time(ms),"
              << "hnsw_build_time(s),hnsw_recall,hnsw_query_time(ms)\n";
 
     // Write data
