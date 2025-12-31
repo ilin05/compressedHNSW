@@ -12,4 +12,4 @@ var/
 **.DS_Store
 *.pyc
 test_results/*
-datasets/sift1m.csv
+datasets/*
