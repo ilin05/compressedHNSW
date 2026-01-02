@@ -148,7 +148,7 @@ std::vector<double> test_save_hnswcab(std::string data_path, std::string file_na
 
     // Initing index
     hnswlib::L2SpaceDouble space(dim);
-    hnswlib::HierarchicalNSWCAB<double>* alg_hnsw = new hnswlib::HierarchicalNSWCAB<double>(&space, max_elements, encoding_algorithm_name, M, ef_construction, true);
+    hnswlib::HierarchicalNSWCABLEANN<double>* alg_hnsw = new hnswlib::HierarchicalNSWCABLEANN<double>(&space, max_elements, encoding_algorithm_name, M, ef_construction, true);
 
     double* data_ptr = new double[dim * max_elements];
     for (int i = 0; i < std::min(rows, max_elements); i++) {
@@ -266,7 +266,7 @@ std::vector<double> test_load_hnswcab(std::string data_path, std::string file_na
     // Initing index
     hnswlib::L2SpaceDouble space(dim);
     std::string hnswcw_path = "storage/" + file_name + "_hnswcw.bin";
-    hnswlib::HierarchicalNSWCAB<double>* alg_hnsw = new hnswlib::HierarchicalNSWCAB<double>(&space, hnswcw_path, true, cache_size, false, max_elements);
+    hnswlib::HierarchicalNSWCABLEANN<double>* alg_hnsw = new hnswlib::HierarchicalNSWCABLEANN<double>(&space, hnswcw_path, true, cache_size, false, max_elements);
 
     double* data_ptr = new double[dim * max_elements];
     for (int i = 0; i < std::min(rows, max_elements); i++) {

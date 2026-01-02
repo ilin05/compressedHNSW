@@ -228,3 +228,4 @@ AlgorithmInterface<dist_t>::searchKnnCloserFirst(const void* query_data, size_t 
 #include "hnswalg.h"
 #include "hnswcwalg.h"
 #include "hnswcwalg_compress_after_build.h"
+#include "hnswcabalg_leann.h"
