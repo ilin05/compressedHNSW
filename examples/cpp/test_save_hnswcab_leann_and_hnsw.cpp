@@ -370,7 +370,7 @@ int main() {
     test_save_and_load_hnswcab();
     test_save_and_load_hnsw();
 
-    write_results_to_csv("hnswcab_hnsw_test_results.csv");
+    write_results_to_csv("hnswcab_leann_hnsw_test_results.csv");
 
     return 0;
 }
