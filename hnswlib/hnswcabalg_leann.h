@@ -556,13 +556,13 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
             reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
             
             std::vector<DeXORState> states(dim); // Default states
-            // auto decode_start = std::chrono::high_resolution_clock::now();
+            auto decode_start = std::chrono::high_resolution_clock::now();
             for(size_t i=0; i<dim; ++i) {
                 result[i] = dexor_decode(states[i], reader);
             }
-            // decoding_count ++;
-            // auto decode_end = std::chrono::high_resolution_clock::now();
-            // decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
+            decoding_count ++;
+            auto decode_end = std::chrono::high_resolution_clock::now();
+            decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
             
             // Optional: Cache this root state if we have space? 
             // For now, we rely on loadCache to populate cache.
@@ -602,13 +602,13 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
             
             reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
             
-            // auto decode_start = std::chrono::high_resolution_clock::now();
+            auto decode_start = std::chrono::high_resolution_clock::now();
             for(size_t i=0; i<dim; ++i) {
                 dexor_decode(states[i], reader);
             }
-            // decoding_count ++;
-            // auto decode_end = std::chrono::high_resolution_clock::now();
-            // decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
+            decoding_count ++;
+            auto decode_end = std::chrono::high_resolution_clock::now();
+            decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
         }
         
         // Now decode Child using the state
@@ -629,13 +629,13 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
         
         reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
         
-        // auto decode_start = std::chrono::high_resolution_clock::now();
+        auto decode_start = std::chrono::high_resolution_clock::now();
         for(size_t i=0; i<dim; ++i) {
             result[i] = dexor_decode(states[i], reader);
         }
-        // decoding_count ++;
-        // auto decode_end = std::chrono::high_resolution_clock::now();
-        // decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
+        decoding_count ++;
+        auto decode_end = std::chrono::high_resolution_clock::now();
+        decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
 
         return result;
     }
@@ -796,144 +796,100 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
     }
 
 
-    // bare_bone_search means there is no check for deletions and stop condition is ignored in return of extra performance
+    // Two-Level Search Base Layer (Algorithm 2 style)
+    // 1. Filter neighbors using Hamming distance (Approximate)
+    // 2. Compute Exact distance for top alpha% candidates
     template <bool bare_bone_search = true, bool collect_metrics = false>
     std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst>
-    searchBaseLayerBinary(
+    searchBaseLayerTwoLevel(
         tableint ep_id,
+        const void *query_data,
         const uint64_t *query_binary,
         size_t ef,
-        BaseFilterFunctor* isIdAllowed = nullptr,
-        BaseSearchStopCondition<dist_t>* stop_condition = nullptr) const {
+        BaseFilterFunctor* isIdAllowed = nullptr) const {
+        
         VisitedList *vl = visited_list_pool_->getFreeVisitedList();
         vl_type *visited_array = vl->mass;
         vl_type visited_array_tag = vl->curV;
 
+        // Queues store EXACT distances
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidate_set;
 
-        dist_t lowerBound;
-        if (bare_bone_search || 
-            (!isMarkedDeleted(ep_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(ep_id))))) {
-            
-            const uint64_t* ep_binary = binary_data_.data() + ep_id * binary_block_size_;
-            dist_t dist = hamming_dist(query_binary, ep_binary, binary_block_size_);
-            
-            lowerBound = dist;
-            top_candidates.emplace(dist, ep_id);
-            if (!bare_bone_search && stop_condition) {
-                // Note: stop_condition usually expects raw data, but here we only have binary.
-                // We might need to adjust stop_condition interface or pass nullptr/dummy.
-                // For now, assuming stop_condition is not used with binary search or handles it.
-                // stop_condition->add_point_to_result(getExternalLabel(ep_id), ep_data, dist);
-            }
-            candidate_set.emplace(-dist, ep_id);
-        } else {
-            lowerBound = std::numeric_limits<dist_t>::max();
-            candidate_set.emplace(-lowerBound, ep_id);
-        }
-
+        // Initial Point (Exact Distance)
+        std::vector<double> vec_ep = getOriginalDataByInternalId(ep_id);
+        dist_t dist = fstdistfunc_(query_data, vec_ep.data(), dist_func_param_);
+        
+        dist_t lowerBound = dist;
+        top_candidates.emplace(dist, ep_id);
+        candidate_set.emplace(-dist, ep_id);
+        
         visited_array[ep_id] = visited_array_tag;
 
         while (!candidate_set.empty()) {
             std::pair<dist_t, tableint> current_node_pair = candidate_set.top();
             dist_t candidate_dist = -current_node_pair.first;
-
-            bool flag_stop_search;
-            if (bare_bone_search) {
-                flag_stop_search = candidate_dist > lowerBound;
-            } else {
-                if (stop_condition) {
-                    flag_stop_search = stop_condition->should_stop_search(candidate_dist, lowerBound);
-                } else {
-                    flag_stop_search = candidate_dist > lowerBound && top_candidates.size() == ef;
-                }
-            }
-            if (flag_stop_search) {
-                break;
-            }
             candidate_set.pop();
+
+            if (candidate_dist > lowerBound) {
+                if (top_candidates.size() == ef) break;
+            }
 
             tableint current_node_id = current_node_pair.second;
             int *data = (int *) get_linklist0(current_node_id);
             size_t size = getListCount((linklistsizeint*)data);
-//                bool cur_node_deleted = isMarkedDeleted(current_node_id);
+
             if (collect_metrics) {
                 metric_hops++;
-                metric_distance_computations+=size;
+                // metric_distance_computations += size; // We do hamming for all, exact for few
             }
 
-#ifdef USE_SSE
-            if (size > 0) {
-                _mm_prefetch((char *) (visited_array + *(data + 1)), _MM_HINT_T0);
-                _mm_prefetch((char *) (visited_array + *(data + 1) + 64), _MM_HINT_T0);
-                // Prefetch Binary Data
-                _mm_prefetch((char*)(binary_data_.data() + *(data + 1) * binary_block_size_), _MM_HINT_T0);
-                _mm_prefetch((char *) (data + 2), _MM_HINT_T0);
-            }
-#endif
+            // 1. Collect Unvisited Neighbors & Compute Hamming Distance
+            std::vector<std::pair<int, tableint>> approx_candidates;
+            approx_candidates.reserve(size);
 
             for (size_t j = 1; j <= size; j++) {
                 int candidate_id = *(data + j);
-//                    if (candidate_id == 0) continue;
-#ifdef USE_SSE
-                if (j < size) {
-                    _mm_prefetch((char *) (visited_array + *(data + j + 1)), _MM_HINT_T0);
-                    // Prefetch Binary Data
-                    _mm_prefetch((char*)(binary_data_.data() + *(data + j + 1) * binary_block_size_), _MM_HINT_T0);
-                }
-#endif
-                if (!(visited_array[candidate_id] == visited_array_tag)) {
+                if (visited_array[candidate_id] != visited_array_tag) {
                     visited_array[candidate_id] = visited_array_tag;
-
+                    
                     const uint64_t* cand_binary = binary_data_.data() + candidate_id * binary_block_size_;
-                    dist_t dist = hamming_dist(query_binary, cand_binary, binary_block_size_);
+                    int h_dist = hamming_dist(query_binary, cand_binary, binary_block_size_);
+                    approx_candidates.push_back({h_dist, candidate_id});
+                }
+            }
 
-                    bool flag_consider_candidate;
-                    if (!bare_bone_search && stop_condition) {
-                        flag_consider_candidate = stop_condition->should_consider_candidate(dist, lowerBound);
-                    } else {
-                        flag_consider_candidate = top_candidates.size() < ef || lowerBound > dist;
-                    }
+            // 2. Filter Top Alpha% (e.g., 20%)
+            if (!approx_candidates.empty()) {
+                size_t candidates_to_check = (size_t)(approx_candidates.size() * 0.2); 
+                if (candidates_to_check < 2) candidates_to_check = std::min(approx_candidates.size(), (size_t)2);
+                
+                std::partial_sort(approx_candidates.begin(), 
+                                  approx_candidates.begin() + candidates_to_check, 
+                                  approx_candidates.end());
 
-                    if (flag_consider_candidate) {
-                        candidate_set.emplace(-dist, candidate_id);
-#ifdef USE_SSE
-                        if (candidate_set.size() > 0) {
-                            size_t offset = is_compacted_ ? (sizeof(tableint) + sizeof(labeltype)) : offsetLevel0_;
-                            _mm_prefetch(data_level0_memory_.data() + level0_element_start_positions_[candidate_set.top().second] +
-                                            offset,  ///////////
-                                            _MM_HINT_T0);  ////////////////////////
-                        }
-#endif
+                // 3. Compute Exact Distance for Survivors
+                for (size_t i = 0; i < candidates_to_check; ++i) {
+                    tableint cand_id = approx_candidates[i].second;
+                    
+                    std::vector<double> vec_cand = getOriginalDataByInternalId(cand_id);
+                    dist_t exact_dist = fstdistfunc_(query_data, vec_cand.data(), dist_func_param_);
 
+                    if (top_candidates.size() < ef || exact_dist < lowerBound) {
+                        candidate_set.emplace(-exact_dist, cand_id);
+                        
                         if (bare_bone_search || 
-                            (!isMarkedDeleted(candidate_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id))))) {
-                            top_candidates.emplace(dist, candidate_id);
-                            if (!bare_bone_search && stop_condition) {
-                                // stop_condition->add_point_to_result(getExternalLabel(candidate_id), currObj1, dist);
-                            }
+                            (!isMarkedDeleted(cand_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(cand_id))))) {
+                            top_candidates.emplace(exact_dist, cand_id);
                         }
 
-                        bool flag_remove_extra = false;
-                        if (!bare_bone_search && stop_condition) {
-                            flag_remove_extra = stop_condition->should_remove_extra();
-                        } else {
-                            flag_remove_extra = top_candidates.size() > ef;
-                        }
-                        while (flag_remove_extra) {
-                            tableint id = top_candidates.top().second;
+                        if (top_candidates.size() > ef) {
                             top_candidates.pop();
-                            if (!bare_bone_search && stop_condition) {
-                                // stop_condition->remove_point_from_result(getExternalLabel(id), getDataByInternalId(id), dist);
-                                flag_remove_extra = stop_condition->should_remove_extra();
-                            } else {
-                                flag_remove_extra = top_candidates.size() > ef;
-                            }
                         }
-
-                        if (!top_candidates.empty())
+                        
+                        if (!top_candidates.empty()) {
                             lowerBound = top_candidates.top().first;
+                        }
                     }
                 }
             }
@@ -2448,7 +2404,7 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
 
         // Check if we can use the 1-bit quantization path
         if (use_encoding_algorithm_ && is_compacted_ && !binary_data_.empty()) {
-             // --- Two-Pass Search with 1-bit Quantization ---
+             // --- Two-Pass Search with 1-bit Quantization (Algorithm 2) ---
 
             // 1. Quantize Query
             size_t dim = data_size_ / sizeof(double);
@@ -2461,12 +2417,12 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
                 }
             }
 
-            // 2. HNSW Routing (Approximate Search using Binary Codes)
+            // 2. HNSW Routing (Upper Layers)
             tableint currObj = enterpoint_node_;
             
-            // Routing on upper layers
-            const uint64_t* curr_binary = binary_data_.data() + currObj * binary_block_size_;
-            dist_t curdist = hamming_dist(q_binary.data(), curr_binary, binary_block_size_);
+            // Initial Exact Distance
+            std::vector<double> vec_ep = getOriginalDataByInternalId(enterpoint_node_);
+            dist_t curdist = fstdistfunc_(query_data, vec_ep.data(), dist_func_param_);
 
             for (int level = maxlevel_; level > 0; level--) {
                 bool changed = true;
@@ -2475,8 +2431,11 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
                     unsigned int *data = (unsigned int *) get_linklist(currObj, level);
                     int size = getListCount(data);
                     metric_hops++;
-                    // metric_distance_computations+=size; // Hamming distance is cheap, maybe track separately?
-
+                    
+                    // Collect neighbors and compute Hamming distance
+                    std::vector<std::pair<int, tableint>> approx_candidates;
+                    approx_candidates.reserve(size);
+                    
                     tableint *datal = (tableint *) (data + 1);
                     for (int i = 0; i < size; i++) {
                         tableint cand = datal[i];
@@ -2484,73 +2443,57 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
                             throw std::runtime_error("cand error");
                         
                         const uint64_t* cand_binary = binary_data_.data() + cand * binary_block_size_;
-                        dist_t d = hamming_dist(q_binary.data(), cand_binary, binary_block_size_);
+                        int h_dist = hamming_dist(q_binary.data(), cand_binary, binary_block_size_);
+                        approx_candidates.push_back({h_dist, cand});
+                    }
+
+                    // Filter Top Alpha% (e.g., 20%)
+                    if (!approx_candidates.empty()) {
+                        size_t candidates_to_check = (size_t)(approx_candidates.size() * 0.2);
+                        if (candidates_to_check < 2) candidates_to_check = std::min(approx_candidates.size(), (size_t)2);
                         
-                        if (d < curdist) {
-                            curdist = d;
-                            currObj = cand;
-                            changed = true;
+                        std::partial_sort(approx_candidates.begin(), 
+                                          approx_candidates.begin() + candidates_to_check, 
+                                          approx_candidates.end());
+                        
+                        // Check Exact Distance for survivors
+                        for(size_t i=0; i<candidates_to_check; ++i) {
+                            tableint cand = approx_candidates[i].second;
+                            std::vector<double> vec_cand = getOriginalDataByInternalId(cand);
+                            dist_t d = fstdistfunc_(query_data, vec_cand.data(), dist_func_param_);
+                            
+                            if (d < curdist) {
+                                curdist = d;
+                                currObj = cand;
+                                changed = true;
+                            }
                         }
                     }
                 }
             }
 
-            // Base Layer Search (Binary)
-            // Over-fetch candidates to improve recall
-            size_t k_approx = std::max(k * 5, (size_t)50); 
-            size_t ef_search = std::max(ef_, k_approx);
+            // 3. Base Layer Search (Two-Level)
+            // Use the same ef as configured to ensure fair comparison of decoding counts
+            size_t ef_search = ef_; 
+            // size_t k_approx = std::max(k * 5, (size_t)50); 
+            // size_t ef_search = std::max(ef_, k_approx);
 
             std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidates;
             
             if (isIdAllowed) {
-                candidates = searchBaseLayerBinary<false>(currObj, q_binary.data(), ef_search, isIdAllowed);
+                candidates = searchBaseLayerTwoLevel<false>(currObj, query_data, q_binary.data(), ef_search, isIdAllowed);
             } else {
-                candidates = searchBaseLayerBinary<true>(currObj, q_binary.data(), ef_search, isIdAllowed);
+                candidates = searchBaseLayerTwoLevel<true>(currObj, query_data, q_binary.data(), ef_search, isIdAllowed);
             }
 
-            // 3. Refinement (DeXOR Decoding & Re-ranking)
-            std::vector<std::pair<dist_t, labeltype>> refined_results;
-            refined_results.reserve(candidates.size());
-
-            while(!candidates.empty()) {
-                tableint id = candidates.top().second;
+            // 4. Result Construction (candidates already contains Exact Distances)
+            while (candidates.size() > k) {
                 candidates.pop();
-
-                // *** DeXOR Decoding ***
-                std::vector<double> vec_original = getOriginalDataByInternalId(id);
-                
-                // Compute Exact Distance
-                dist_t true_dist = fstdistfunc_(query_data, vec_original.data(), dist_func_param_);
-                refined_results.push_back({true_dist, getExternalLabel(id)});
             }
-
-            // 4. Sort and Top-K
-            std::sort(refined_results.begin(), refined_results.end(), 
-                [](const std::pair<dist_t, labeltype>& a, const std::pair<dist_t, labeltype>& b){ return a.first < b.first; }); // Min-heap logic for distance (smallest first)
-
-            if(refined_results.size() > k) refined_results.resize(k);
-
-            // Push to result queue (max heap for priority_queue to keep smallest at top? No, priority_queue is max heap by default)
-            // Wait, standard HNSW returns max heap of (dist, label) where top is largest distance?
-            // Actually, usually we want smallest distances. 
-            // The original code returns `std::priority_queue<std::pair<dist_t, labeltype >>`.
-            // If it's a max heap, popping gives the largest distance.
-            // If we want the k nearest neighbors, we usually keep the k smallest distances.
-            // A max heap of size k will have the k-th smallest distance at the top.
-            // So we should push the k smallest distances into the result queue.
-            
-            // The original code:
-            // while (top_candidates.size() > k) top_candidates.pop();
-            // top_candidates is `priority_queue<..., CompareByFirst>` which is a Max Heap (default for pair is lexicographical, but CompareByFirst usually implements <).
-            // If CompareByFirst implements <, then it's a Max Heap.
-            // So top_candidates keeps the smallest k elements if we pop the largest ones?
-            // No, if it's a Max Heap, top() is the largest. If we limit size to k, we are keeping the k smallest elements.
-            
-            // So for my refined_results (sorted smallest to largest), I should just push them all into the result queue.
-            // The result queue is `std::priority_queue<std::pair<dist_t, labeltype >>` (default Max Heap).
-            
-            for(const auto& p : refined_results) {
-                result.push(p);
+            while (candidates.size() > 0) {
+                std::pair<dist_t, tableint> rez = candidates.top();
+                result.push(std::pair<dist_t, labeltype>(rez.first, getExternalLabel(rez.second)));
+                candidates.pop();
             }
             return result;
         }
