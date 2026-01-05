@@ -505,7 +505,7 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
         return (char*)(data_level0_memory + level0_element_start_positions_[internal_id] + offset);
     }
 
-    std::vector<double> getOriginalDataByInternalId(tableint internal_id) const {
+    std::vector<double> getOriginalDataByInternalId(tableint internal_id, bool collect_metrics = false) const {
         // auto start_time = std::chrono::high_resolution_clock::now();
 
         if(!use_encoding_algorithm_ || !is_compacted_) {
@@ -560,9 +560,11 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
             for(size_t i=0; i<dim; ++i) {
                 result[i] = dexor_decode(states[i], reader);
             }
-            decoding_count ++;
-            auto decode_end = std::chrono::high_resolution_clock::now();
-            decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
+            if (collect_metrics) {
+                decoding_count ++;
+                auto decode_end = std::chrono::high_resolution_clock::now();
+                decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
+            }
             
             // Optional: Cache this root state if we have space? 
             // For now, we rely on loadCache to populate cache.
@@ -606,9 +608,11 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
             for(size_t i=0; i<dim; ++i) {
                 dexor_decode(states[i], reader);
             }
-            decoding_count ++;
-            auto decode_end = std::chrono::high_resolution_clock::now();
-            decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
+            if (collect_metrics) {
+                decoding_count ++;
+                auto decode_end = std::chrono::high_resolution_clock::now();
+                decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
+            }
         }
         
         // Now decode Child using the state
@@ -633,13 +637,25 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
         for(size_t i=0; i<dim; ++i) {
             result[i] = dexor_decode(states[i], reader);
         }
-        decoding_count ++;
-        auto decode_end = std::chrono::high_resolution_clock::now();
-        decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
+        if (collect_metrics) {
+            decoding_count ++;
+            auto decode_end = std::chrono::high_resolution_clock::now();
+            decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
+        }
 
         return result;
     }
 
+
+    std::vector<std::vector<double>> getBatchOriginalDataByInternalId(const std::vector<tableint>& internal_ids) const {
+        std::vector<std::vector<double>> results(internal_ids.size());
+        
+        #pragma omp parallel for schedule(dynamic)
+        for (int i = 0; i < internal_ids.size(); ++i) {
+            results[i] = getOriginalDataByInternalId(internal_ids[i], false);
+        }
+        return results;
+    }
 
     int getRandomLevel(double reverse_size) {
         std::uniform_real_distribution<double> distribution(0.0, 1.0);
@@ -869,10 +885,17 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
                                   approx_candidates.end());
 
                 // 3. Compute Exact Distance for Survivors
+                std::vector<tableint> batch_ids;
+                batch_ids.reserve(candidates_to_check);
                 for (size_t i = 0; i < candidates_to_check; ++i) {
-                    tableint cand_id = approx_candidates[i].second;
-                    
-                    std::vector<double> vec_cand = getOriginalDataByInternalId(cand_id);
+                    batch_ids.push_back(approx_candidates[i].second);
+                }
+
+                std::vector<std::vector<double>> batch_data = getBatchOriginalDataByInternalId(batch_ids);
+
+                for (size_t i = 0; i < candidates_to_check; ++i) {
+                    tableint cand_id = batch_ids[i];
+                    const std::vector<double>& vec_cand = batch_data[i];
                     dist_t exact_dist = fstdistfunc_(query_data, vec_cand.data(), dist_func_param_);
 
                     if (top_candidates.size() < ef || exact_dist < lowerBound) {
@@ -2457,9 +2480,17 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
                                           approx_candidates.end());
                         
                         // Check Exact Distance for survivors
+                        std::vector<tableint> batch_ids;
+                        batch_ids.reserve(candidates_to_check);
                         for(size_t i=0; i<candidates_to_check; ++i) {
-                            tableint cand = approx_candidates[i].second;
-                            std::vector<double> vec_cand = getOriginalDataByInternalId(cand);
+                            batch_ids.push_back(approx_candidates[i].second);
+                        }
+
+                        std::vector<std::vector<double>> batch_data = getBatchOriginalDataByInternalId(batch_ids);
+
+                        for(size_t i=0; i<candidates_to_check; ++i) {
+                            tableint cand = batch_ids[i];
+                            const std::vector<double>& vec_cand = batch_data[i];
                             dist_t d = fstdistfunc_(query_data, vec_cand.data(), dist_func_param_);
                             
                             if (d < curdist) {
