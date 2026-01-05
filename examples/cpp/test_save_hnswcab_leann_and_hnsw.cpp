@@ -14,10 +14,11 @@ namespace {
         "siftsmall_base",
         "gist_small_base",
         "mnist-784-euclidean_small_base",
-        "fashion-mnist-784-euclidean_small_base"
-        // "mnist-784-euclidean",
-        // "fashion-mnist-784-euclidean",
-        // "sift-128-euclidean"
+        "fashion-mnist-784-euclidean_small_base",
+        "mnist-784-euclidean",
+        "fashion-mnist-784-euclidean",
+        "sift1m"
+        // "gist_base"
         // "SaYoPillow",
         // "emotional_monitoring_dataset_with_target",
         // "simulated_highdim_physical"
@@ -34,10 +35,11 @@ namespace {
         {"siftsmall_base", 100}, // siftsmall_base: cahce_size = rows * 1%
         {"gist_small_base", 100}, // gist_small_base: cahce_size = rows * 1%
         {"mnist-784-euclidean_small_base", 100}, // mnist-784-euclidean_small_base: cahce_size = rows * 1%
-        {"fashion-mnist-784-euclidean_small_base", 100} // fashion-mnist-784-euclidean_small_base: cahce_size = rows * 1%
-        // {"mnist-784-euclidean", 600}, // mnist-784-euclidean: cahce_size = rows * 1%
-        // {"fashion-mnist-784-euclidean", 600}, // fashion-mnist-784-euclidean: cahce_size = rows * 1%
-        // {"sift-128-euclidean", 10000} // sift-128-euclidean: cahce_size = rows * 1%
+        {"fashion-mnist-784-euclidean_small_base", 100}, // fashion-mnist-784-euclidean_small_base: cahce_size = rows * 1%
+        {"mnist-784-euclidean", 600}, // mnist-784-euclidean: cahce_size = rows * 1%
+        {"fashion-mnist-784-euclidean", 600}, // fashion-mnist-784-euclidean: cahce_size = rows * 1%
+        {"sift1m", 10000}, // sift1m: cahce_size = rows * 1%
+        {"gist_base", 10000} // gist_base: cahce_size = rows * 1%
         // {"SaYoPillow", 6}, // SaYoPillow: cahce_size = rows * 1%
         // {"emotional_monitoring_dataset_with_target", 10}, // emotional_monitoring_dataset_with_target: cahce_size = rows * 1%
         // {"simulated_highdim_physical", 50}, // simulated_highdim_physical: cahce_size = rows * 1%
@@ -46,11 +48,11 @@ namespace {
 
     // 结果以csv表格形式保存。表中每一行记录一种数据集的测试结果。列包括：
     // 0. file name
-    // 1. hnswcab index build time (seconds)
-    // 2. hnswcab compression ratio
-    // 3. hnswcab recall
-    // 4. hnswcab query time per query (milliseconds)
-    // 5. hnswcab decoding time per query (milliseconds)
+    // 1. hnswcab_leann index build time (seconds)
+    // 2. hnswcab_leann compression ratio
+    // 3. hnswcab_leann recall
+    // 4. hnswcab_leann query time per query (milliseconds)
+    // 5. hnswcab_leann decoding time per query (milliseconds)
     // 6. hnsw index build time (seconds)
     // 7. hnsw recall
     // 8. hnsw query time per query (milliseconds)
@@ -126,7 +128,7 @@ std::vector<double> test_save_hnsw(std::string data_path, std::string file_name)
     return results;
 }
 
-std::vector<double> test_save_hnswcab(std::string data_path, std::string file_name) {
+std::vector<double> test_save_hnswcab_leann(std::string data_path, std::string file_name) {
     std::string file_path = data_path + "/" + file_name + ".csv";
     std::vector<std::vector<double>> data = data_loader::loadData(file_path);
     std::vector<double> results;
@@ -160,7 +162,7 @@ std::vector<double> test_save_hnswcab(std::string data_path, std::string file_na
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < max_elements; i++) {
         alg_hnsw->addPoint(data_ptr + i * dim, i);
-        if(i > 0 && i % 500 == 0){
+        if(i > 0 && i % 5000 == 0){
             std::cout << "Added " << i << " points." << std::endl;
         }
     }
@@ -224,15 +226,15 @@ std::vector<double> test_load_hnsw(std::string data_path, std::string file_name)
     // Query the elements for themselves and measure recall
     float correct = 0;
     auto query_start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < max_elements; i++) {
+    for (int i = 0; i < std::min(max_elements, 10000); i++) {
         std::priority_queue<std::pair<double, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data_ptr + i * dim, 1);
         hnswlib::labeltype label = result.top().second;
         if (label == i) correct++;
     }
     auto query_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> query_duration = query_end - query_start;
-    float avg_query_time = query_duration.count() / max_elements; // milliseconds per query
-    float recall = correct / max_elements;
+    float avg_query_time = query_duration.count() / std::min(max_elements, 10000); // milliseconds per query
+    float recall = correct / std::min(max_elements, 10000);
     std::cout << "HNSW recall: " << recall << "\n";
     std::cout << "HNSW average query time: " << avg_query_time << " ms" << std::endl;
     results.push_back(recall);
@@ -243,7 +245,7 @@ std::vector<double> test_load_hnsw(std::string data_path, std::string file_name)
     return results;
 }
 
-std::vector<double> test_load_hnswcab(std::string data_path, std::string file_name, size_t cache_size = 0) {
+std::vector<double> test_load_hnswcab_leann(std::string data_path, std::string file_name, size_t cache_size = 0) {
     std::string file_path = data_path + "/" + file_name + ".csv";
     std::vector<std::vector<double>> data = data_loader::loadData(file_path);
     std::vector<double> results;
@@ -278,17 +280,17 @@ std::vector<double> test_load_hnswcab(std::string data_path, std::string file_na
     // Query the elements for themselves and measure recall
     float correct = 0;
     auto query_start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < max_elements; i++) {
+    for (int i = 0; i < std::min(max_elements, 10000); i++) {
         std::priority_queue<std::pair<double, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data_ptr + i * dim, 1);
         hnswlib::labeltype label = result.top().second;
         if (label == i) correct++;
     }
     auto query_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> query_duration = query_end - query_start;
-    float avg_query_time = query_duration.count() / max_elements; // milliseconds per query
-    float recall = correct / max_elements;
-    float decoding_time_per_query = static_cast<float>(alg_hnsw->getTotalTimeDecoding()) / max_elements / 1e3; // milliseconds per query
-    float decoding_call_count_per_query = static_cast<float>(alg_hnsw->getDecodingCallCount()) / max_elements;
+    float avg_query_time = query_duration.count() / std::min(max_elements, 10000); // milliseconds per query
+    float recall = correct / std::min(max_elements, 10000);
+    float decoding_time_per_query = static_cast<float>(alg_hnsw->getTotalTimeDecoding()) / std::min(max_elements, 10000) / 1e3; // milliseconds per query
+    float decoding_call_count_per_query = static_cast<float>(alg_hnsw->getDecodingCallCount()) / std::min(max_elements, 10000);
     std::cout << "HNSWCW recall: " << recall << "\n";
     std::cout << "HNSWCW average query time: " << avg_query_time << " ms" << std::endl;
     std::cout << "HNSWCW average decoding time: " << decoding_time_per_query << " ms" << std::endl;
@@ -306,17 +308,17 @@ std::vector<double> test_load_hnswcab(std::string data_path, std::string file_na
     return results;
 }
 
-void test_save_and_load_hnswcab(){
+void test_save_and_load_hnswcab_leann(){
     for(const auto& file_name : file_names){
         std::cout << "Processing file: " << file_name << std::endl;
-        std::vector<double> save_results = test_save_hnswcab("../datasets/", file_name);
-        std::vector<double> load_results = test_load_hnswcab("../datasets/", file_name, cache_sizes.at(file_name));
-        test_results[file_name][0] = save_results[0]; // hnswcab index build time
-        test_results[file_name][1] = save_results[1]; // hnswcab compression ratio
-        test_results[file_name][2] = load_results[0]; // hnswcab recall
-        test_results[file_name][3] = load_results[1]; // hnswcab query time
-        test_results[file_name][4] = load_results[2]; // hnswcab decoding time
-        test_results[file_name][5] = load_results[3]; // hnswcab decoding call count
+        std::vector<double> save_results = test_save_hnswcab_leann("../datasets/", file_name);
+        std::vector<double> load_results = test_load_hnswcab_leann("../datasets/", file_name, cache_sizes.at(file_name));
+        test_results[file_name][0] = save_results[0]; // hnswcab_leann index build time
+        test_results[file_name][1] = save_results[1]; // hnswcab_leann compression ratio
+        test_results[file_name][2] = load_results[0]; // hnswcab_leann recall
+        test_results[file_name][3] = load_results[1]; // hnswcab_leann query time
+        test_results[file_name][4] = load_results[2]; // hnswcab_leann decoding time
+        test_results[file_name][5] = load_results[3]; // hnswcab_leann decoding call count
     }
 }
 
@@ -333,7 +335,7 @@ void test_save_and_load_hnsw(){
 
 void initialize_test_results(){
     for(const auto& file_name : file_names){
-        test_results[file_name] = std::vector<double>(9, 0.0); // 0: hnswcab build time, 1: hnswcab compression ratio, 2: hnswcab recall, 3: hnswcab query time, 4: hnswcab decoding time, 5: hnswcab decoding call count, 6: hnsw build time, 7: hnsw recall, 8: hnsw query time
+        test_results[file_name] = std::vector<double>(9, 0.0); // 0: hnswcab_leann build time, 1: hnswcab_leann compression ratio, 2: hnswcab_leann recall, 3: hnswcab_leann query time, 4: hnswcab_leann decoding time, 5: hnswcab_leann decoding call count, 6: hnsw build time, 7: hnsw recall, 8: hnsw query time
     }
 }
 
@@ -345,7 +347,7 @@ void write_results_to_csv(const std::string& csv_file_path){
     }
 
     // Write header
-    csv_file << "file_name,hnswcab_build_time(s),hnswcab_compression_ratio,hnswcab_recall,hnswcab_query_time(ms),hnswcab_decoding_time(ms),hnswcab_decoding_calls_per_query,"
+    csv_file << "file_name,hnswcab_leann_build_time(s),hnswcab_leann_compression_ratio,hnswcab_leann_recall,hnswcab_leann_query_time(ms),hnswcab_leann_decoding_time(ms),hnswcab_leann_decoding_calls_per_query,"
              << "hnsw_build_time(s),hnsw_recall,hnsw_query_time(ms)\n";
 
     // Write data
@@ -367,7 +369,7 @@ int main() {
 
     std::string file_path = "../datasets/";
     initialize_test_results();
-    test_save_and_load_hnswcab();
+    test_save_and_load_hnswcab_leann();
     test_save_and_load_hnsw();
 
     write_results_to_csv("hnswcab_leann_hnsw_test_results.csv");
