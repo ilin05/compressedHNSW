@@ -110,7 +110,7 @@ std::vector<double> test_save_hnsw(std::string data_path, std::string file_name)
     return results;
 }
 
-std::vector<double> test_save_hnswalp(std::string data_path, std::string file_name) {
+std::vector<double> test_save_hnswalp_leann(std::string data_path, std::string file_name) {
     std::string file_path = data_path + "/" + file_name + ".csv";
     std::vector<std::vector<double>> data = data_loader::loadData(file_path);
     std::vector<double> results;
@@ -132,7 +132,7 @@ std::vector<double> test_save_hnswalp(std::string data_path, std::string file_na
 
     // Initing index
     hnswlib::L2SpaceDouble space(dim);
-    hnswlib::HierarchicalNSWALP<double>* alg_hnsw = new hnswlib::HierarchicalNSWALP<double>(&space, max_elements, M, ef_construction);
+    hnswlib::HierarchicalNSWALPLEANN<double>* alg_hnsw = new hnswlib::HierarchicalNSWALPLEANN<double>(&space, max_elements, M, ef_construction);
 
     double* data_ptr = new double[dim * max_elements];
     for (int i = 0; i < std::min(rows, max_elements); i++) {
@@ -155,8 +155,8 @@ std::vector<double> test_save_hnswalp(std::string data_path, std::string file_na
     results.push_back(build_duration.count());
 
     // Serialize index
-    std::string hnswalp_path = "storage/" + file_name + "_hnswalp.bin";
-    alg_hnsw->saveIndex(hnswalp_path);
+    std::string hnswalp_leann_path = "storage/" + file_name + "_hnswalp_leann.bin";
+    alg_hnsw->saveIndex(hnswalp_leann_path);
 
     // 原始大小
     size_t original_data_size = static_cast<size_t>(max_elements) * static_cast<size_t>(dim) * sizeof(double);
@@ -225,7 +225,7 @@ std::vector<double> test_load_hnsw(std::string data_path, std::string file_name)
     return results;
 }
 
-std::vector<double> test_load_hnswalp(std::string data_path, std::string file_name) {
+std::vector<double> test_load_hnswalp_leann(std::string data_path, std::string file_name) {
     std::string file_path = data_path + "/" + file_name + ".csv";
     std::vector<std::vector<double>> data = data_loader::loadData(file_path);
     std::vector<double> results;
@@ -247,8 +247,8 @@ std::vector<double> test_load_hnswalp(std::string data_path, std::string file_na
 
     // Initing index
     hnswlib::L2SpaceDouble space(dim);
-    std::string hnswalp_path = "storage/" + file_name + "_hnswalp.bin";
-    hnswlib::HierarchicalNSWALP<double>* alg_hnsw = new hnswlib::HierarchicalNSWALP<double>(&space, hnswalp_path);
+    std::string hnswalp_leann_path = "storage/" + file_name + "_hnswalp_leann.bin";
+    hnswlib::HierarchicalNSWALPLEANN<double>* alg_hnsw = new hnswlib::HierarchicalNSWALPLEANN<double>(&space, hnswalp_leann_path);
 
     double* data_ptr = new double[dim * max_elements];
     for (int i = 0; i < std::min(rows, max_elements); i++) {
@@ -271,9 +271,9 @@ std::vector<double> test_load_hnswalp(std::string data_path, std::string file_na
     float recall = correct / std::min(max_elements, 10000);
     float decoding_time_per_query = static_cast<float>(alg_hnsw->getTotalTimeDecoding()) / std::min(max_elements, 10000) / 1e3; // milliseconds per query
     float decoding_call_count_per_query = static_cast<float>(alg_hnsw->getDecodingCallCount()) / std::min(max_elements, 10000);
-    std::cout << "HNSWALP recall: " << recall << "\n";
-    std::cout << "HNSWALP average query time: " << avg_query_time << " ms" << std::endl;
-    // std::cout << "HNSWALP average decoding time: " << decoding_time_per_query << " ms" << std::endl;
+    std::cout << "HNSWALPLEANN recall: " << recall << "\n";
+    std::cout << "HNSWALPLEANN average query time: " << avg_query_time << " ms" << std::endl;
+    // std::cout << "HNSWALPLEANN average decoding time: " << decoding_time_per_query << " ms" << std::endl;
     results.push_back(recall);
     results.push_back(avg_query_time);
     results.push_back(decoding_time_per_query);
@@ -288,11 +288,11 @@ std::vector<double> test_load_hnswalp(std::string data_path, std::string file_na
     return results;
 }
 
-void test_save_and_load_hnswalp(){
+void test_save_and_load_hnswalp_leann(){
     for(const auto& file_name : file_names){
         std::cout << "Processing file: " << file_name << std::endl;
-        std::vector<double> save_results = test_save_hnswalp("../datasets/", file_name);
-        std::vector<double> load_results = test_load_hnswalp("../datasets/", file_name);
+        std::vector<double> save_results = test_save_hnswalp_leann("../datasets/", file_name);
+        std::vector<double> load_results = test_load_hnswalp_leann("../datasets/", file_name);
         test_results[file_name][0] = save_results[0]; // hnswalp index build time
         test_results[file_name][1] = save_results[1]; // hnswalp compression ratio
         test_results[file_name][2] = load_results[0]; // hnswalp recall
@@ -327,7 +327,7 @@ void write_results_to_csv(const std::string& csv_file_path){
     }
 
     // Write header
-    csv_file << "file_name,hnswalp_build_time(s),hnswalp_compression_ratio,hnswalp_recall,hnswalp_query_time(ms),hnswalp_decoding_time(ms),hnswalp_decoding_calls_per_query,"
+    csv_file << "file_name,hnswalp_leann_build_time(s),hnswalp_leann_compression_ratio,hnswalp_leann_recall,hnswalp_leann_query_time(ms),hnswalp_leann_decoding_time(ms),hnswalp_leann_decoding_calls_per_query,"
              << "hnsw_build_time(s),hnsw_recall,hnsw_query_time(ms)\n";
 
     // Write data
@@ -349,10 +349,10 @@ int main() {
 
     std::string file_path = "../datasets/";
     initialize_test_results();
-    test_save_and_load_hnswalp();
+    test_save_and_load_hnswalp_leann();
     test_save_and_load_hnsw();
 
-    write_results_to_csv("hnswalp_hnsw_test_results.csv");
+    write_results_to_csv("hnswalp_leann_hnsw_test_results.csv");
 
     return 0;
 }

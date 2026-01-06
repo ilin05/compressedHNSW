@@ -20,7 +20,7 @@ typedef unsigned int tableint;
 typedef unsigned int linklistsizeint;
 
 template<typename dist_t>
-class HierarchicalNSWALP : public AlgorithmInterface<dist_t> {
+class HierarchicalNSWALPLEANN : public AlgorithmInterface<dist_t> {
  public:
     static const tableint MAX_LABEL_OPERATION_LOCKS = 65536;
     static const unsigned char DELETE_MARK = 0x01;
@@ -86,6 +86,24 @@ class HierarchicalNSWALP : public AlgorithmInterface<dist_t> {
 
     // 记录decoding的次数
     mutable std::atomic<long> decoding_call_count{0};
+
+    // 1-bit Quantization Data
+    std::vector<double> dim_means_;
+    std::vector<uint64_t> binary_data_;
+    size_t binary_block_size_ = 0;
+
+    inline int hamming_dist(const uint64_t* a, const uint64_t* b, size_t block_size) const {
+        int dist = 0;
+        for(size_t i=0; i<block_size; ++i) {
+            uint64_t xor_val = a[i] ^ b[i];
+            #ifdef _MSC_VER
+                dist += __popcnt64(xor_val);
+            #else
+                dist += __builtin_popcountll(xor_val);
+            #endif
+        }
+        return dist;
+    }
 
     // ALP Helper Functions
     
@@ -187,11 +205,11 @@ class HierarchicalNSWALP : public AlgorithmInterface<dist_t> {
         }
     }
 
-    HierarchicalNSWALP(SpaceInterface<dist_t> *s) {
+    HierarchicalNSWALPLEANN(SpaceInterface<dist_t> *s) {
     }
 
 
-    HierarchicalNSWALP(
+    HierarchicalNSWALPLEANN(
         SpaceInterface<dist_t> *s,
         const std::string &location,
         bool nmslib = false,
@@ -202,7 +220,7 @@ class HierarchicalNSWALP : public AlgorithmInterface<dist_t> {
     }
 
 
-    HierarchicalNSWALP(
+    HierarchicalNSWALPLEANN(
         SpaceInterface<dist_t> *s,
         size_t max_elements,
         size_t M = 16,
@@ -254,14 +272,14 @@ class HierarchicalNSWALP : public AlgorithmInterface<dist_t> {
 
         linkLists_ = (char **) malloc(sizeof(void *) * max_elements_);
         if (linkLists_ == nullptr)
-            throw std::runtime_error("Not enough memory: HierarchicalNSWALP failed to allocate linklists");
+            throw std::runtime_error("Not enough memory: HierarchicalNSWALPLEANN failed to allocate linklists");
         size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
         mult_ = 1 / log(1.0 * M_);
         revSize_ = 1.0 / mult_;
     }
 
 
-    ~HierarchicalNSWALP() {
+    ~HierarchicalNSWALPLEANN() {
         clear();
     }
 
@@ -514,6 +532,114 @@ class HierarchicalNSWALP : public AlgorithmInterface<dist_t> {
         visited_list_pool_->releaseVisitedList(vl);
 
         // 返回动态列表，也就是返回layer层中距离q最近的ef个邻居
+        return top_candidates;
+    }
+
+    // Two-Level Search Base Layer (Algorithm 2 style)
+    // 1. Filter neighbors using Hamming distance (Approximate)
+    // 2. Compute Exact distance for top alpha% candidates
+    template <bool bare_bone_search = true>
+    std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst>
+    searchBaseLayerTwoLevel(
+        tableint ep_id,
+        const void *query_data,
+        const uint64_t *query_binary,
+        size_t ef,
+        BaseFilterFunctor* isIdAllowed = nullptr) const {
+        
+        VisitedList *vl = visited_list_pool_->getFreeVisitedList();
+        vl_type *visited_array = vl->mass;
+        vl_type visited_array_tag = vl->curV;
+
+        // Queues store EXACT distances
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidate_set;
+
+        // Initial Point (Exact Distance)
+        dist_t dist;
+        if (is_compacted_) {
+            std::vector<double> vec_ep = getOriginalDataByInternalId(ep_id);
+            dist = fstdistfunc_(query_data, vec_ep.data(), dist_func_param_);
+        } else {
+            dist = fstdistfunc_(query_data, getDataByInternalId(ep_id), dist_func_param_);
+        }
+        
+        dist_t lowerBound = dist;
+        top_candidates.emplace(dist, ep_id);
+        candidate_set.emplace(-dist, ep_id);
+        
+        visited_array[ep_id] = visited_array_tag;
+
+        while (!candidate_set.empty()) {
+            std::pair<dist_t, tableint> current_node_pair = candidate_set.top();
+            dist_t candidate_dist = -current_node_pair.first;
+            candidate_set.pop();
+
+            if (candidate_dist > lowerBound) {
+                if (top_candidates.size() == ef) break;
+            }
+
+            tableint current_node_id = current_node_pair.second;
+            unsigned int *data = (unsigned int *) get_linklist0(current_node_id);
+            size_t size = getListCount((linklistsizeint*)data);
+
+            // 1. Collect Unvisited Neighbors & Compute Hamming Distance
+            std::vector<std::pair<int, tableint>> approx_candidates;
+            approx_candidates.reserve(size);
+
+            for (size_t j = 1; j <= size; j++) {
+                int candidate_id = *(data + j);
+                if (visited_array[candidate_id] != visited_array_tag) {
+                    visited_array[candidate_id] = visited_array_tag;
+                    
+                    const uint64_t* cand_binary = binary_data_.data() + candidate_id * binary_block_size_;
+                    int h_dist = hamming_dist(query_binary, cand_binary, binary_block_size_);
+                    approx_candidates.push_back({h_dist, candidate_id});
+                }
+            }
+
+            // 2. Filter Top Alpha% (e.g., 20%)
+            if (!approx_candidates.empty()) {
+                size_t candidates_to_check = (size_t)(approx_candidates.size() * 0.2); 
+                if (candidates_to_check < 2) candidates_to_check = std::min(approx_candidates.size(), (size_t)2);
+                
+                std::partial_sort(approx_candidates.begin(), 
+                                  approx_candidates.begin() + candidates_to_check, 
+                                  approx_candidates.end());
+
+                // 3. Compute Exact Distance for Survivors
+                for (size_t i = 0; i < candidates_to_check; ++i) {
+                    tableint cand_id = approx_candidates[i].second;
+                    dist_t exact_dist;
+                    
+                    if (is_compacted_) {
+                        std::vector<double> vec_cand = getOriginalDataByInternalId(cand_id);
+                        exact_dist = fstdistfunc_(query_data, vec_cand.data(), dist_func_param_);
+                    } else {
+                        exact_dist = fstdistfunc_(query_data, getDataByInternalId(cand_id), dist_func_param_);
+                    }
+
+                    if (top_candidates.size() < ef || exact_dist < lowerBound) {
+                        candidate_set.emplace(-exact_dist, cand_id);
+                        
+                        if (bare_bone_search || 
+                            (!isMarkedDeleted(cand_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(cand_id))))) {
+                            top_candidates.emplace(exact_dist, cand_id);
+                        }
+
+                        if (top_candidates.size() > ef) {
+                            top_candidates.pop();
+                        }
+                        
+                        if (!top_candidates.empty()) {
+                            lowerBound = top_candidates.top().first;
+                        }
+                    }
+                }
+            }
+        }
+
+        visited_list_pool_->releaseVisitedList(vl);
         return top_candidates;
     }
 
@@ -950,6 +1076,56 @@ class HierarchicalNSWALP : public AlgorithmInterface<dist_t> {
 
         size_t dim = *((size_t *) dist_func_param_);
         size_t count = cur_element_count;
+
+        // --- 1-bit Quantization (LEANN) ---
+        dim_means_.assign(dim, 0.0);
+        size_t valid_count = 0;
+        
+        // Pass 1: Compute Sums
+        for(size_t i=0; i<count; ++i) {
+             char* raw_ptr = data_level0_memory_.data() + i * size_data_per_element_;
+             if (data_size_ / dim == sizeof(float)) {
+                float* d = (float*)(raw_ptr + offsetData_);
+                for(size_t k=0; k<dim; ++k) dim_means_[k] += d[k];
+            } else {
+                double* d = (double*)(raw_ptr + offsetData_);
+                for(size_t k=0; k<dim; ++k) dim_means_[k] += d[k];
+            }
+            valid_count++;
+        }
+        
+        if(valid_count > 0) {
+            for(size_t d=0; d<dim; ++d) {
+                dim_means_[d] /= valid_count;
+            }
+        }
+        
+        // Pass 2: Binary Codes
+        binary_block_size_ = (dim + 63) / 64;
+        binary_data_.resize(count * binary_block_size_, 0);
+        
+        for(size_t i=0; i<count; ++i) {
+             char* raw_ptr = data_level0_memory_.data() + i * size_data_per_element_;
+             uint64_t* bin_ptr = binary_data_.data() + i * binary_block_size_;
+
+             // Use double for comparison regardless of storage type
+             if (data_size_ / dim == sizeof(float)) {
+                float* d = (float*)(raw_ptr + offsetData_);
+                for(size_t d_idx=0; d_idx<dim; ++d_idx) {
+                    if (d[d_idx] >= dim_means_[d_idx]) {
+                        bin_ptr[d_idx / 64] |= (1ULL << (d_idx % 64));
+                    }
+                }
+            } else {
+                double* d = (double*)(raw_ptr + offsetData_);
+                for(size_t d_idx=0; d_idx<dim; ++d_idx) {
+                    if (d[d_idx] >= dim_means_[d_idx]) {
+                        bin_ptr[d_idx / 64] |= (1ULL << (d_idx % 64));
+                    }
+                }
+            }
+        }
+        // --- End 1-bit Quantization ---
         
         std::vector<char> new_data_memory;
         new_data_memory.reserve(data_level0_memory_.size() / 2); 
@@ -1022,6 +1198,16 @@ class HierarchicalNSWALP : public AlgorithmInterface<dist_t> {
         writeBinaryPOD(output, is_compacted_);
         
         if (is_compacted_) {
+            // Write 1-bit quantization data (LEANN)
+            size_t dim_means_size = dim_means_.size();
+            writeBinaryPOD(output, dim_means_size);
+            if(dim_means_size > 0) output.write((char*)dim_means_.data(), dim_means_size * sizeof(double));
+            
+            writeBinaryPOD(output, binary_block_size_);
+            size_t binary_data_size = binary_data_.size();
+            writeBinaryPOD(output, binary_data_size);
+            if(binary_data_size > 0) output.write((char*)binary_data_.data(), binary_data_size * sizeof(uint64_t));
+
             // Write start positions
             size_t num_positions = level0_element_start_positions_.size();
             writeBinaryPOD(output, num_positions);
@@ -1087,6 +1273,22 @@ class HierarchicalNSWALP : public AlgorithmInterface<dist_t> {
         readBinaryPOD(input, is_compacted_);
         
         if (is_compacted_) {
+            // Read 1-bit quantization data (LEANN)
+            size_t dim_means_size;
+            readBinaryPOD(input, dim_means_size);
+            if(dim_means_size > 0) {
+                dim_means_.resize(dim_means_size);
+                input.read((char*)dim_means_.data(), dim_means_size * sizeof(double));
+            }
+
+            readBinaryPOD(input, binary_block_size_);
+            size_t binary_data_size;
+            readBinaryPOD(input, binary_data_size);
+            if(binary_data_size > 0) {
+                binary_data_.resize(binary_data_size);
+                input.read((char*)binary_data_.data(), binary_data_size * sizeof(uint64_t));
+            }
+
             size_t num_positions;
             readBinaryPOD(input, num_positions);
             level0_element_start_positions_.resize(num_positions);
@@ -1647,15 +1849,45 @@ class HierarchicalNSWALP : public AlgorithmInterface<dist_t> {
 
         // 目前已获得第一层与query最近的元素currObj
         // 在第零层获取currObj邻居中距离query最近的max(k, ef)个近邻，也就是动态列表top_candidates-----论文中是W
+        
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
         bool bare_bone_search = !num_deleted_ && !isIdAllowed;
-        if (bare_bone_search) {
-            top_candidates = searchBaseLayerST<true>(
-                    currObj, query_data, std::max(ef_, k), isIdAllowed);
+
+        // LEANN: Prepare Query Binary Code if compacted
+        if (is_compacted_ && !dim_means_.empty()) {
+            size_t dim = dim_means_.size();
+            std::vector<uint64_t> q_binary(binary_block_size_, 0);
+            
+            if (data_size_ / dim == sizeof(float)) {
+                const float* q = (const float*)query_data;
+                for(size_t i=0; i<dim; ++i) {
+                     if (q[i] >= dim_means_[i]) q_binary[i / 64] |= (1ULL << (i % 64));
+                }
+            } else {
+                const double* q = (const double*)query_data;
+                for(size_t i=0; i<dim; ++i) {
+                     if (q[i] >= dim_means_[i]) q_binary[i / 64] |= (1ULL << (i % 64));
+                }
+            }
+
+            if (bare_bone_search) {
+                top_candidates = searchBaseLayerTwoLevel<true>(
+                        currObj, query_data, q_binary.data(), std::max(ef_, k), isIdAllowed);
+            } else {
+                top_candidates = searchBaseLayerTwoLevel<false>(
+                        currObj, query_data, q_binary.data(), std::max(ef_, k), isIdAllowed);
+            }
+
         } else {
-            top_candidates = searchBaseLayerST<false>(
-                    currObj, query_data, std::max(ef_, k), isIdAllowed);
+            if (bare_bone_search) {
+                top_candidates = searchBaseLayerST<true>(
+                        currObj, query_data, std::max(ef_, k), isIdAllowed);
+            } else {
+                top_candidates = searchBaseLayerST<false>(
+                        currObj, query_data, std::max(ef_, k), isIdAllowed);
+            }
         }
+
         // top_candidates修建为k个
         while (top_candidates.size() > k) {
             top_candidates.pop();
