@@ -351,7 +351,7 @@ class HierarchicalNSWALPLEANN : public AlgorithmInterface<dist_t> {
         return (char*)(data_level0_memory_.data() + internal_id * size_data_per_element_ + offsetData_);
     }
 
-    std::vector<double> getOriginalDataByInternalId(tableint internal_id) const {
+    std::vector<double> getOriginalDataByInternalId(tableint internal_id, bool collect_metrics = false) const {
         size_t dim = *((size_t *) dist_func_param_);
         std::vector<double> result(dim);
 
@@ -374,13 +374,27 @@ class HierarchicalNSWALPLEANN : public AlgorithmInterface<dist_t> {
         
         utils::MemoryStreamReader reader((const unsigned char*)(data_level0_memory_.data() + start + offset));
         
-        auto start_time = std::chrono::high_resolution_clock::now();
-        alp_decode_vector(reader, result);
-        auto end_time = std::chrono::high_resolution_clock::now();
-        decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
-        decoding_call_count++;
+        if (collect_metrics) {
+            auto start_time = std::chrono::high_resolution_clock::now();
+            alp_decode_vector(reader, result);
+            auto end_time = std::chrono::high_resolution_clock::now();
+            decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+            decoding_call_count++;
+        } else {
+            alp_decode_vector(reader, result);
+        }
 
         return result;
+    }
+
+    std::vector<std::vector<double>> getBatchOriginalDataByInternalId(const std::vector<tableint>& internal_ids) const {
+        std::vector<std::vector<double>> results(internal_ids.size());
+        
+        #pragma omp parallel for schedule(dynamic)
+        for (int i = 0; i < internal_ids.size(); ++i) {
+            results[i] = getOriginalDataByInternalId(internal_ids[i], false);
+        }
+        return results;
     }
 
     int getRandomLevel(double reverse_size) {
@@ -608,12 +622,25 @@ class HierarchicalNSWALPLEANN : public AlgorithmInterface<dist_t> {
                                   approx_candidates.end());
 
                 // 3. Compute Exact Distance for Survivors
+                
+                std::vector<tableint> batch_ids;
+                std::vector<std::vector<double>> batch_data;
+
+                // Only perform batch fetching if compacted, otherwise direct access is faster or equivalent
+                if (is_compacted_) {
+                    batch_ids.reserve(candidates_to_check);
+                    for (size_t i = 0; i < candidates_to_check; ++i) {
+                        batch_ids.push_back(approx_candidates[i].second);
+                    }
+                    batch_data = getBatchOriginalDataByInternalId(batch_ids);
+                }
+
                 for (size_t i = 0; i < candidates_to_check; ++i) {
                     tableint cand_id = approx_candidates[i].second;
                     dist_t exact_dist;
                     
                     if (is_compacted_) {
-                        std::vector<double> vec_cand = getOriginalDataByInternalId(cand_id);
+                        const std::vector<double>& vec_cand = batch_data[i];
                         exact_dist = fstdistfunc_(query_data, vec_cand.data(), dist_func_param_);
                     } else {
                         exact_dist = fstdistfunc_(query_data, getDataByInternalId(cand_id), dist_func_param_);
