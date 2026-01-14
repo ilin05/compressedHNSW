@@ -87,6 +87,98 @@ static std::vector<std::vector<double>> loadData(const std::string& filePath) {
 }
 
 /**
+ * @brief 从 CSV 文件加载数据并直接返回一维数组指针（优化内存占用）.
+ * 
+ * @param filePath CSV文件的路径.
+ * @param rows 输出参数：行数.
+ * @param dim 输出参数：维度（列数）.
+ * @return double* 指向分配的一维数组的指针 (new double[]). 调用者负责 delete[].
+ */
+static double* loadDataForSearch(const std::string& filePath, int& rows, int& dim) {
+    std::ifstream file(filePath);
+    if (!file.is_open()) {
+        throw std::runtime_error("Could not open file: " + filePath);
+    }
+
+    // Check for UTF-8 BOM
+    char bom[3] = {0};
+    file.read(bom, 3);
+    if (!(file.gcount() == 3 && 
+        static_cast<unsigned char>(bom[0]) == 0xEF && 
+        static_cast<unsigned char>(bom[1]) == 0xBB && 
+        static_cast<unsigned char>(bom[2]) == 0xBF)) {
+        file.seekg(0, std::ios::beg);
+    }
+
+    // Pass 1: Count rows and cols
+    std::string line;
+    size_t num_rows = 0;
+    size_t num_cols = 0;
+    
+    while (std::getline(file, line)) {
+        if (line.empty()) continue;
+        
+        std::stringstream ss(line);
+        std::string value;
+        size_t current_row_cols = 0;
+
+        while (std::getline(ss, value, ',')) {
+             const std::string whitespace = " \t\r\n";
+             size_t start = value.find_first_not_of(whitespace);
+             if (start != std::string::npos) {
+                 current_row_cols++;
+             }
+        }
+        
+        if (current_row_cols > 0) {
+            if (num_cols == 0) num_cols = current_row_cols;
+            num_rows++;
+        }
+    }
+
+    rows = static_cast<int>(num_rows);
+    dim = static_cast<int>(num_cols);
+
+    if (num_rows == 0 || num_cols == 0) return nullptr;
+
+    // Pass 2: Load data
+    file.clear(); // Reset eof
+    file.seekg(0, std::ios::beg);
+    file.read(bom, 3);
+    if (!(file.gcount() == 3 && 
+        static_cast<unsigned char>(bom[0]) == 0xEF && 
+        static_cast<unsigned char>(bom[1]) == 0xBB && 
+        static_cast<unsigned char>(bom[2]) == 0xBF)) {
+        file.seekg(0, std::ios::beg);
+    }
+
+    double* data_ptr = new double[num_rows * num_cols];
+    size_t current_idx = 0;
+
+    while (std::getline(file, line)) {
+        if (line.empty()) continue;
+        std::stringstream ss(line);
+        std::string value;
+
+        while (std::getline(ss, value, ',')) {
+            const std::string whitespace = " \t\r\n";
+            size_t start = value.find_first_not_of(whitespace);
+            if (start != std::string::npos) {
+                size_t end = value.find_last_not_of(whitespace);
+                value = value.substr(start, end - start + 1);
+                try {
+                    data_ptr[current_idx++] = std::stod(value);
+                } catch (...) {
+                    data_ptr[current_idx++] = 0.0;
+                }
+            }
+        }
+    }
+    file.close();
+    return data_ptr;
+}
+
+/**
  * @brief 计算两个向量之间的欧氏距离.
  * 
  * @param a 第一个向量.

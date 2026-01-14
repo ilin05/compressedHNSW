@@ -2,21 +2,26 @@
 #include "../data_processor/data_loader.h"
 #include <map>
 
+#ifdef __linux__
+#include <sys/mman.h>
+#endif
+
+
 namespace {
     const double EPS[] = {1, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10, 1e-11, 1e-12,
             1e-13, 1e-14, 1e-15, 1e-16, 1e-17, 1e-18, 1e-19, 1e-20, 1e-21, 1e-22, 1e-23};
 
     // file names list
     const std::vector<std::string> file_names = {
-        "winequality-red",
-        "winequality-white",
-        // "Stress-Lysis",
-        "siftsmall_base",
-        "gist_small_base",
-        "mnist-784-euclidean_small_base",
-        "fashion-mnist-784-euclidean_small_base",
-        "mnist-784-euclidean",
-        "fashion-mnist-784-euclidean",
+        // "winequality-red",
+        // "winequality-white",
+        // // "Stress-Lysis",
+        // "siftsmall_base",
+        // "gist_small_base",
+        // "mnist-784-euclidean_small_base",
+        // "fashion-mnist-784-euclidean_small_base",
+        // "mnist-784-euclidean",
+        // "fashion-mnist-784-euclidean",
         "sift1m"
         // "gist_base"
         // "SaYoPillow",
@@ -79,19 +84,31 @@ static int getDecimalPlace(double value) {
 }
 
 std::vector<double> test_save_hnsw(std::string data_path, std::string file_name) {
-    std::string file_path = data_path + "/" + file_name + ".csv";
-    std::vector<std::vector<double>> data = data_loader::loadData(file_path);
     std::vector<double> results;
-    if (data.empty()) {
-        std::cerr << "Failed to load data or data is empty." << std::endl;
-        return results;
+    int rows = 0, cols = 0, dim = 0, max_elements = 0;
+    double* data_ptr = nullptr;
+
+    {
+        std::string file_path = data_path + "/" + file_name + ".csv";
+        std::vector<std::vector<double>> data = data_loader::loadData(file_path);
+        if (data.empty()) {
+            std::cerr << "Failed to load data or data is empty." << std::endl;
+            return results;
+        }
+
+        rows = static_cast<int>(data.size());
+        cols = static_cast<int>(data.front().size());
+        dim = cols;
+        max_elements = rows;
+
+        data_ptr = new double[static_cast<size_t>(dim) * max_elements];
+        for (int i = 0; i < std::min(rows, max_elements); i++) {
+            for (int j = 0; j < cols; j++) {
+                data_ptr[i * dim + j] = data[i][j];
+            }
+        }
     }
 
-    const int rows = static_cast<int>(data.size());
-    const int cols = static_cast<int>(data.front().size());
-
-    int dim = cols;               // Dimension of the elements
-    int max_elements = rows;   // Maximum number of elements, should be known beforehand
     int M = 16;                 // Tightly connected with internal dimensionality of the data
                                 // strongly affects the memory consumption
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
@@ -100,13 +117,6 @@ std::vector<double> test_save_hnsw(std::string data_path, std::string file_name)
     hnswlib::L2SpaceDouble space(dim);
     // hnswlib::HierarchicalNSWCW<double>* alg_hnsw = new hnswlib::HierarchicalNSWCW<double>(&space, max_elements, encoding_algorithm_name, M, ef_construction);
     hnswlib::HierarchicalNSW<double>* alg_hnsw = new hnswlib::HierarchicalNSW<double>(&space, max_elements, M, ef_construction);
-
-    double* data_ptr = new double[dim * max_elements];
-    for (int i = 0; i < std::min(rows, max_elements); i++) {
-        for (int j = 0; j < cols; j++) {
-            data_ptr[i * dim + j] = data[i][j];
-        }
-    }
 
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < max_elements; i++) {
@@ -129,19 +139,31 @@ std::vector<double> test_save_hnsw(std::string data_path, std::string file_name)
 }
 
 std::vector<double> test_save_hnswcab_leann(std::string data_path, std::string file_name) {
-    std::string file_path = data_path + "/" + file_name + ".csv";
-    std::vector<std::vector<double>> data = data_loader::loadData(file_path);
     std::vector<double> results;
-    if (data.empty()) {
-        std::cerr << "Failed to load data or data is empty." << std::endl;
-        return results;
+    int rows = 0, cols = 0, dim = 0, max_elements = 0;
+    double* data_ptr = nullptr;
+
+    {
+        std::string file_path = data_path + "/" + file_name + ".csv";
+        std::vector<std::vector<double>> data = data_loader::loadData(file_path);
+        if (data.empty()) {
+            std::cerr << "Failed to load data or data is empty." << std::endl;
+            return results;
+        }
+
+        rows = static_cast<int>(data.size());
+        cols = static_cast<int>(data.front().size());
+        dim = cols;
+        max_elements = rows;
+
+        data_ptr = new double[static_cast<size_t>(dim) * max_elements];
+        for (int i = 0; i < std::min(rows, max_elements); i++) {
+            for (int j = 0; j < cols; j++) {
+                data_ptr[i * dim + j] = data[i][j];
+            }
+        }
     }
 
-    const int rows = static_cast<int>(data.size());
-    const int cols = static_cast<int>(data.front().size());
-
-    int dim = cols;               // Dimension of the elements
-    int max_elements = rows;   // Maximum number of elements, should be known beforehand
     int M = 16;                 // Tightly connected with internal dimensionality of the data
                                 // strongly affects the memory consumption
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
@@ -151,13 +173,6 @@ std::vector<double> test_save_hnswcab_leann(std::string data_path, std::string f
     // Initing index
     hnswlib::L2SpaceDouble space(dim);
     hnswlib::HierarchicalNSWCABLEANN<double>* alg_hnsw = new hnswlib::HierarchicalNSWCABLEANN<double>(&space, max_elements, encoding_algorithm_name, M, ef_construction, true);
-
-    double* data_ptr = new double[dim * max_elements];
-    for (int i = 0; i < std::min(rows, max_elements); i++) {
-        for (int j = 0; j < cols; j++) {
-            data_ptr[i * dim + j] = data[i][j];
-        }
-    }
 
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < max_elements; i++) {
@@ -193,19 +208,30 @@ std::vector<double> test_save_hnswcab_leann(std::string data_path, std::string f
 }
 
 std::vector<double> test_load_hnsw(std::string data_path, std::string file_name){
-    std::string file_path = data_path + "/" + file_name + ".csv";
-    std::vector<std::vector<double>> data = data_loader::loadData(file_path);
     std::vector<double> results;
-    if (data.empty()) {
-        std::cerr << "Failed to load data or data is empty." << std::endl;
-        return results;
+    int rows = 0, cols = 0, dim = 0, max_elements = 0;
+    double* data_ptr = nullptr;
+
+    {
+        std::string file_path = data_path + "/" + file_name + ".csv";
+        data_ptr = data_loader::loadDataForSearch(file_path, rows, cols);
+        if (data_ptr == nullptr) {
+            std::cerr << "Failed to load data or data is empty." << std::endl;
+            return results;
+        }
+
+        dim = cols;
+        max_elements = rows;
     }
 
-    const int rows = static_cast<int>(data.size());
-    const int cols = static_cast<int>(data.front().size());
+#ifdef __linux__
+    if (mlock(data_ptr, static_cast<size_t>(dim) * max_elements * sizeof(double)) != 0) {
+        perror("mlock failed");
+    } else {
+        std::cout << "Pinned data_ptr to memory." << std::endl;
+    }
+#endif
 
-    int dim = cols;               // Dimension of the elements
-    int max_elements = rows;   // Maximum number of elements, should be known beforehand
     int M = 16;                 // Tightly connected with internal dimensionality of the data
                                 // strongly affects the memory consumption
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
@@ -216,49 +242,59 @@ std::vector<double> test_load_hnsw(std::string data_path, std::string file_name)
     std::string hnsw_path = "storage/" + file_name + "_hnsw.bin";
     hnswlib::HierarchicalNSW<double>* alg_hnsw = new hnswlib::HierarchicalNSW<double>(&space, hnsw_path, false, false, max_elements);
 
-    double* data_ptr = new double[dim * max_elements];
-    for (int i = 0; i < std::min(rows, max_elements); i++) {
-        for (int j = 0; j < cols; j++) {
-            data_ptr[i * dim + j] = data[i][j];
-        }
-    }
-
     // Query the elements for themselves and measure recall
     float correct = 0;
+    int step = std::max(1, max_elements / 50000);
+    int query_count = 0;
     auto query_start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < std::min(max_elements, 10000); i++) {
+    for (int i = 0; i < max_elements; i+=step) {
         std::priority_queue<std::pair<double, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data_ptr + i * dim, 1);
         hnswlib::labeltype label = result.top().second;
         if (label == i) correct++;
+        query_count++;
     }
     auto query_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> query_duration = query_end - query_start;
-    float avg_query_time = query_duration.count() / std::min(max_elements, 10000); // milliseconds per query
-    float recall = correct / std::min(max_elements, 10000);
+    float avg_query_time = query_duration.count() / query_count; // milliseconds per query
+    float recall = correct / query_count;
     std::cout << "HNSW recall: " << recall << "\n";
     std::cout << "HNSW average query time: " << avg_query_time << " ms" << std::endl;
     results.push_back(recall);
     results.push_back(avg_query_time);
     
     delete alg_hnsw;
+#ifdef __linux__
+    munlock(data_ptr, static_cast<size_t>(dim) * max_elements * sizeof(double));
+#endif
     delete[] data_ptr;
     return results;
 }
 
 std::vector<double> test_load_hnswcab_leann(std::string data_path, std::string file_name, size_t cache_size = 0) {
-    std::string file_path = data_path + "/" + file_name + ".csv";
-    std::vector<std::vector<double>> data = data_loader::loadData(file_path);
     std::vector<double> results;
-    if (data.empty()) {
-        std::cerr << "Failed to load data or data is empty." << std::endl;
-        return results;
+    int rows = 0, cols = 0, dim = 0, max_elements = 0;
+    double* data_ptr = nullptr;
+
+    {
+        std::string file_path = data_path + "/" + file_name + ".csv";
+        data_ptr = data_loader::loadDataForSearch(file_path, rows, cols);
+        if (data_ptr == nullptr) {
+            std::cerr << "Failed to load data or data is empty." << std::endl;
+            return results;
+        }
+
+        dim = cols;
+        max_elements = rows;
     }
 
-    const int rows = static_cast<int>(data.size());
-    const int cols = static_cast<int>(data.front().size());
+#ifdef __linux__
+    if (mlock(data_ptr, static_cast<size_t>(dim) * max_elements * sizeof(double)) != 0) {
+        perror("mlock failed");
+    } else {
+        std::cout << "Pinned data_ptr to memory." << std::endl;
+    }
+#endif
 
-    int dim = cols;               // Dimension of the elements
-    int max_elements = rows;   // Maximum number of elements, should be known beforehand
     int M = 16;                 // Tightly connected with internal dimensionality of the data
                                 // strongly affects the memory consumption
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
@@ -270,27 +306,23 @@ std::vector<double> test_load_hnswcab_leann(std::string data_path, std::string f
     std::string hnswcw_path = "storage/" + file_name + "_hnswcw.bin";
     hnswlib::HierarchicalNSWCABLEANN<double>* alg_hnsw = new hnswlib::HierarchicalNSWCABLEANN<double>(&space, hnswcw_path, true, cache_size, false, max_elements);
 
-    double* data_ptr = new double[dim * max_elements];
-    for (int i = 0; i < std::min(rows, max_elements); i++) {
-        for (int j = 0; j < cols; j++) {
-            data_ptr[i * dim + j] = data[i][j];
-        }
-    }
-
     // Query the elements for themselves and measure recall
     float correct = 0;
+    int query_count = 0;
+    int step = std::max(1, max_elements / 50000);
     auto query_start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < std::min(max_elements, 10000); i++) {
+    for (int i = 0; i < max_elements; i += step) {
         std::priority_queue<std::pair<double, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data_ptr + i * dim, 1);
         hnswlib::labeltype label = result.top().second;
         if (label == i) correct++;
+        query_count++;
     }
     auto query_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> query_duration = query_end - query_start;
-    float avg_query_time = query_duration.count() / std::min(max_elements, 10000); // milliseconds per query
-    float recall = correct / std::min(max_elements, 10000);
-    float decoding_time_per_query = static_cast<float>(alg_hnsw->getTotalTimeDecoding()) / std::min(max_elements, 10000) / 1e3; // milliseconds per query
-    float decoding_call_count_per_query = static_cast<float>(alg_hnsw->getDecodingCallCount()) / std::min(max_elements, 10000);
+    float avg_query_time = query_duration.count() / query_count; // milliseconds per query
+    float recall = correct / query_count;
+    float decoding_time_per_query = static_cast<float>(alg_hnsw->getTotalTimeDecoding()) / query_count / 1e3; // milliseconds per query
+    float decoding_call_count_per_query = static_cast<float>(alg_hnsw->getDecodingCallCount()) / query_count;
     std::cout << "HNSWCW recall: " << recall << "\n";
     std::cout << "HNSWCW average query time: " << avg_query_time << " ms" << std::endl;
     std::cout << "HNSWCW average decoding time: " << decoding_time_per_query << " ms" << std::endl;
@@ -304,17 +336,26 @@ std::vector<double> test_load_hnswcab_leann(std::string data_path, std::string f
     // std::cout << "HNSWCW average decoding time: " << avg_decoding_time << " ms" << std::endl;
 
     delete alg_hnsw;
+#ifdef __linux__
+    munlock(data_ptr, static_cast<size_t>(dim) * max_elements * sizeof(double));
+#endif
     delete[] data_ptr;
     return results;
 }
 
-void test_save_and_load_hnswcab_leann(){
+void collect_save_hnswcab_leann_results(){
     for(const auto& file_name : file_names){
         std::cout << "Processing file: " << file_name << std::endl;
         std::vector<double> save_results = test_save_hnswcab_leann("../datasets/", file_name);
-        std::vector<double> load_results = test_load_hnswcab_leann("../datasets/", file_name, cache_sizes.at(file_name));
         test_results[file_name][0] = save_results[0]; // hnswcab_leann index build time
         test_results[file_name][1] = save_results[1]; // hnswcab_leann compression ratio
+    }
+}
+
+void collect_load_hnswcab_leann_results(){
+    for(const auto& file_name : file_names){
+        std::cout << "Processing file: " << file_name << std::endl;
+        std::vector<double> load_results = test_load_hnswcab_leann("../datasets/", file_name, cache_sizes.at(file_name));
         test_results[file_name][2] = load_results[0]; // hnswcab_leann recall
         test_results[file_name][3] = load_results[1]; // hnswcab_leann query time
         test_results[file_name][4] = load_results[2]; // hnswcab_leann decoding time
@@ -322,12 +363,18 @@ void test_save_and_load_hnswcab_leann(){
     }
 }
 
-void test_save_and_load_hnsw(){
+void collect_save_hnsw_results(){
     for(const auto& file_name : file_names){
         std::cout << "Processing file: " << file_name << std::endl;
         std::vector<double> save_results = test_save_hnsw("../datasets/", file_name);
-        std::vector<double> load_results = test_load_hnsw("../datasets/", file_name);
         test_results[file_name][6] = save_results[0]; // hnsw index build time
+    }
+}
+
+void collect_load_hnsw_results(){
+    for(const auto& file_name : file_names){
+        std::cout << "Processing file: " << file_name << std::endl;
+        std::vector<double> load_results = test_load_hnsw("../datasets/", file_name);
         test_results[file_name][7] = load_results[0]; // hnsw recall
         test_results[file_name][8] = load_results[1]; // hnsw query
     }
@@ -369,8 +416,10 @@ int main() {
 
     std::string file_path = "../datasets/";
     initialize_test_results();
-    test_save_and_load_hnswcab_leann();
-    test_save_and_load_hnsw();
+    // collect_save_hnswcab_leann_results();
+    // collect_save_hnsw_results();
+    // collect_load_hnswcab_leann_results();
+    collect_load_hnsw_results();
 
     write_results_to_csv("hnswcab_leann_hnsw_test_results.csv");
 
