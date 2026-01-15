@@ -374,6 +374,83 @@ void write_results_to_csv(const std::string& csv_file_path){
     std::cout << "Results written to " << csv_file_path << std::endl;
 }
 
+// 统计HNSW图中每个节点的degree和access probability分布
+void analyze_hnsw_graph(std::string data_path, std::string file_name){
+    std::cout << "Analyzing HNSW graph for: " << file_name << std::endl;
+    std::string file_path = data_path + "/" + file_name + ".csv";
+    int rows = 0, cols = 0;
+    double* data_ptr = data_loader::loadDataForSearch(file_path, rows, cols);
+
+    if (data_ptr == nullptr) {
+        std::cerr << "Failed to load data or data is empty." << std::endl;
+        return;
+    }
+
+    const int dim = cols;               // Dimension of the elements
+    int max_elements = rows;   // Maximum number of elements, should be known beforehand
+
+    // Initing index
+    hnswlib::L2SpaceDouble space(dim);
+    std::string hnsw_path = "storage/" + file_name + "_hnsw.bin";
+    
+    // Check if index exists
+    std::ifstream f(hnsw_path.c_str());
+    if (!f.good()) {
+        std::cout << "Index file not found: " << hnsw_path << std::endl;
+        delete[] data_ptr;
+        return;
+    }
+    f.close();
+
+    hnswlib::HierarchicalNSW<double>* alg_hnsw = new hnswlib::HierarchicalNSW<double>(&space, hnsw_path, false, false, max_elements);
+
+    // Reset access counts
+    alg_hnsw->resetAccessCounts();
+
+    // Query the elements
+    int step = std::max(1, max_elements / 50000); // 50000 queries
+    int query_count = 0;
+    
+    std::cout << "Running queries..." << std::endl;
+    for (int i = 0; i < max_elements; i += step) {
+        alg_hnsw->searchKnn(data_ptr + i * dim, 1);
+        query_count++;
+    }
+    
+    // Get Statistics
+    std::vector<int> degrees = alg_hnsw->getNodeDegrees();
+    std::vector<unsigned long long> access_counts = alg_hnsw->getAccessCounts();
+    
+    // Save to CSV
+    std::string output_csv = "analysis_" + file_name + "_degree_access.csv";
+    std::ofstream csv_file(output_csv);
+    if (!csv_file.is_open()) {
+        std::cerr << "Failed to open CSV file for writing: " << output_csv << std::endl;
+        delete alg_hnsw;
+        delete[] data_ptr;
+        return;
+    }
+    
+    csv_file << "internal_id,level,level0_degree,access_count\n";
+    for(size_t i = 0; i < alg_hnsw->getCurrentElementCount(); ++i) {
+        csv_file << i << "," 
+                 << alg_hnsw->element_levels_[i] << "," 
+                 << degrees[i] << "," 
+                 << access_counts[i] << "\n";
+    }
+    csv_file.close();
+    std::cout << "Analysis data saved to " << output_csv << std::endl;
+
+    delete alg_hnsw;
+    delete[] data_ptr;
+}
+
+void collect_analyze_hnsw_graph_results() {
+    for (const auto& file_name : file_names) {
+        analyze_hnsw_graph("../datasets/", file_name);
+    }
+}
+
 int main() {
 
     std::string file_path = "../datasets/";
@@ -382,6 +459,7 @@ int main() {
     collect_save_hnsw_results();
     collect_load_hnswalp_leann_results();
     collect_load_hnsw_results();
+    collect_analyze_hnsw_graph_results();
 
     write_results_to_csv("hnswalp_leann_hnsw_test_results.csv");
 

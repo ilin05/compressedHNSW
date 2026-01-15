@@ -71,6 +71,24 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     std::unordered_set<tableint> deleted_elements;  // contains internal ids of deleted elements
 
     mutable std::atomic<long> getDataTimeMicroseconds{0};
+    mutable std::vector<unsigned long long> access_counts_;
+
+    void resetAccessCounts() {
+        std::fill(access_counts_.begin(), access_counts_.end(), 0);
+    }
+
+    std::vector<unsigned long long> getAccessCounts() const {
+        return access_counts_;
+    }
+
+    std::vector<int> getNodeDegrees() const {
+        std::vector<int> degrees(cur_element_count);
+        for (size_t i = 0; i < cur_element_count; i++) {
+             unsigned int *data = (unsigned int *) get_linklist0(i);
+             degrees[i] = getListCount((linklistsizeint*)data);
+        }
+        return degrees;
+    }
 
     HierarchicalNSW(SpaceInterface<dist_t> *s) {
     }
@@ -202,6 +220,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     // 数据存储在第0层，每个element的大小都是固定的，size_data_per_element。可以通过HNSW内部的id随机读取数据
     // 如果要使用差分编码压缩data，将无法通过简单的随机读取获取数据。或许需要页表之类的结构进行索引；同时，data需要解压缩。可以在每个element的开头记录上一个data的internal_id，接着回溯到第0个data，然后依次解压缩
     inline char *getDataByInternalId(tableint internal_id) const {
+        if (internal_id < access_counts_.size()) {
+            access_counts_[internal_id]++;
+        }
         // auto start = std::chrono::high_resolution_clock::now();
         char* result = data_level0_memory_ + internal_id * size_data_per_element_ + offsetData_;
         // auto end = std::chrono::high_resolution_clock::now();
@@ -840,6 +861,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
         std::vector<std::mutex>(max_elements).swap(link_list_locks_);
         std::vector<std::mutex>(MAX_LABEL_OPERATION_LOCKS).swap(label_op_locks_);
+        
+        access_counts_.resize(max_elements);
+        std::fill(access_counts_.begin(), access_counts_.end(), 0);
 
         visited_list_pool_.reset(new VisitedListPool(1, max_elements));
 
@@ -1500,6 +1524,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             }
         }
         return total_size;
+    }
+
+    // 根据internal id获取该节点在level0的linkLists中元素的数量
+    int getLevel0LinkListSize(tableint internalId) {
+        std::unique_lock <std::mutex> lock(link_list_locks_[internalId]);
+        linklistsizeint *ll_cur = get_linklist_at_level(internalId, 0);
+        int size = getListCount(ll_cur);
+        return size;
     }
 };
 }  // namespace hnswlib
