@@ -16,13 +16,13 @@ namespace {
         // "winequality-red",
         // "winequality-white",
         // // "Stress-Lysis",
-        // "siftsmall_base",
+        "siftsmall_base"
         // "gist_small_base",
         // "mnist-784-euclidean_small_base",
         // "fashion-mnist-784-euclidean_small_base"
         // "mnist-784-euclidean",
         // "fashion-mnist-784-euclidean",
-        "sift1m"
+        // "sift1m"
         // "gist_base"
         // "SaYoPillow",
         // "emotional_monitoring_dataset_with_target",
@@ -377,11 +377,11 @@ void write_results_to_csv(const std::string& csv_file_path){
 int main() {
 
     std::string file_path = "../datasets/";
-    // initialize_test_results();
-    // collect_save_hnswalp_leann_results();
-    // collect_save_hnsw_results();
+    initialize_test_results();
+    collect_save_hnswalp_leann_results();
+    collect_save_hnsw_results();
     collect_load_hnswalp_leann_results();
-    // collect_load_hnsw_results();
+    collect_load_hnsw_results();
 
     write_results_to_csv("hnswalp_leann_hnsw_test_results.csv");
 

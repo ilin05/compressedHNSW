@@ -390,7 +390,7 @@ class HierarchicalNSWALPLEANN : public AlgorithmInterface<dist_t> {
     std::vector<std::vector<double>> getBatchOriginalDataByInternalId(const std::vector<tableint>& internal_ids) const {
         std::vector<std::vector<double>> results(internal_ids.size());
         
-        #pragma omp parallel for schedule(dynamic)
+        // #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < internal_ids.size(); ++i) {
             results[i] = getOriginalDataByInternalId(internal_ids[i], false);
         }
@@ -1837,6 +1837,116 @@ class HierarchicalNSWALPLEANN : public AlgorithmInterface<dist_t> {
         std::priority_queue<std::pair<dist_t, labeltype >> result;
         if (cur_element_count == 0) return result;
 
+        // Check if we can use the 1-bit quantization path
+        if (is_compacted_ && !dim_means_.empty()) {
+             // --- Two-Pass Search with 1-bit Quantization (Algorithm 2) ---
+
+            // 1. Quantize Query
+            size_t dim = dim_means_.size();
+            std::vector<uint64_t> q_binary(binary_block_size_, 0);
+            
+            if (data_size_ / dim == sizeof(float)) {
+                const float* q = (const float*)query_data;
+                for(size_t i=0; i<dim; ++i) {
+                     if (q[i] >= dim_means_[i]) q_binary[i / 64] |= (1ULL << (i % 64));
+                }
+            } else {
+                const double* q = (const double*)query_data;
+                for(size_t i=0; i<dim; ++i) {
+                     if (q[i] >= dim_means_[i]) q_binary[i / 64] |= (1ULL << (i % 64));
+                }
+            }
+
+            // 2. HNSW Routing (Upper Layers)
+            tableint currObj = enterpoint_node_;
+            
+            // Initial Exact Distance
+            std::vector<double> vec_ep = getOriginalDataByInternalId(enterpoint_node_);
+            dist_t curdist = fstdistfunc_(query_data, vec_ep.data(), dist_func_param_);
+
+            for (int level = maxlevel_; level > 0; level--) {
+                bool changed = true;
+                while (changed) {
+                    changed = false;
+                    unsigned int *data = (unsigned int *) get_linklist(currObj, level);
+                    int size = getListCount(data);
+                    metric_hops++;
+                    
+                    // Collect neighbors and compute Hamming distance
+                    std::vector<std::pair<int, tableint>> approx_candidates;
+                    approx_candidates.reserve(size);
+                    
+                    tableint *datal = (tableint *) (data + 1);
+                    for (int i = 0; i < size; i++) {
+                        tableint cand = datal[i];
+                        if (cand < 0 || cand > max_elements_)
+                            throw std::runtime_error("cand error");
+                        
+                        const uint64_t* cand_binary = binary_data_.data() + cand * binary_block_size_;
+                        int h_dist = hamming_dist(q_binary.data(), cand_binary, binary_block_size_);
+                        approx_candidates.push_back({h_dist, cand});
+                    }
+
+                    // Filter Top Alpha% (e.g., 20%)
+                    if (!approx_candidates.empty()) {
+                        size_t candidates_to_check = (size_t)(approx_candidates.size() * 0.2);
+                        if (candidates_to_check < 2) candidates_to_check = std::min(approx_candidates.size(), (size_t)2);
+                        
+                        std::partial_sort(approx_candidates.begin(), 
+                                          approx_candidates.begin() + candidates_to_check, 
+                                          approx_candidates.end());
+                        
+                        // Check Exact Distance for survivors
+                        metric_distance_computations += candidates_to_check;
+                        std::vector<tableint> batch_ids;
+                        batch_ids.reserve(candidates_to_check);
+                        for(size_t i=0; i<candidates_to_check; ++i) {
+                            batch_ids.push_back(approx_candidates[i].second);
+                        }
+
+                        std::vector<std::vector<double>> batch_data = getBatchOriginalDataByInternalId(batch_ids);
+
+                        for(size_t i=0; i<candidates_to_check; ++i) {
+                            tableint cand = batch_ids[i];
+                            const std::vector<double>& vec_cand = batch_data[i];
+                            dist_t d = fstdistfunc_(query_data, vec_cand.data(), dist_func_param_);
+                            
+                            if (d < curdist) {
+                                curdist = d;
+                                currObj = cand;
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Base Layer Search (Two-Level)
+            size_t ef_search = std::max(ef_, k);
+            
+            std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidates;
+            bool bare_bone_search = !num_deleted_ && !isIdAllowed;
+            
+            if (bare_bone_search) {
+                candidates = searchBaseLayerTwoLevel<true>(currObj, query_data, q_binary.data(), ef_search, isIdAllowed);
+            } else {
+                candidates = searchBaseLayerTwoLevel<false>(currObj, query_data, q_binary.data(), ef_search, isIdAllowed);
+            }
+
+            // 4. Result Construction
+            while (candidates.size() > k) {
+                candidates.pop();
+            }
+            while (candidates.size() > 0) {
+                std::pair<dist_t, tableint> rez = candidates.top();
+                result.push(std::pair<dist_t, labeltype>(rez.first, getExternalLabel(rez.second)));
+                candidates.pop();
+            }
+            return result;
+        }
+
+        // --- Original Search (Fallback) ---
+
         // currObj和curdist分别记录距离data point最近的点和距离
         tableint currObj = enterpoint_node_;
         std::vector<double> vec_ep = getOriginalDataByInternalId(enterpoint_node_);
@@ -1876,45 +1986,15 @@ class HierarchicalNSWALPLEANN : public AlgorithmInterface<dist_t> {
 
         // 目前已获得第一层与query最近的元素currObj
         // 在第零层获取currObj邻居中距离query最近的max(k, ef)个近邻，也就是动态列表top_candidates-----论文中是W
-        
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
         bool bare_bone_search = !num_deleted_ && !isIdAllowed;
-
-        // LEANN: Prepare Query Binary Code if compacted
-        if (is_compacted_ && !dim_means_.empty()) {
-            size_t dim = dim_means_.size();
-            std::vector<uint64_t> q_binary(binary_block_size_, 0);
-            
-            if (data_size_ / dim == sizeof(float)) {
-                const float* q = (const float*)query_data;
-                for(size_t i=0; i<dim; ++i) {
-                     if (q[i] >= dim_means_[i]) q_binary[i / 64] |= (1ULL << (i % 64));
-                }
-            } else {
-                const double* q = (const double*)query_data;
-                for(size_t i=0; i<dim; ++i) {
-                     if (q[i] >= dim_means_[i]) q_binary[i / 64] |= (1ULL << (i % 64));
-                }
-            }
-
-            if (bare_bone_search) {
-                top_candidates = searchBaseLayerTwoLevel<true>(
-                        currObj, query_data, q_binary.data(), std::max(ef_, k), isIdAllowed);
-            } else {
-                top_candidates = searchBaseLayerTwoLevel<false>(
-                        currObj, query_data, q_binary.data(), std::max(ef_, k), isIdAllowed);
-            }
-
+        if (bare_bone_search) {
+            top_candidates = searchBaseLayerST<true>(
+                    currObj, query_data, std::max(ef_, k), isIdAllowed);
         } else {
-            if (bare_bone_search) {
-                top_candidates = searchBaseLayerST<true>(
-                        currObj, query_data, std::max(ef_, k), isIdAllowed);
-            } else {
-                top_candidates = searchBaseLayerST<false>(
-                        currObj, query_data, std::max(ef_, k), isIdAllowed);
-            }
+            top_candidates = searchBaseLayerST<false>(
+                    currObj, query_data, std::max(ef_, k), isIdAllowed);
         }
-
         // top_candidates修建为k个
         while (top_candidates.size() > k) {
             top_candidates.pop();
