@@ -156,7 +156,7 @@ void search_hnswalp(double* data, int rows, int dim) {
 }
 
 int main() {
-    std::string data_path = "bigann_learn.bvecs"; 
+    std::string data_path = "../datasets/bigann_learn.bvecs"; 
 
     int rows, dim;
     double* data = nullptr;
