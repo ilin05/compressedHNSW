@@ -459,7 +459,7 @@ int main() {
     collect_save_hnsw_results();
     collect_load_hnswalp_leann_results();
     collect_load_hnsw_results();
-    collect_analyze_hnsw_graph_results();
+    // collect_analyze_hnsw_graph_results();
 
     write_results_to_csv("hnswalp_leann_hnsw_test_results.csv");
 

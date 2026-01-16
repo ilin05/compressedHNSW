@@ -11,6 +11,7 @@
 #include <memory>
 #include <cmath>
 #include <algorithm>
+#include <numeric>
 #include <vector>
 #include "../examples/utils/memory_stream_reader.h"
 #include "../examples/utils/memory_stream_writer.h"
@@ -59,6 +60,7 @@ class HierarchicalNSWALPLEANN : public AlgorithmInterface<dist_t> {
 
     char **linkLists_{nullptr};
     std::vector<int> element_levels_;  // keeps level of each element
+    std::vector<uint8_t> uncompressed_mask_;
 
     size_t data_size_{0};
 
@@ -285,6 +287,7 @@ class HierarchicalNSWALPLEANN : public AlgorithmInterface<dist_t> {
 
     void clear() {
         std::vector<char>().swap(data_level0_memory_);
+        std::vector<uint8_t>().swap(uncompressed_mask_);
         for (tableint i = 0; i < cur_element_count; i++) {
             if (element_levels_[i] > 0)
                 free(linkLists_[i]);
@@ -372,16 +375,26 @@ class HierarchicalNSWALPLEANN : public AlgorithmInterface<dist_t> {
         offset += sizeof(linklistsizeint);
         offset += size * sizeof(tableint);
         
-        utils::MemoryStreamReader reader((const unsigned char*)(data_level0_memory_.data() + start + offset));
-        
-        if (collect_metrics) {
-            auto start_time = std::chrono::high_resolution_clock::now();
-            alp_decode_vector(reader, result);
-            auto end_time = std::chrono::high_resolution_clock::now();
-            decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
-            decoding_call_count++;
+        if (uncompressed_mask_[internal_id]) {
+             if (data_size_ / dim == sizeof(float)) {
+                 float* data_ptr = (float*)(data_level0_memory_.data() + start + offset);
+                 for(size_t i=0; i<dim; ++i) result[i] = (double)data_ptr[i];
+             } else {
+                 double* data_ptr = (double*)(data_level0_memory_.data() + start + offset);
+                 memcpy(result.data(), data_ptr, dim * sizeof(double));
+             }
         } else {
-            alp_decode_vector(reader, result);
+            utils::MemoryStreamReader reader((const unsigned char*)(data_level0_memory_.data() + start + offset));
+            
+            if (collect_metrics) {
+                auto start_time = std::chrono::high_resolution_clock::now();
+                alp_decode_vector(reader, result);
+                auto end_time = std::chrono::high_resolution_clock::now();
+                decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+                decoding_call_count++;
+            } else {
+                alp_decode_vector(reader, result);
+            }
         }
 
         return result;
@@ -1154,6 +1167,19 @@ class HierarchicalNSWALPLEANN : public AlgorithmInterface<dist_t> {
         }
         // --- End 1-bit Quantization ---
         
+        // Select Hubs for Cache (Uncompressed)
+        size_t target_hub_count = std::max((size_t)1, cur_element_count / 100);
+        std::vector<tableint> indices(cur_element_count);
+        std::iota(indices.begin(), indices.end(), 0);
+        std::sort(indices.begin(), indices.end(), [&](tableint a, tableint b) {
+            return element_levels_[a] > element_levels_[b];
+        });
+        
+        uncompressed_mask_.assign(cur_element_count, 0);
+        for(size_t i=0; i<target_hub_count && i < cur_element_count; ++i) {
+             uncompressed_mask_[indices[i]] = 1;
+        }
+
         std::vector<char> new_data_memory;
         new_data_memory.reserve(data_level0_memory_.size() / 2); 
         
@@ -1182,19 +1208,25 @@ class HierarchicalNSWALPLEANN : public AlgorithmInterface<dist_t> {
             // Write Neighbors
             new_data_memory.insert(new_data_memory.end(), old_ll_ptr + ll_header_size, old_ll_ptr + ll_header_size + neighbors_size);
             
-            // 4. Compress and Append Data
-            std::vector<double> vec(dim);
-            if (data_size_ / dim == sizeof(float)) {
-                float* d = (float*)(raw_ptr + offsetData_);
-                for(size_t k=0; k<dim; ++k) vec[k] = (double)d[k];
+            // 4. Compress or Store Raw
+            if (uncompressed_mask_[i]) {
+                // Store Raw
+                char* src_data = raw_ptr + offsetData_;
+                new_data_memory.insert(new_data_memory.end(), src_data, src_data + data_size_);
             } else {
-                double* d = (double*)(raw_ptr + offsetData_);
-                for(size_t k=0; k<dim; ++k) vec[k] = d[k];
-            }
+                std::vector<double> vec(dim);
+                if (data_size_ / dim == sizeof(float)) {
+                    float* d = (float*)(raw_ptr + offsetData_);
+                    for(size_t k=0; k<dim; ++k) vec[k] = (double)d[k];
+                } else {
+                    double* d = (double*)(raw_ptr + offsetData_);
+                    for(size_t k=0; k<dim; ++k) vec[k] = d[k];
+                }
 
-            utils::MemoryStreamWriter writer(&new_data_memory);
-            alp_encode_vector(vec.data(), dim, writer);
-            writer.align();
+                utils::MemoryStreamWriter writer(&new_data_memory);
+                alp_encode_vector(vec.data(), dim, writer);
+                writer.align();
+            }
         }
         
         data_level0_memory_.swap(new_data_memory);
@@ -1240,6 +1272,10 @@ class HierarchicalNSWALPLEANN : public AlgorithmInterface<dist_t> {
             writeBinaryPOD(output, num_positions);
             output.write((char*)level0_element_start_positions_.data(), num_positions * sizeof(size_t));
             
+            size_t mask_size = uncompressed_mask_.size();
+            writeBinaryPOD(output, mask_size);
+            if(mask_size > 0) output.write((char*)uncompressed_mask_.data(), mask_size * sizeof(uint8_t));
+
             // Write compressed data size
             size_t data_size = data_level0_memory_.size();
             writeBinaryPOD(output, data_size);
@@ -1321,6 +1357,13 @@ class HierarchicalNSWALPLEANN : public AlgorithmInterface<dist_t> {
             level0_element_start_positions_.resize(num_positions);
             input.read((char*)level0_element_start_positions_.data(), num_positions * sizeof(size_t));
             
+            size_t mask_size;
+            readBinaryPOD(input, mask_size);
+            if(mask_size > 0) {
+                uncompressed_mask_.resize(mask_size);
+                input.read((char*)uncompressed_mask_.data(), mask_size * sizeof(uint8_t));
+            }
+
             size_t data_size;
             readBinaryPOD(input, data_size);
             data_level0_memory_.resize(data_size);
