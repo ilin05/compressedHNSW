@@ -129,6 +129,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_bigann_hnswalp_and_hnsw examples/cpp/test_bigann_hnswalp_and_hnsw.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_bigann_hnswalp_and_hnsw hnswlib)
 
+    add_executable(test_save_hnswalp_origin_and_hnsw examples/cpp/test_save_hnswalp_origin_and_hnsw.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_save_hnswalp_origin_and_hnsw hnswlib)
+
     # tests
     add_executable(multivector_search_test tests/cpp/multivector_search_test.cpp)
     target_link_libraries(multivector_search_test hnswlib)
