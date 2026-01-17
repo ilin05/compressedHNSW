@@ -110,18 +110,21 @@ class HierarchicalNSWORIGINALP : public AlgorithmInterface<dist_t> {
 
     // ALP Helper Functions
     
-    // ZigZag encoding to map signed integers to unsigned
-    static inline uint64_t zigzag_encode(int64_t n) {
-        return (n << 1) ^ (n >> 63);
-    }
-
-    static inline int64_t zigzag_decode(uint64_t n) {
-        return (n >> 1) ^ -(int64_t)(n & 1);
+    // Get P10 power from lookup table (Range -23 to 23)
+    // Matches Java ALPTools.java constants
+    static double get_alp_p10(int pow) {
+        static const double P10[] = {
+            1e-23, 1e-22, 1e-21, 1e-20, 1e-19, 1e-18, 1e-17, 1e-16, 1e-15, 1e-14, 1e-13, 1e-12, 1e-11, 
+            1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1.0, 
+            1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 
+            1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22, 1e23
+        };
+        // pow + 23 to access index
+        return P10[pow + 23];
     }
 
     static inline int get_bit_width(uint64_t n) {
         if (n == 0) return 0;
-        // Portable log2
         int bits = 0;
         while (n > 0) {
             n >>= 1;
@@ -131,155 +134,159 @@ class HierarchicalNSWORIGINALP : public AlgorithmInterface<dist_t> {
     }
 
     // Optimized ALP with Frame-Of-Reference (FOR) and Exception Patching
-    // References: Native ALP (C++) and Java ALP
+    // References: Native ALP (C++) and Java ALP (strict adherence to logic)
     void alp_encode_vector(const double* data, size_t dim, utils::MemoryStreamWriter& writer) const {
-        
-        struct Config {
-            int exponent = 0;
-            int bit_width = 64;
-            int64_t base_value = 0;
-            std::vector<uint16_t> exception_indices;
-            std::vector<double> exception_values;
-            size_t total_bits = SIZE_MAX;
-        } best_config;
+        int best_e = 0;
+        int best_f = 0;
+        size_t min_exceptions = dim + 1;
 
-        // Iterate exponents 0..16 to find best compression configuration
-        for (int exp = 0; exp <= 16; ++exp) {
-            double factor = std::pow(10.0, exp);
-            
-            int64_t min_val = INT64_MAX;
-            int64_t max_val = INT64_MIN;
-            
-            std::vector<uint16_t> current_exceptions;
-            std::vector<double> current_exception_vals;
-            
-            // Pass 1: Identify Range and Exceptions
-            // We only consider values "valid" for FOR if they are lossless integers
-            for (size_t i = 0; i < dim; ++i) {
-                double val = data[i];
-                double val_encoded = val * factor;
-                int64_t val_int = std::round(val_encoded);
-                
-                // Recovery check
-                double val_recovered = val_int / factor;
-                
-                // Native ALP uses specific tolerance relative to precision
-                // Here we use a tight fixed tolerance suitable for normalized vectors
-                if (std::abs(val - val_recovered) > 1e-6) { 
-                   current_exceptions.push_back((uint16_t)i);
-                   current_exception_vals.push_back(val);
-                   // Do not update min/max for exceptions? 
-                   // Standard ALP usually removes exceptions from FOR range to lower bitwidth.
-                   continue; 
+        // Sampling / Grid Search for best e, f
+        // Range: e [0, 22], f [0, e] based on Java implementation
+        for (int e = 0; e < 23; ++e) {
+            for (int f = 0; f <= e; ++f) {
+                size_t exc_count = 0;
+                double factor_e = get_alp_p10(e);
+                double factor_f_inv = get_alp_p10(-f);
+                double factor_e_inv = get_alp_p10(-e);
+                double factor_f = get_alp_p10(f);
+
+                for (size_t i = 0; i < dim; ++i) {
+                    double v = data[i];
+                    int64_t enc_v = std::llround(v * factor_e * factor_f_inv);
+                    double dec_v = enc_v * factor_e_inv * factor_f;
+                    
+                    // Exact bitwise comparison for strictness
+                    uint64_t v_bits, dec_v_bits;
+                    std::memcpy(&v_bits, &v, 8);
+                    std::memcpy(&dec_v_bits, &dec_v, 8);
+                    if (v_bits != dec_v_bits) {
+                        exc_count++;
+                    }
+                    if (exc_count > min_exceptions) break;
                 }
                 
-                if (val_int < min_val) min_val = val_int;
-                if (val_int > max_val) max_val = val_int;
+                if (exc_count < min_exceptions) {
+                    min_exceptions = exc_count;
+                    best_e = e;
+                    best_f = f;
+                    if (min_exceptions == 0) goto end_search;
+                }
             }
+        }
+        end_search:;
 
-            // If all are exceptions (unlikely), handle gracefully
-            if (min_val > max_val) {
-                min_val = 0; 
-                max_val = 0;
-            }
-            
-            uint64_t range = (uint64_t)(max_val - min_val);
-            int bw = get_bit_width(range);
+        // Final Encoding with Best Pair
+        std::vector<int64_t> enc_vec(dim);
+        std::vector<uint32_t> exc_indices;
+        std::vector<double> exc_values;
+        
+        double factor_e = get_alp_p10(best_e);
+        double factor_f_inv = get_alp_p10(-best_f);
+        double factor_e_inv = get_alp_p10(-best_e);
+        double factor_f = get_alp_p10(best_f);
 
-            // Calculate Total Size in Bits
-            // Header: Exp(8) + BW(8) + Base(64) + ExcCount(16)
-            size_t header_bits = 8 + 8 + 64 + 16;
-            // Body: (Dim - ExcCount) * BW  <-- We technically store BW for everything or skip?
-            // Usually, standard layouts store BW bits for EVERY slot for random access, or use valid maps.
-            // For HNSW sequential decode, we physically store BW bits for ALL indices to maintain O(1) stride decoding,
-            // OR we store BW only for non-exceptions. 
-            // Simplest robust way: Store BW bits for ALL. Exceptions are patched over.
-            // This ensures alignment is predictable.
-            size_t body_bits = dim * bw;
-            // Exceptions: Count * (Index(16) + Value(64))
-            size_t exception_bits = current_exceptions.size() * (16 + 64);
-            
-            size_t current_total = header_bits + body_bits + exception_bits;
-            
-            if (current_total < best_config.total_bits) {
-                best_config.exponent = exp;
-                best_config.bit_width = bw;
-                best_config.base_value = min_val;
-                best_config.exception_indices = std::move(current_exceptions);
-                best_config.exception_values = std::move(current_exception_vals);
-                best_config.total_bits = current_total;
+        bool first = false;
+        int64_t first_suc = 0;
+
+        for (size_t i = 0; i < dim; ++i) {
+            double v = data[i];
+            int64_t enc = std::llround(v * factor_e * factor_f_inv);
+            double dec = enc * factor_e_inv * factor_f;
+
+            uint64_t v_bits, dec_bits;
+            std::memcpy(&v_bits, &v, 8);
+            std::memcpy(&dec_bits, &dec, 8);
+
+            if (v_bits == dec_bits) {
+                if (!first) {
+                    first = true;
+                    first_suc = enc;
+                }
+                enc_vec[i] = enc;
+            } else {
+                exc_indices.push_back((uint32_t)i);
+                exc_values.push_back(v);
+                enc_vec[i] = 0; // Placeholder
             }
         }
 
-        // 3. Write Config and Data
-        writer.write(best_config.exponent, 8);
-        writer.write(best_config.bit_width, 8);
-        writer.write((long long)best_config.base_value, 64); 
-        
-        uint16_t exc_count = (uint16_t)best_config.exception_indices.size();
-        writer.write((int)exc_count, 16);
-        
+        // Patch exceptions with first valid value to improve FFOR compression
+        for (uint32_t idx : exc_indices) {
+            enc_vec[idx] = first_suc;
+        }
+
+        // Write Header
+        writer.write(best_e, 5);
+        writer.write(best_f, 5);
+        writer.write((int)exc_indices.size(), 16); 
+
         // Write Exceptions
-        for(size_t i=0; i<exc_count; ++i) {
-             writer.write((int)best_config.exception_indices[i], 16);
-             uint64_t raw_double;
-             std::memcpy(&raw_double, &best_config.exception_values[i], 8);
-             writer.write((long long)raw_double, 64);
+        int idx_bits = (dim > 1) ? get_bit_width(dim - 1) : 1;
+        for (size_t k = 0; k < exc_indices.size(); ++k) {
+            writer.write((long long)exc_indices[k], idx_bits);
+            uint64_t raw_double;
+            std::memcpy(&raw_double, &exc_values[k], 8);
+            writer.write((long long)raw_double, 64);
         }
 
-        // Write Packed Codes (Frame-Of-Reference)
-        double factor = std::pow(10.0, best_config.exponent);
-        int64_t base = best_config.base_value;
-        int bw = best_config.bit_width;
+        // FFOR Encoding
+        int64_t min_v = enc_vec[0];
+        int64_t max_v = enc_vec[0];
+        for (size_t i = 1; i < dim; ++i) {
+            if (enc_vec[i] < min_v) min_v = enc_vec[i];
+            if (enc_vec[i] > max_v) max_v = enc_vec[i];
+        }
 
-        // NOTE: We re-calculate integers. Exceptions are written as placeholders (clamped to range)
-        // or just garbage. They will be overwritten.
-        for(size_t i=0; i<dim; ++i) {
-             int64_t val_int = std::round(data[i] * factor);
-             // Safety clamp for exception values to avoid overflow in FOR
-             if (val_int < base) val_int = base; 
-             // Upper bound clamping is implicit by bitwidth mask usually, but let's be safe
-             // In decode, these slots are overwritten by exception values anyway.
-             
-             uint64_t for_val = (uint64_t)(val_int - base);
-             writer.write((long long)for_val, bw);
+        uint64_t delta_range = (uint64_t)(max_v - min_v);
+        int cost = get_bit_width(delta_range);
+
+        writer.write(cost, 8);
+        writer.write((long long)min_v, 64);
+        
+        for (size_t i = 0; i < dim; ++i) {
+            writer.write((long long)(enc_vec[i] - min_v), cost);
         }
     }
 
     void alp_decode_vector(utils::MemoryStreamReader& reader, std::vector<double>& result) const {
         size_t dim = result.size();
         
-        // 1. Read Header
-        int exp = reader.readInt(8);
-        int bit_width = reader.readInt(8);
-        int64_t base_value = reader.readLong(64);
+        // Read Header
+        int e = reader.readInt(5);
+        int f = reader.readInt(5);
         int exc_count = reader.readInt(16);
         
-        // 2. Read Exceptions (Sorted by index usually, as we pushed them in order)
-        // We use a small vector for exceptions to keep stack usage low and cache friendly
-        std::vector<std::pair<uint16_t, double>> exceptions(exc_count);
-        for(int i=0; i<exc_count; ++i) {
-            uint16_t idx = (uint16_t)reader.readInt(16);
+        int idx_bits = (dim > 1) ? get_bit_width(dim - 1) : 1;
+
+        std::vector<std::pair<uint32_t, double>> exceptions(exc_count);
+        for(int i = 0; i < exc_count; ++i) {
+            uint32_t idx = (uint32_t)reader.readInt(idx_bits);
             uint64_t val_raw = (uint64_t)reader.readLong(64);
             double val;
             std::memcpy(&val, &val_raw, 8);
             exceptions[i] = {idx, val};
         }
+
+        // Read FFOR
+        int cost = reader.readInt(8);
+        int64_t min_v = reader.readLong(64);
         
-        // 3. Decode Body and Patch
-        double factor_inv = std::pow(10.0, -exp);
-        int next_exc = 0;
+        // Decode Body
+        double factor_e_inv = get_alp_p10(-e);
+        double factor_f = get_alp_p10(f);
         
         for (size_t i = 0; i < dim; ++i) {
-            uint64_t for_val = (uint64_t)reader.readLong(bit_width);
+            int64_t delta = reader.readLong(cost);
+            int64_t enc = min_v + delta;
             
-            // Check if current index is an exception
-            if (next_exc < exc_count && exceptions[next_exc].first == i) {
-                result[i] = exceptions[next_exc].second;
-                next_exc++;
-            } else {
-                int64_t val_int = base_value + (int64_t)for_val;
-                result[i] = val_int * factor_inv;
+            // Reconstruct
+            result[i] = enc * factor_e_inv * factor_f;
+        }
+        
+        // Patch Exceptions
+        for(int i = 0; i < exc_count; ++i) {
+            if (exceptions[i].first < dim) {
+                result[exceptions[i].first] = exceptions[i].second;
             }
         }
     }
