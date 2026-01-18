@@ -210,7 +210,10 @@ static double* loadBvecs(const std::string& filePath, int& rows, int& dim) {
         std::cerr << "Warning: File size is not a multiple of vector size. Data might be truncated." << std::endl;
     }
 
-    size_t num_vectors = std::min((size_t)(fileSize / vecSize), 15000000ULL); // 限制最大读取量15M
+    size_t num_vectors = fileSize / vecSize;
+    if(num_vectors > 15000000){
+        num_vectors = 15000000; // 限制最大加载量15M
+    }
     rows = static_cast<int>(num_vectors);
 
     std::cout << "Loading " << rows << " vectors of dimension " << dim << " from " << filePath << "..." << std::endl;
