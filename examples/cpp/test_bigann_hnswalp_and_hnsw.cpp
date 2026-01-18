@@ -83,7 +83,7 @@ void build_hnswalp(double* data, int rows, int dim) {
     std::cout << "--------------------------------------------------------" << std::endl;
     std::cout << "Building HNSWALP_LEANN Index..." << std::endl;
     hnswlib::L2SpaceDouble space(dim);
-    hnswlib::HierarchicalNSWALPLEANN<double> alg_alp(&space, max_elements, M, ef_construction);
+    hnswlib::HierarchicalNSWALPSIMPLIFIED<double> alg_alp(&space, max_elements, M, ef_construction);
 
     auto start = std::chrono::high_resolution_clock::now();
     
@@ -123,7 +123,7 @@ void search_hnswalp(double* data, int rows, int dim) {
     hnswlib::L2SpaceDouble space(dim);
     
     std::cout << "Loading HNSWALP index from " << hnswalp_path << "..." << std::endl;
-    hnswlib::HierarchicalNSWALPLEANN<double> alg_alp(&space, hnswalp_path);
+    hnswlib::HierarchicalNSWALPSIMPLIFIED<double> alg_alp(&space, hnswalp_path);
     std::cout << "Index loaded." << std::endl;
 
     float correct = 0;
