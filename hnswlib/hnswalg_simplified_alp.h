@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <unordered_set>
-#include <unordered_map>
 #include <list>
 #include <memory>
 #include <cmath>
@@ -22,7 +21,7 @@ typedef unsigned int tableint;
 typedef unsigned int linklistsizeint;
 
 template<typename dist_t>
-class HierarchicalNSWORIGINALP : public AlgorithmInterface<dist_t> {
+class HierarchicalNSWALPSIMPLIFIED : public AlgorithmInterface<dist_t> {
  public:
     static const tableint MAX_LABEL_OPERATION_LOCKS = 65536;
     static const unsigned char DELETE_MARK = 0x01;
@@ -110,21 +109,11 @@ class HierarchicalNSWORIGINALP : public AlgorithmInterface<dist_t> {
 
     // ALP Helper Functions
     
-    // Get P10 power from lookup table (Range -23 to 23)
-    // Matches Java ALPTools.java constants
-    static double get_alp_p10(int pow) {
-        static const double P10[] = {
-            1e-23, 1e-22, 1e-21, 1e-20, 1e-19, 1e-18, 1e-17, 1e-16, 1e-15, 1e-14, 1e-13, 1e-12, 1e-11, 
-            1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1.0, 
-            1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 
-            1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22, 1e23
-        };
-        // pow + 23 to access index
-        return P10[pow + 23];
-    }
+    // ZigZag encoding removed as it is not needed for FFOR with positive deltas
 
     static inline int get_bit_width(uint64_t n) {
         if (n == 0) return 0;
+        // Portable log2
         int bits = 0;
         while (n > 0) {
             n >>= 1;
@@ -133,187 +122,80 @@ class HierarchicalNSWORIGINALP : public AlgorithmInterface<dist_t> {
         return bits;
     }
 
-    // Optimized ALP with Frame-Of-Reference (FOR) and Exception Patching
-    // References: Native ALP (C++) and Java ALP (strict adherence to logic)
     void alp_encode_vector(const double* data, size_t dim, utils::MemoryStreamWriter& writer) const {
-        int best_e = 0;
-        int best_f = 0;
-        size_t min_cost = SIZE_MAX;
+        // 1. Find best exponent
+        int selected_exp = 16; // Default to max precision
         
-        int idx_bits = (dim > 1) ? get_bit_width(dim - 1) : 1;
-
-        // Sampling / Grid Search for best e, f
-        // Range: e [0, 22], f [0, e] based on Java implementation
-        // We iterate to find the combination that minimizes total bit size (Cost)
-        // Cost = (dim * bit_width) + (exc_count * (idx_bits + 64))
-        for (int e = 0; e < 23; ++e) {
-            for (int f = 0; f <= e; ++f) {
-                size_t exc_count = 0;
-                double factor_e = get_alp_p10(e);
-                double factor_f_inv = get_alp_p10(-f);
-                double factor_e_inv = get_alp_p10(-e);
-                double factor_f = get_alp_p10(f);
-
-                int64_t min_val = INT64_MAX;
-                int64_t max_val = INT64_MIN;
-                bool any_valid = false;
-
-                for (size_t i = 0; i < dim; ++i) {
-                    double v = data[i];
-                    int64_t enc_v = std::llround(v * factor_e * factor_f_inv);
-                    double dec_v = enc_v * factor_e_inv * factor_f;
-
-                    // Tolerance check: if diff is small enough, it's not an exception
-                    if (std::abs(v - dec_v) > 1e-4) {
-                        exc_count++;
-                    } else {
-                        if (!any_valid) {
-                            min_val = enc_v;
-                            max_val = enc_v;
-                            any_valid = true;
-                        } else {
-                            if (enc_v < min_val) min_val = enc_v;
-                            if (enc_v > max_val) max_val = enc_v;
-                        }
-                    }
-                }
-
-                int bw = 0;
-                if (any_valid) {
-                     uint64_t delta = (uint64_t)(max_val - min_val);
-                     bw = get_bit_width(delta);
-                }
-                
-                // Estimate total bits
-                size_t current_cost = exc_count * (idx_bits + 64) + dim * bw;
-
-                // Update best. We use <= to prefer larger e/f (last one checked) in case of ties
-                // This matches ALP's preference for larger factors/exponents
-                if (current_cost <= min_cost) {
-                    min_cost = current_cost;
-                    best_e = e;
-                    best_f = f;
+        // Iterate to find smallest exponent satisfying tolerance
+        for (int exp = 0; exp <= 16; ++exp) {
+            double factor = std::pow(10.0, exp);
+            double inv_factor = 1.0 / factor;
+            bool ok = true;
+            for (size_t i = 0; i < dim; ++i) {
+                double origin = data[i];
+                double reconstructed = std::round(origin * factor) * inv_factor;
+                if (std::abs(origin - reconstructed) > 1e-4) {
+                    ok = false;
+                    break;
                 }
             }
-        }
-
-        // Final Encoding with Best Pair
-        std::vector<int64_t> enc_vec(dim);
-        std::vector<uint32_t> exc_indices;
-        std::vector<double> exc_values;
-        
-        double factor_e = get_alp_p10(best_e);
-        double factor_f_inv = get_alp_p10(-best_f);
-        double factor_e_inv = get_alp_p10(-best_e);
-        double factor_f = get_alp_p10(best_f);
-
-        bool first = false;
-        int64_t first_suc = 0;
-
-        for (size_t i = 0; i < dim; ++i) {
-            double v = data[i];
-            int64_t enc = std::llround(v * factor_e * factor_f_inv);
-            double dec = enc * factor_e_inv * factor_f;
-
-            if (std::abs(v - dec) <= 1e-4) {
-                if (!first) {
-                    first = true;
-                    first_suc = enc;
-                }
-                enc_vec[i] = enc;
-            } else {
-                exc_indices.push_back((uint32_t)i);
-                exc_values.push_back(v);
-                enc_vec[i] = 0; // Placeholder
+            if (ok) {
+                selected_exp = exp;
+                break;
             }
         }
-
-        // Patch exceptions with first valid value to improve FFOR compression
-        for (uint32_t idx : exc_indices) {
-            enc_vec[idx] = first_suc;
-        }
-
-        // Write Header
-        writer.write(best_e, 5);
-        writer.write(best_f, 5);
-        writer.write((int)exc_indices.size(), 16); 
-
-        // Write Exceptions
-        // int idx_bits = (dim > 1) ? get_bit_width(dim - 1) : 1;
-        for (size_t k = 0; k < exc_indices.size(); ++k) {
-            writer.write((long long)exc_indices[k], idx_bits);
-            uint64_t raw_double;
-            std::memcpy(&raw_double, &exc_values[k], 8);
-            writer.write((long long)raw_double, 64);
-        }
-
-        // FFOR Encoding
-        int64_t min_v = enc_vec[0];
-        int64_t max_v = enc_vec[0];
-        for (size_t i = 1; i < dim; ++i) {
-            if (enc_vec[i] < min_v) min_v = enc_vec[i];
-            if (enc_vec[i] > max_v) max_v = enc_vec[i];
-        }
-
-        uint64_t delta_range = (uint64_t)(max_v - min_v);
-        int cost = get_bit_width(delta_range);
-
-        writer.write(cost, 8);
-        writer.write((long long)min_v, 64);
         
+        writer.write(selected_exp, 8); 
+        
+        double factor = std::pow(10.0, selected_exp);
+        
+        // 2. Find Min/Max and Calculate Bit Width
+        int64_t min_val = INT64_MAX;
+        int64_t max_val = INT64_MIN;
+        
+        // We accumulate values first to avoid re-calculating or use a buffer
+        // Since dim is usually small (vector dimension), we can do two passes
+        
+        // Pass 1: Range
         for (size_t i = 0; i < dim; ++i) {
-            writer.write((long long)(enc_vec[i] - min_v), cost);
+            int64_t val = (int64_t)std::llround(data[i] * factor);
+            if (val < min_val) min_val = val;
+            if (val > max_val) max_val = val;
+        }
+        
+        uint64_t range = (uint64_t)(max_val - min_val);
+        int bit_width = get_bit_width(range);
+        writer.write(bit_width, 8);
+        writer.write((long long)min_val, 64);
+        
+        // 3. Write Deltas (FFOR)
+        for (size_t i = 0; i < dim; ++i) {
+            int64_t val = (int64_t)std::llround(data[i] * factor);
+            writer.write((long long)(val - min_val), bit_width);
         }
     }
 
     void alp_decode_vector(utils::MemoryStreamReader& reader, std::vector<double>& result) const {
         size_t dim = result.size();
         
-        // Read Header
-        int e = reader.readInt(5);
-        int f = reader.readInt(5);
-        int exc_count = reader.readInt(16);
+        int exp = reader.readInt(8);
+        int bit_width = reader.readInt(8);
+        int64_t min_val = reader.readLong(64);
         
-        int idx_bits = (dim > 1) ? get_bit_width(dim - 1) : 1;
-
-        std::vector<std::pair<uint32_t, double>> exceptions(exc_count);
-        for(int i = 0; i < exc_count; ++i) {
-            uint32_t idx = (uint32_t)reader.readInt(idx_bits);
-            uint64_t val_raw = (uint64_t)reader.readLong(64);
-            double val;
-            std::memcpy(&val, &val_raw, 8);
-            exceptions[i] = {idx, val};
-        }
-
-        // Read FFOR
-        int cost = reader.readInt(8);
-        int64_t min_v = reader.readLong(64);
-        
-        // Decode Body
-        double factor_e_inv = get_alp_p10(-e);
-        double factor_f = get_alp_p10(f);
+        double factor = std::pow(10.0, -exp); // Inverse factor
         
         for (size_t i = 0; i < dim; ++i) {
-            int64_t delta = reader.readLong(cost);
-            int64_t enc = min_v + delta;
-            
-            // Reconstruct
-            result[i] = enc * factor_e_inv * factor_f;
-        }
-        
-        // Patch Exceptions
-        for(int i = 0; i < exc_count; ++i) {
-            if (exceptions[i].first < dim) {
-                result[exceptions[i].first] = exceptions[i].second;
-            }
+            int64_t delta = reader.readLong(bit_width);
+            int64_t val = min_val + delta;
+            result[i] = val * factor;
         }
     }
 
-    HierarchicalNSWORIGINALP(SpaceInterface<dist_t> *s) {
+    HierarchicalNSWALPSIMPLIFIED(SpaceInterface<dist_t> *s) {
     }
 
 
-    HierarchicalNSWORIGINALP(
+    HierarchicalNSWALPSIMPLIFIED(
         SpaceInterface<dist_t> *s,
         const std::string &location,
         bool nmslib = false,
@@ -324,7 +206,7 @@ class HierarchicalNSWORIGINALP : public AlgorithmInterface<dist_t> {
     }
 
 
-    HierarchicalNSWORIGINALP(
+    HierarchicalNSWALPSIMPLIFIED(
         SpaceInterface<dist_t> *s,
         size_t max_elements,
         size_t M = 16,
@@ -376,14 +258,14 @@ class HierarchicalNSWORIGINALP : public AlgorithmInterface<dist_t> {
 
         linkLists_ = (char **) malloc(sizeof(void *) * max_elements_);
         if (linkLists_ == nullptr)
-            throw std::runtime_error("Not enough memory: HierarchicalNSWORIGINALP failed to allocate linklists");
+            throw std::runtime_error("Not enough memory: HierarchicalNSWALPSIMPLIFIED failed to allocate linklists");
         size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
         mult_ = 1 / log(1.0 * M_);
         revSize_ = 1.0 / mult_;
     }
 
 
-    ~HierarchicalNSWORIGINALP() {
+    ~HierarchicalNSWALPSIMPLIFIED() {
         clear();
     }
 
