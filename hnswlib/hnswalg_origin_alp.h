@@ -138,10 +138,14 @@ class HierarchicalNSWORIGINALP : public AlgorithmInterface<dist_t> {
     void alp_encode_vector(const double* data, size_t dim, utils::MemoryStreamWriter& writer) const {
         int best_e = 0;
         int best_f = 0;
-        size_t min_exceptions = dim + 1;
+        size_t min_cost = SIZE_MAX;
+        
+        int idx_bits = (dim > 1) ? get_bit_width(dim - 1) : 1;
 
         // Sampling / Grid Search for best e, f
         // Range: e [0, 22], f [0, e] based on Java implementation
+        // We iterate to find the combination that minimizes total bit size (Cost)
+        // Cost = (dim * bit_width) + (exc_count * (idx_bits + 64))
         for (int e = 0; e < 23; ++e) {
             for (int f = 0; f <= e; ++f) {
                 size_t exc_count = 0;
@@ -149,6 +153,10 @@ class HierarchicalNSWORIGINALP : public AlgorithmInterface<dist_t> {
                 double factor_f_inv = get_alp_p10(-f);
                 double factor_e_inv = get_alp_p10(-e);
                 double factor_f = get_alp_p10(f);
+
+                int64_t min_val = INT64_MAX;
+                int64_t max_val = INT64_MIN;
+                bool any_valid = false;
 
                 for (size_t i = 0; i < dim; ++i) {
                     double v = data[i];
@@ -159,21 +167,39 @@ class HierarchicalNSWORIGINALP : public AlgorithmInterface<dist_t> {
                     uint64_t v_bits, dec_v_bits;
                     std::memcpy(&v_bits, &v, 8);
                     std::memcpy(&dec_v_bits, &dec_v, 8);
+                    
                     if (v_bits != dec_v_bits) {
                         exc_count++;
+                    } else {
+                        if (!any_valid) {
+                            min_val = enc_v;
+                            max_val = enc_v;
+                            any_valid = true;
+                        } else {
+                            if (enc_v < min_val) min_val = enc_v;
+                            if (enc_v > max_val) max_val = enc_v;
+                        }
                     }
-                    if (exc_count > min_exceptions) break;
+                }
+
+                int bw = 0;
+                if (any_valid) {
+                     uint64_t delta = (uint64_t)(max_val - min_val);
+                     bw = get_bit_width(delta);
                 }
                 
-                if (exc_count < min_exceptions) {
-                    min_exceptions = exc_count;
+                // Estimate total bits
+                size_t current_cost = exc_count * (idx_bits + 64) + dim * bw;
+
+                // Update best. We use <= to prefer larger e/f (last one checked) in case of ties
+                // This matches ALP's preference for larger factors/exponents
+                if (current_cost <= min_cost) {
+                    min_cost = current_cost;
                     best_e = e;
                     best_f = f;
-                    if (min_exceptions == 0) goto end_search;
                 }
             }
         }
-        end_search:;
 
         // Final Encoding with Best Pair
         std::vector<int64_t> enc_vec(dim);
