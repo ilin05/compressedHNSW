@@ -41,5 +41,15 @@ namespace utils {
         int readInt(int size) {
             return static_cast<int>(readLong(size));
         }
+
+        const unsigned char* get_current_ptr_and_advance_bytes(size_t bytes) {
+            if (leftBits < 8) {
+                pointer++;
+                leftBits = 8;
+            }
+            const unsigned char* ptr = data_source + pointer;
+            pointer += bytes;
+            return ptr;
+        }
     };
 }
