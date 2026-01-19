@@ -158,7 +158,7 @@ std::vector<double> test_save_hnswalp_simdized(std::string data_path, std::strin
     results.push_back(build_duration.count());
 
     // Serialize index
-    std::string hnswalp_leann_path = "storage/" + file_name + "_hnswalp_simdized.bin";
+    std::string hnswalp_leann_path = "storage/" + file_name + "_hnswalp_simplified.bin";
     alg_hnsw->saveIndex(hnswalp_leann_path);
 
     // 原始大小
@@ -253,7 +253,7 @@ std::vector<double> test_load_hnswalp_simdized(std::string data_path, std::strin
 
     // Initing index
     hnswlib::L2SpaceDouble space(dim);
-    std::string hnswalp_leann_path = "storage/" + file_name + "_hnswalp_simdized.bin";
+    std::string hnswalp_leann_path = "storage/" + file_name + "_hnswalp_simplified.bin";
     hnswlib::HierarchicalNSWALPSIMPLIFIEDSIMD<double>* alg_hnsw = new hnswlib::HierarchicalNSWALPSIMPLIFIEDSIMD<double>(&space, hnswalp_leann_path);
 
 #ifdef __linux__
@@ -299,6 +299,69 @@ std::vector<double> test_load_hnswalp_simdized(std::string data_path, std::strin
 #endif
     delete[] data_ptr;
     return results;
+}
+
+void test_hnswalp_data_correction(std::string data_path, std::string file_name) {
+    std::vector<std::vector<double>> data = data_loader::loadData(data_path + "/" + file_name + ".csv");
+    if (data.empty()) {
+        std::cerr << "Failed to load data or data is empty." << std::endl;
+        return;
+    }
+
+    const int rows = static_cast<int>(data.size());
+    const int cols = static_cast<int>(data.front().size());
+
+    int dim = cols;               // Dimension of the elements
+    int max_elements = rows;   // Maximum number of elements, should be known beforehand
+
+    // Initing index
+    hnswlib::L2SpaceDouble space(dim);
+    std::string hnswalp_leann_path = "storage/" + file_name + "_hnswalp_simplified.bin";
+    
+    // hnswlib::HierarchicalNSWALPSIMPLIFIEDSIMD<double>* alg_hnsw = new hnswlib::HierarchicalNSWALPSIMPLIFIEDSIMD<double>(&space, max_elements, 16, 200);
+
+    // double* data_ptr = new double[dim * max_elements];
+    // for (int i = 0; i < std::min(rows, max_elements); i++) {
+    //     for (int j = 0; j < cols; j++) {
+    //         data_ptr[i * dim + j] = data[i][j];
+    //     }
+    // }
+
+    // for (int i = 0; i < max_elements; i++) {
+    //     alg_hnsw->addPoint(data_ptr + i * dim, i);
+    // }
+
+    // alg_hnsw->compress_dataset();
+
+    // // before saving, decode and verify
+    // for (int i = 0; i < 3; i++) {
+    //     std::vector<double> decoded_data = alg_hnsw->getOriginalDataByInternalId(i);
+    //     for (int j = 0; j < dim; j++) {
+    //         if (std::abs(decoded_data[j] - data_ptr[i * dim + j]) > 1e-6) {
+    //             std::cerr << "Data mismatch at point " << i << ", dimension " << j << ": "
+    //                       << "original=" << data_ptr[i * dim + j]
+    //                       << ", decoded=" << decoded_data[j] << std::endl;
+    //         }
+    //     }
+    // }
+    // delete alg_hnsw;
+    // delete[] data_ptr;
+
+    hnswlib::HierarchicalNSWALPSIMPLIFIEDSIMD<double>* alg_hnsw_reloaded = new hnswlib::HierarchicalNSWALPSIMPLIFIEDSIMD<double>(&space, hnswalp_leann_path);
+    // alg_hnsw = new hnswlib::HierarchicalNSWALPSIMPLIFIEDSIMD<double>(&space, hnswalp_leann_path);
+    
+    // after loading, decode and verify
+    for (int i = 0; i < 3; i++) {
+        std::vector<double> decoded_data = alg_hnsw_reloaded->getOriginalDataByInternalId(i);
+        for (int j = 0; j < dim; j++) {
+            if (std::abs(decoded_data[j] - data[i][j]) > 1e-6) {
+                std::cerr << "After load: Data mismatch at point " << i << ", dimension " << j << ": "
+                          << "original=" << data[i][j]
+                          << ", decoded=" << decoded_data[j] << std::endl;
+            }
+        }
+    }
+    delete alg_hnsw_reloaded;
 }
 
 void collect_save_hnswalp_simdized_results(){
@@ -451,12 +514,15 @@ int main() {
 
     std::string file_path = "../datasets/";
     initialize_test_results();
-    collect_save_hnswalp_simdized_results();
-    collect_save_hnsw_results();
+    // collect_save_hnswalp_simdized_results();
+    // collect_save_hnsw_results();
     collect_load_hnswalp_simdized_results();
     collect_load_hnsw_results();
     // collect_analyze_hnsw_graph_results();
 
     write_results_to_csv("hnswalp_simdized_hnsw_test_results.csv");
+    
+    
+    // test_hnswalp_data_correction(file_path, "siftsmall_base");
     return 0;
 }

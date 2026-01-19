@@ -167,9 +167,6 @@ class HierarchicalNSWALPSIMPLIFIEDSIMD : public AlgorithmInterface<dist_t> {
         writer.write(bit_width, 8);
         writer.write((long long)min_val, 64);
         
-        // Align before writing bulk data for SIMD friendliness
-        writer.align();
-
         // 3. Write Deltas (FFOR)
         for (size_t i = 0; i < dim; ++i) {
             int64_t val = (int64_t)std::llround(data[i] * factor);
@@ -185,6 +182,8 @@ class HierarchicalNSWALPSIMPLIFIEDSIMD : public AlgorithmInterface<dist_t> {
         int exp = reader.readInt(8);
         int bit_width = reader.readInt(8);
         int64_t min_val = reader.readLong(64);
+
+        // std::cout << "Decoding vector: exp=" << exp << ", bit_width=" << bit_width << ", min_val=" << min_val << std::endl;
         
         double factor = std::pow(10.0, -exp); // Inverse factor
         
@@ -252,6 +251,7 @@ class HierarchicalNSWALPSIMPLIFIEDSIMD : public AlgorithmInterface<dist_t> {
                     }
                 }
                 deltas[i] = result;
+                // std::cout << "Delta " << i << ": " << deltas[i] << std::endl;
             }
         }
         
@@ -269,7 +269,14 @@ class HierarchicalNSWALPSIMPLIFIEDSIMD : public AlgorithmInterface<dist_t> {
         bool nmslib = false,
         size_t max_elements = 0,
         bool allow_replace_deleted = false)
-        : allow_replace_deleted_(allow_replace_deleted) {
+        : allow_replace_deleted_(allow_replace_deleted),
+          label_op_locks_(MAX_LABEL_OPERATION_LOCKS),
+          link_list_locks_(MAX_LABEL_OPERATION_LOCKS),
+          deleted_elements_lock(),
+          label_lookup_lock() {
+        if (max_elements > 0)
+            max_elements_ = max_elements;
+
         loadIndex(location, s, max_elements);
     }
 
