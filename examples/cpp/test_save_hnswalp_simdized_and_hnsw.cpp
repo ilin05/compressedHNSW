@@ -158,7 +158,7 @@ std::vector<double> test_save_hnswalp_simdized(std::string data_path, std::strin
     results.push_back(build_duration.count());
 
     // Serialize index
-    std::string hnswalp_leann_path = "storage/" + file_name + "_hnswalp_simplified.bin";
+    std::string hnswalp_leann_path = "storage/" + file_name + "_hnswalp_simdized.bin";
     alg_hnsw->saveIndex(hnswalp_leann_path);
 
     // 原始大小
@@ -253,7 +253,7 @@ std::vector<double> test_load_hnswalp_simdized(std::string data_path, std::strin
 
     // Initing index
     hnswlib::L2SpaceDouble space(dim);
-    std::string hnswalp_leann_path = "storage/" + file_name + "_hnswalp_simplified.bin";
+    std::string hnswalp_leann_path = "storage/" + file_name + "_hnswalp_simdized.bin";
     hnswlib::HierarchicalNSWALPSIMPLIFIEDSIMD<double>* alg_hnsw = new hnswlib::HierarchicalNSWALPSIMPLIFIEDSIMD<double>(&space, hnswalp_leann_path);
 
 #ifdef __linux__
