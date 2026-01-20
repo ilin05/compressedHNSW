@@ -44,9 +44,7 @@ void build_hnsw(const std::string& data_path, size_t total_vectors, int dim) {
         }
 
         std::cout << "Adding chunk to HNSW..." << std::endl;
-        // #pragma omp parallel for // addPoint is thread-safe internally usually, but parallel loop depends on implementation.
-        // HNSW addPoint is thread-safe only if we manage visited lists carefully, usually parallel batch add is better if supported or just separate additions.
-        // Standard HNSW addPoint is thread safe.
+        #pragma omp parallel for
         for (long i = 0; i < static_cast<long>(this_batch); ++i) {
              alg_hnsw.addPoint(chunk_data + i * dim, loaded_count + i);
         }
@@ -120,6 +118,7 @@ void build_hnswalp(const std::string& data_path, size_t total_vectors, int dim) 
         double* chunk_data = data_loader::loadBvecsChunk(data_path, loaded_count, this_batch, loaded_dim);
 
         std::cout << "Adding chunk to HNSWALP..." << std::endl;
+        #pragma omp parallel for
         for (long i = 0; i < static_cast<long>(this_batch); ++i) {
             alg_alp.addPoint(chunk_data + i * dim, loaded_count + i);
         }
@@ -199,6 +198,11 @@ int main(int argc, char** argv) {
     std::cout << "Settings:" << std::endl;
     std::cout << "Total Vectors: " << TOTAL_LOAD_COUNT << std::endl;
     std::cout << "Chunk Size: " << CHUNK_SIZE << std::endl;
+
+#ifdef _OPENMP
+    omp_set_num_threads(20);
+    std::cout << "OpenMP Threads set to: 20" << std::endl;
+#endif
 
     // Detect Dim from first chunk or header
     int dim;
