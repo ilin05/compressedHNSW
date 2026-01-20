@@ -252,6 +252,78 @@ static double* loadBvecs(const std::string& filePath, int& rows, int& dim) {
 }
 
 /**
+ * @brief 从 .bvecs 文件加载部分数据（分块加载）.
+ * 
+ * @param filePath bvecs文件路径
+ * @param offset_vectors 起始向量索引
+ * @param count_vectors 加载的向量数量
+ * @param dim 输出: 维度
+ * @return double* 数据指针, 大小为 count_vectors * dim, 需要 delete[] 释放. 如果文件结束可能返回较少数据(需调用者检查逻辑，此处未返回实际读取数，假设调用者知道界限).
+ */
+static double* loadBvecsChunk(const std::string& filePath, size_t offset_vectors, size_t count_vectors, int& dim) {
+    std::ifstream file(filePath, std::ios::binary);
+    if (!file.is_open()) {
+        throw std::runtime_error("Could not open file: " + filePath);
+    }
+
+    // 读取维度
+    int d;
+    if (!file.read(reinterpret_cast<char*>(&d), sizeof(int))) {
+        throw std::runtime_error("Empty file or error reading dimension");
+    }
+    dim = d;
+    
+    size_t vecSize = sizeof(int) + dim;
+    
+    // 跳转到偏移位置
+    file.seekg(offset_vectors * vecSize, std::ios::beg);
+    if (!file.good()) {
+        file.close();
+         // Return empty buffer or null? 
+         // For safety let's allocate but warn
+         std::cerr << "Warning: Seek past end of file in loadBvecsChunk" << std::endl;
+         return new double[0];
+    }
+
+    double* data = new double[count_vectors * (size_t)dim];
+    
+    // 分块读取以提高效率
+    size_t buffer_vecs = std::min((size_t)100000, count_vectors);
+    std::vector<unsigned char> buffer(buffer_vecs * vecSize);
+
+    size_t vectors_read = 0;
+    while (vectors_read < count_vectors) {
+        size_t to_read = std::min(buffer_vecs, count_vectors - vectors_read);
+        
+        file.read(reinterpret_cast<char*>(buffer.data()), to_read * vecSize);
+        size_t read_count = file.gcount() / vecSize;
+        
+        if (read_count == 0) break;
+
+        #pragma omp parallel for
+        for (long i = 0; i < static_cast<long>(read_count); ++i) {
+            unsigned char* ptr = buffer.data() + i * vecSize;
+            ptr += sizeof(int); // skip dim
+            
+            size_t data_idx = (vectors_read + i) * (size_t)dim;
+            for (int j = 0; j < dim; ++j) {
+                data[data_idx + j] = static_cast<double>(ptr[j]);
+            }
+        }
+        vectors_read += read_count;
+        if (read_count < to_read) break; // EOF
+    }
+    
+    file.close();
+    
+    if (vectors_read < count_vectors) {
+        std::cerr << "Warning: Requested " << count_vectors << " vectors but only read " << vectors_read << std::endl;
+    }
+    
+    return data;
+}
+
+/**
  * @brief 计算两个向量之间的欧氏距离.
  * 
  * @param a 第一个向量.

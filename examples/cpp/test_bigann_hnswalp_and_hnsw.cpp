@@ -13,28 +13,47 @@
 
 // Global parameters
 const size_t M = 32;
-const size_t ef_construction = 200;
+const size_t ef_construction = 300;
 const std::string hnsw_path = "bigann_hnsw.bin";
 const std::string hnswalp_path = "bigann_hnswalp.bin";
 
-void build_hnsw(double* data, int rows, int dim) {
-    size_t max_elements = rows;
+size_t TOTAL_LOAD_COUNT = 10000000; // Default 10M
+size_t CHUNK_SIZE = 5000000;        // Default 5M
+
+void build_hnsw(const std::string& data_path, size_t total_vectors, int dim) {
+    size_t max_elements = total_vectors;
     std::cout << "--------------------------------------------------------" << std::endl;
-    std::cout << "Building Standard HNSW Index..." << std::endl;
+    std::cout << "Building Standard HNSW Index (Incremental)..." << std::endl;
     hnswlib::L2SpaceDouble space(dim);
     hnswlib::HierarchicalNSW<double> alg_hnsw(&space, max_elements, M, ef_construction);
 
     auto start = std::chrono::high_resolution_clock::now();
     
-    // #pragma omp parallel for
-    for (long i = 0; i < static_cast<long>(max_elements); ++i) {
-         alg_hnsw.addPoint(data + i * dim, i);
-         if (i % 100000 == 0 && i > 0) {
-            //  #pragma omp critical 
-             {
-                std::cout << "HNSW Added " << i << " points" << std::endl;
-             }
-         }
+    size_t loaded_count = 0;
+    while (loaded_count < total_vectors) {
+        size_t this_batch = std::min(CHUNK_SIZE, total_vectors - loaded_count);
+        std::cout << "Loading chunk: offset " << loaded_count << ", size " << this_batch << std::endl;
+        
+        int loaded_dim;
+        double* chunk_data = data_loader::loadBvecsChunk(data_path, loaded_count, this_batch, loaded_dim);
+        
+        if (loaded_dim != dim) {
+            std::cerr << "Error: Dimension mismatch in chunk!" << std::endl;
+            delete[] chunk_data;
+            break;
+        }
+
+        std::cout << "Adding chunk to HNSW..." << std::endl;
+        // #pragma omp parallel for // addPoint is thread-safe internally usually, but parallel loop depends on implementation.
+        // HNSW addPoint is thread-safe only if we manage visited lists carefully, usually parallel batch add is better if supported or just separate additions.
+        // Standard HNSW addPoint is thread safe.
+        for (long i = 0; i < static_cast<long>(this_batch); ++i) {
+             alg_hnsw.addPoint(chunk_data + i * dim, loaded_count + i);
+        }
+        
+        delete[] chunk_data; // Release memory for this chunk
+        loaded_count += this_batch;
+        std::cout << "HNSW Total Added " << loaded_count << " points" << std::endl;
     }
 
     auto end = std::chrono::high_resolution_clock::now();
@@ -44,7 +63,7 @@ void build_hnsw(double* data, int rows, int dim) {
     alg_hnsw.saveIndex(hnsw_path);
 }
 
-void search_hnsw(double* data, int rows, int dim) {
+void search_hnsw(const std::string& data_path, int rows, int dim) {
     std::cout << "--------------------------------------------------------" << std::endl;
     std::cout << "Searching Standard HNSW Index..." << std::endl;
     hnswlib::L2SpaceDouble space(dim);
@@ -53,20 +72,23 @@ void search_hnsw(double* data, int rows, int dim) {
     hnswlib::HierarchicalNSW<double> alg_hnsw(&space, hnsw_path, false, false, rows);
     std::cout << "Index loaded." << std::endl;
 
+    // Load a small subset for query (e.g. first 10k or first chunk)
+    // For fair comparison, we use the first 10,000 vectors as queries if rows allows
+    int query_limit = std::min(rows, 10000);
+    int d_dummy;
+    double* query_data = data_loader::loadBvecsChunk(data_path, 0, query_limit, d_dummy);
+    
     float correct = 0;
-    // Limit query count for large datasets
-    int step = std::max(1, rows / 50000); 
     int query_count = 0;
     
-    std::cout << "Querying..." << std::endl;
+    std::cout << "Querying " << query_limit << " vectors..." << std::endl;
     auto query_start = std::chrono::high_resolution_clock::now();
     
-    for (int i = 0; i < rows; i += step) {
-        std::priority_queue<std::pair<double, hnswlib::labeltype>> result = alg_hnsw.searchKnn(data + i * dim, 1);
+    for (int i = 0; i < query_limit; i++) {
+        std::priority_queue<std::pair<double, hnswlib::labeltype>> result = alg_hnsw.searchKnn(query_data + i * dim, 1);
         hnswlib::labeltype label = result.top().second;
         if (label == i) correct++;
         query_count++;
-        if (query_count % 10000 == 0) std::cout << "Queried " << query_count << " vectors..." << std::endl;
     }
     
     auto query_end = std::chrono::high_resolution_clock::now();
@@ -74,28 +96,37 @@ void search_hnsw(double* data, int rows, int dim) {
     float avg_query_time = query_duration.count() / query_count; 
     float recall = correct / query_count;
     
-    std::cout << "HNSW Recall@1: " << recall << "\n";
+    std::cout << "HNSW Recall@1 (First " << query_limit << "): " << recall << "\n";
     std::cout << "HNSW Average Query Time: " << avg_query_time << " ms" << std::endl;
+    
+    delete[] query_data;
 }
 
-void build_hnswalp(double* data, int rows, int dim) {
-    size_t max_elements = rows;
+void build_hnswalp(const std::string& data_path, size_t total_vectors, int dim) {
+    size_t max_elements = total_vectors;
     std::cout << "--------------------------------------------------------" << std::endl;
-    std::cout << "Building HNSWALP_LEANN Index..." << std::endl;
+    std::cout << "Building HNSWALP_LEANN Index (Incremental)..." << std::endl;
     hnswlib::L2SpaceDouble space(dim);
     hnswlib::HierarchicalNSWALPSIMPLIFIED<double> alg_alp(&space, max_elements, M, ef_construction);
 
     auto start = std::chrono::high_resolution_clock::now();
     
-    // #pragma omp parallel for
-    for (long i = 0; i < static_cast<long>(max_elements); ++i) {
-        alg_alp.addPoint(data + i * dim, i);
-        if (i % 100000 == 0 && i > 0) {
-            //  #pragma omp critical
-             {
-                std::cout << "HNSWALP Added " << i << " points" << std::endl;
-             }
-         }
+    size_t loaded_count = 0;
+    while (loaded_count < total_vectors) {
+        size_t this_batch = std::min(CHUNK_SIZE, total_vectors - loaded_count);
+        std::cout << "Loading chunk: offset " << loaded_count << ", size " << this_batch << std::endl;
+        
+        int loaded_dim;
+        double* chunk_data = data_loader::loadBvecsChunk(data_path, loaded_count, this_batch, loaded_dim);
+
+        std::cout << "Adding chunk to HNSWALP..." << std::endl;
+        for (long i = 0; i < static_cast<long>(this_batch); ++i) {
+            alg_alp.addPoint(chunk_data + i * dim, loaded_count + i);
+        }
+        
+        delete[] chunk_data; // Release memory
+        loaded_count += this_batch;
+        std::cout << "HNSWALP Added " << loaded_count << " points" << std::endl;
     }
     
     std::cout << "Compressing dataset..." << std::endl;
@@ -117,7 +148,7 @@ void build_hnswalp(double* data, int rows, int dim) {
     std::cout << "Compression Ratio: " << (double)original_size / compressed_size << std::endl;
 }
 
-void search_hnswalp(double* data, int rows, int dim) {
+void search_hnswalp(const std::string& data_path, int rows, int dim) {
     std::cout << "--------------------------------------------------------" << std::endl;
     std::cout << "Searching HNSWALP_LEANN Index..." << std::endl;
     hnswlib::L2SpaceDouble space(dim);
@@ -126,19 +157,21 @@ void search_hnswalp(double* data, int rows, int dim) {
     hnswlib::HierarchicalNSWALPSIMPLIFIED<double> alg_alp(&space, hnswalp_path);
     std::cout << "Index loaded." << std::endl;
 
+    int query_limit = std::min(rows, 10000);
+    int d_dummy;
+    double* query_data = data_loader::loadBvecsChunk(data_path, 0, query_limit, d_dummy);
+
     float correct = 0;
-    int step = std::max(1, rows / 50000); 
     int query_count = 0;
     
-    std::cout << "Querying..." << std::endl;
+    std::cout << "Querying " << query_limit << " vectors..." << std::endl;
     auto query_start = std::chrono::high_resolution_clock::now();
     
-    for (int i = 0; i < rows; i += step) {
-        std::priority_queue<std::pair<double, hnswlib::labeltype>> result = alg_alp.searchKnn(data + i * dim, 1);
+    for (int i = 0; i < query_limit; i++) {
+        std::priority_queue<std::pair<double, hnswlib::labeltype>> result = alg_alp.searchKnn(query_data + i * dim, 1);
         hnswlib::labeltype label = result.top().second;
         if (label == i) correct++;
         query_count++;
-        if (query_count % 10000 == 0) std::cout << "Queried " << query_count << " vectors..." << std::endl;
     }
     
     auto query_end = std::chrono::high_resolution_clock::now();
@@ -153,30 +186,38 @@ void search_hnswalp(double* data, int rows, int dim) {
     float decoding_call_count_per_query = static_cast<float>(alg_alp.getDecodingCallCount()) / query_count;
     std::cout << "HNSWALP Avg Decoding Time: " << decoding_time_per_query << " ms" << std::endl;
     std::cout << "HNSWALP Avg Decoding Calls: " << decoding_call_count_per_query << std::endl;
+    
+    delete[] query_data;
 }
 
-int main() {
+int main(int argc, char** argv) {
     std::string data_path = "../datasets/bigann_learn.bvecs"; 
 
-    int rows, dim;
-    double* data = nullptr;
-    try {
-        data = data_loader::loadBvecs(data_path, rows, dim);
-    } catch (const std::exception& e) {
-        std::cerr << "Error loading data: " << e.what() << std::endl;
-        return 1;
-    }
+    if (argc > 1) TOTAL_LOAD_COUNT = std::stoull(argv[1]);
+    if (argc > 2) CHUNK_SIZE = std::stoull(argv[2]);
 
-    if (!data) return 1;
-    std::cout << "Data loaded. Rows: " << rows << ", Dim: " << dim << std::endl;
+    std::cout << "Settings:" << std::endl;
+    std::cout << "Total Vectors: " << TOTAL_LOAD_COUNT << std::endl;
+    std::cout << "Chunk Size: " << CHUNK_SIZE << std::endl;
+
+    // Detect Dim from first chunk or header
+    int dim;
+    {
+       std::ifstream in(data_path, std::ios::binary);
+       if(!in) {
+           std::cerr << "Cannot open " << data_path << std::endl;
+           return 1;
+       }
+       in.read((char*)&dim, 4);
+    }
+    std::cout << "Detected Dimension: " << dim << std::endl;
 
     // Uncomment sections to run specific stages
-    build_hnsw(data, rows, dim);
-    search_hnsw(data, rows, dim);
+    build_hnsw(data_path, TOTAL_LOAD_COUNT, dim);
+    search_hnsw(data_path, TOTAL_LOAD_COUNT, dim);
     
-    build_hnswalp(data, rows, dim);
-    search_hnswalp(data, rows, dim);
+    build_hnswalp(data_path, TOTAL_LOAD_COUNT, dim);
+    search_hnswalp(data_path, TOTAL_LOAD_COUNT, dim);
 
-    delete[] data;
     return 0;
 }
