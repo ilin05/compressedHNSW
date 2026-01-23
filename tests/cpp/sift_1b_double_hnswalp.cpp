@@ -226,9 +226,9 @@ test_vs_recall(
         float recall = test_approx(massQ, vecsize, qsize, appr_alg, vecdim, answers, k);
         float time_us_per_query = stopw.getElapsedTimeMicro() / qsize;
 
-        cout << ef << "\t" << recall << "\t" << time_us_per_query << " us\n";
+        cout << ef << "\t" << recall << "\t" << time_us_per_query << " us" << endl;
         if (recall > 1.0) {
-            cout << recall << "\t" << time_us_per_query << " us\n";
+            cout << recall << "\t" << time_us_per_query << " us" << endl;
             break;
         }
     }
