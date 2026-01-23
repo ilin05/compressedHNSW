@@ -157,7 +157,7 @@ get_gt(
     size_t k) {
     (vector<std::priority_queue<std::pair<double, labeltype >>>(qsize)).swap(answers);
     DISTFUNC<double> fstdistfunc_ = l2space.get_dist_func();
-    cout << qsize << "\n";
+    cout << qsize << "" << endl;
     for (int i = 0; i < qsize; i++) {
         for (int j = 0; j < k; j++) {
             answers[i].emplace(0.0f, massQA[1000 * i + j]);
@@ -257,7 +257,7 @@ void sift_test1B_double_hnswalp() {
 
     snprintf(path_gt, sizeof(path_gt), "../bigann/gnd/idx_%dM.ivecs", subset_size_milllions);
 
-    cout << "Loading GT:\n";
+    cout << "Loading GT:" << endl;
     ifstream inputGT(path_gt, ios::binary);
     unsigned int *massQA = new unsigned int[qsize * 1000];
     for (int i = 0; i < qsize; i++) {
@@ -271,7 +271,7 @@ void sift_test1B_double_hnswalp() {
     }
     inputGT.close();
 
-    cout << "Loading queries:\n";
+    cout << "Loading queries:" << endl;
     int dim_q;
     double* massQ = data_loader::loadBvecsChunk(path_q, 0, qsize, dim_q);
     if(dim_q != vecdim) {
@@ -283,11 +283,11 @@ void sift_test1B_double_hnswalp() {
     HierarchicalNSWALPSIMPLIFIED<double> *appr_alg;
     
     if (exists_test(path_index)) {
-        cout << "Loading index from " << path_index << ":\n";
+        cout << "Loading index from " << path_index << ":" << endl;
         appr_alg = new HierarchicalNSWALPSIMPLIFIED<double>(&l2space, path_index, false);
-        cout << "Actual memory usage: " << getCurrentRSS() / 1000000 << " Mb \n";
+        cout << "Actual memory usage: " << getCurrentRSS() / 1000000 << " Mb " << endl;
     } else {
-        cout << "Building index:\n";
+        cout << "Building index:" << endl;
         appr_alg = new HierarchicalNSWALPSIMPLIFIED<double>(&l2space, vecsize, M, efConstruction);
 
         size_t CHUNK_SIZE = 500000; // 500k chunks
@@ -317,23 +317,23 @@ void sift_test1B_double_hnswalp() {
             loaded_count += this_batch;
             
             cout << "Added " << loaded_count << " points. Mem: " 
-                 << getCurrentRSS() / 1000000 << " Mb \n";
+                 << getCurrentRSS() / 1000000 << " Mb " << endl;
         }
         appr_alg->compress_dataset();
-        cout << "Build time:" << 1e-6 * stopw_full.getElapsedTimeMicro() << "  seconds\n";
+        cout << "Build time:" << 1e-6 * stopw_full.getElapsedTimeMicro() << "  seconds" << endl;
         appr_alg->saveIndex(path_index);
     }
 
 
     vector<std::priority_queue<std::pair<double, labeltype >>> answers;
     size_t k = 1;
-    cout << "Parsing gt:\n"; // Should rename to just preparing GT struct or similar since GT is already loaded, but keeping string from user code
+    cout << "Parsing gt:" << endl; // Should rename to just preparing GT struct or similar since GT is already loaded, but keeping string from user code
     // Note: get_gt signature changed but checks massQ and mass which are now doubles (or NULL)
     get_gt(massQA, massQ, NULL, vecsize, qsize, l2space, vecdim, answers, k);
-    cout << "Loaded gt\n";
+    cout << "Loaded gt" << endl;
     for (int i = 0; i < 1; i++)
         test_vs_recall(massQ, vecsize, qsize, *appr_alg, vecdim, answers, k);
-    cout << "Actual memory usage: " << getCurrentRSS() / 1000000 << " Mb \n";
+    cout << "Actual memory usage: " << getCurrentRSS() / 1000000 << " Mb " << endl;
     
     delete[] massQA;
     delete[] massQ;
