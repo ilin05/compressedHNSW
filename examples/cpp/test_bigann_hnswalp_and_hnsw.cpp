@@ -2,6 +2,7 @@
 #include "../../hnswlib/hnswalg_ALP_leann.h"
 #include "../data_processor/data_loader.h"
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <chrono>
 #include <thread>
@@ -147,6 +148,131 @@ void build_hnswalp(const std::string& data_path, size_t total_vectors, int dim) 
     std::cout << "Compression Ratio: " << (double)original_size / compressed_size << std::endl;
 }
 
+void test_hnsw_ef_performance(const std::string& data_path, int rows, int dim) {
+    std::cout << "--------------------------------------------------------" << std::endl;
+    std::cout << "Testing HNSW Performance vs ef..." << std::endl;
+    
+    hnswlib::L2SpaceDouble space(dim);
+    hnswlib::HierarchicalNSW<double> alg_hnsw(&space, hnsw_path, false, false, rows);
+    std::cout << "HNSW Index loaded." << std::endl;
+
+    int query_limit = std::min(rows, 10000);
+    int d_dummy;
+    double* query_data = data_loader::loadBvecsChunk(data_path, 0, query_limit, d_dummy);
+    
+    std::string csv_file_path = "hnsw_performance_ef.csv";
+    std::ofstream csv_file(csv_file_path);
+    csv_file << "ef,recall,avg_time_ms\n";
+
+    // std::vector<int> ef_values = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 150, 200, 300, 400, 500};
+    std::vector<int> ef_values;
+    for (int i = 1; i < 30; i++) {
+        ef_values.push_back(i);
+    }
+    for (int i = 30; i < 100; i += 10) {
+        ef_values.push_back(i);
+    }
+    for (int i = 100; i < 500; i += 40) {
+        ef_values.push_back(i);
+    }
+
+    // Calculate Ground Truth for checking recall (since we don't use external GT file)
+    // For large datasets, exact BF search is slow.
+    // However, the original code used label==i logic:
+    // "if (label == i) correct++;"
+    // This assumes the query is the vector itself (query_data is chunk from data_path at same index). 
+    // And assumes the nearest neighbor of vector i is vector i itself (distance 0).
+    // This is valid for "self-query" recall@1 test.
+    
+    for (int ef : ef_values) {
+        alg_hnsw.setEf(ef);
+        float correct = 0;
+        
+        auto start = std::chrono::high_resolution_clock::now();
+        
+        for (int i = 0; i < query_limit; i++) {
+            std::priority_queue<std::pair<double, hnswlib::labeltype>> result = alg_hnsw.searchKnn(query_data + i * dim, 1);
+            if (!result.empty()) {
+                 hnswlib::labeltype label = result.top().second;
+                 if (label == i) correct++;
+            }
+        }
+        
+        auto end = std::chrono::high_resolution_clock::now();
+        float avg_time = std::chrono::duration<double, std::milli>(end - start).count() / query_limit;
+        float recall = correct / query_limit;
+        
+        std::cout << "ef=" << ef << "\tRecall=" << recall << "\tTime=" << avg_time << " ms" << std::endl;
+        csv_file << ef << "," << recall << "," << avg_time << "\n";
+    }
+    
+    csv_file.close();
+    delete[] query_data;
+    std::cout << "Results saved to " << csv_file_path << std::endl;
+}
+
+void test_hnswalp_ef_performance(const std::string& data_path, int rows, int dim) {
+    std::cout << "--------------------------------------------------------" << std::endl;
+    std::cout << "Testing HNSWALP Performance vs ef..." << std::endl;
+    
+    hnswlib::L2SpaceDouble space(dim);
+    hnswlib::HierarchicalNSWALPSIMPLIFIED<double> alg_alp(&space, hnswalp_path);
+    std::cout << "HNSWALP Index loaded." << std::endl;
+
+    int query_limit = std::min(rows, 10000);
+    int d_dummy;
+    double* query_data = data_loader::loadBvecsChunk(data_path, 0, query_limit, d_dummy);
+
+    std::string csv_file_path = "hnswalp_performance_ef.csv";
+    std::ofstream csv_file(csv_file_path);
+    csv_file << "ef,recall,avg_time_ms,decoding_time_ms,decoding_calls\n";
+
+    // std::vector<int> ef_values = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 150, 200, 300, 400, 500};
+    std::vector<int> ef_values;
+    for (int i = 1; i < 30; i++) {
+        ef_values.push_back(i);
+    }
+    for (int i = 30; i < 100; i += 10) {
+        ef_values.push_back(i);
+    }
+    for (int i = 100; i < 500; i += 40) {
+        ef_values.push_back(i);
+    }
+
+    for (int ef : ef_values) {
+        alg_alp.setEf(ef);
+        
+        // Reset compression metrics
+        alg_alp.decoding_time = 0;
+        alg_alp.decoding_call_count = 0;
+        
+        float correct = 0;
+        auto start = std::chrono::high_resolution_clock::now();
+        
+        for (int i = 0; i < query_limit; i++) {
+            std::priority_queue<std::pair<double, hnswlib::labeltype>> result = alg_alp.searchKnn(query_data + i * dim, 1);
+            if (!result.empty()) {
+                 hnswlib::labeltype label = result.top().second;
+                 if (label == i) correct++;
+            }
+        }
+        
+        auto end = std::chrono::high_resolution_clock::now();
+        float avg_time = std::chrono::duration<double, std::milli>(end - start).count() / query_limit;
+        float recall = correct / query_limit;
+        
+        float avg_decoding_time = static_cast<float>(alg_alp.decoding_time) / query_limit / 1e3; // us -> ms
+        float avg_decoding_calls = static_cast<float>(alg_alp.decoding_call_count) / query_limit;
+
+        std::cout << "ef=" << ef << "\tRecall=" << recall << "\tTime=" << avg_time << " ms" << std::endl;
+        csv_file << ef << "," << recall << "," << avg_time << "," << avg_decoding_time << "," << avg_decoding_calls << "\n";
+    }
+    
+    csv_file.close();
+    delete[] query_data;
+    std::cout << "Results saved to " << csv_file_path << std::endl;
+}
+
 void search_hnswalp(const std::string& data_path, int rows, int dim) {
     std::cout << "--------------------------------------------------------" << std::endl;
     std::cout << "Searching HNSWALP_LEANN Index..." << std::endl;
@@ -222,6 +348,9 @@ int main(int argc, char** argv) {
     
     build_hnswalp(data_path, TOTAL_LOAD_COUNT, dim);
     search_hnswalp(data_path, TOTAL_LOAD_COUNT, dim);
+
+    test_hnsw_ef_performance(data_path, TOTAL_LOAD_COUNT, dim);
+    test_hnswalp_ef_performance(data_path, TOTAL_LOAD_COUNT, dim);
 
     return 0;
 }
