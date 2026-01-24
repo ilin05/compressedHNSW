@@ -13,3 +13,6 @@ var/
 *.pyc
 test_results/*
 datasets/*
+tests/cpp/bigann/*
+tests/cpp/downloads/*
+bigann/*
