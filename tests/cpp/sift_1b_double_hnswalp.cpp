@@ -209,6 +209,11 @@ test_vs_recall(
     size_t vecdim,
     vector<std::priority_queue<std::pair<double, labeltype>>> &answers,
     size_t k) {
+
+    std::string csv_file_path = "sift1b_hnswalp_recall_results.csv";
+    std::ofstream csv_file(csv_file_path);
+    csv_file << "ef,recall,time_us_per_query\n";
+
     vector<size_t> efs;  // = { 10,10,10,10,10 };
     for (int i = k; i < 30; i++) {
         efs.push_back(i);
@@ -227,11 +232,13 @@ test_vs_recall(
         float time_us_per_query = stopw.getElapsedTimeMicro() / qsize;
 
         cout << ef << "\t" << recall << "\t" << time_us_per_query << " us" << endl;
+        csv_file << ef << "," << recall << "," << time_us_per_query << "\n";
         if (recall > 1.0) {
             cout << recall << "\t" << time_us_per_query << " us" << endl;
             break;
         }
     }
+    csv_file.close();
 }
 
 inline bool exists_test(const std::string &name) {
