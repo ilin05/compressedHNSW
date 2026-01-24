@@ -1865,6 +1865,7 @@ class HierarchicalNSWALPSIMPLIFIED : public AlgorithmInterface<dist_t> {
         if (cur_element_count == 0) return result;
 
         // Check if we can use the 1-bit quantization path
+#ifdef TWO_LEVEL_SEARCH
         if (is_compacted_ && !dim_means_.empty()) {
              // --- Two-Pass Search with 1-bit Quantization (Algorithm 2) ---
 
@@ -1971,6 +1972,7 @@ class HierarchicalNSWALPSIMPLIFIED : public AlgorithmInterface<dist_t> {
             }
             return result;
         }
+#endif
 
         // --- Original Search (Fallback) ---
 
