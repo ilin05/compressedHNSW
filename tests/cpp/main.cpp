@@ -9,6 +9,7 @@
 void sift_test1B();
 void sift_test1B_double_hnsw();
 void sift_test1B_double_hnswalp();
+void sift_test1B_double_hnswalp_pq();
 int main() {
 #ifdef _OPENMP
     omp_set_num_threads(20);
@@ -18,6 +19,7 @@ int main() {
     // sift_test1B();
     sift_test1B_double_hnsw();
     sift_test1B_double_hnswalp();
+    sift_test1B_double_hnswalp_pq();
 
     return 0;
 }
