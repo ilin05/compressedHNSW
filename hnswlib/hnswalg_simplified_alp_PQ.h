@@ -1296,7 +1296,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         // Select Hubs for Cache (Uncompressed)
         size_t target_hub_count = 0;
 #ifdef SELECT_HUBS_FOR_CACHE
-        size_t target_hub_count = std::max((size_t)1, cur_element_count / 100);
+        target_hub_count = std::max((size_t)1, cur_element_count / 100);
 #endif
         std::vector<tableint> indices(cur_element_count);
         std::iota(indices.begin(), indices.end(), 0);

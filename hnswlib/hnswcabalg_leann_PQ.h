@@ -598,10 +598,6 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
         data_level0_memory_.shrink_to_fit();
         root_state_cache_.clear();
         lru_history_.clear();
-        binary_data_.clear();
-        binary_data_.shrink_to_fit();
-        dim_means_.clear();
-        dim_means_.shrink_to_fit();
         for (tableint i = 0; i < cur_element_count; i++) {
             if (element_levels_[i] > 0)
                 free(linkLists_[i]);

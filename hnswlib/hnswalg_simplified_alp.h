@@ -1152,7 +1152,10 @@ class HierarchicalNSWALPSIMPLIFIED : public AlgorithmInterface<dist_t> {
         // --- End 1-bit Quantization ---
         
         // Select Hubs for Cache (Uncompressed)
-        size_t target_hub_count = std::max((size_t)1, cur_element_count / 100);
+        size_t target_hub_count = 0;
+# ifdef SELECT_HUBS_FOR_CACHE
+        target_hub_count = std::max((size_t)1, cur_element_count / 100);
+# endif
         std::vector<tableint> indices(cur_element_count);
         std::iota(indices.begin(), indices.end(), 0);
         std::sort(indices.begin(), indices.end(), [&](tableint a, tableint b) {
