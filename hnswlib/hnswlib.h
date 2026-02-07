@@ -235,3 +235,4 @@ AlgorithmInterface<dist_t>::searchKnnCloserFirst(const void* query_data, size_t 
 #include "hnswalg_simplified_alp.h"
 #include "hnswalg_simplified_alp_simdized.h"
 #include "hnswalg_simplified_alp_PQ.h"
+#include "hnswcabalg_leann_PQ.h"

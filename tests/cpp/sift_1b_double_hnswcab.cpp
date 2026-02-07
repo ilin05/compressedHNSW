@@ -170,7 +170,7 @@ test_approx(
     double *massQ,
     size_t vecsize,
     size_t qsize,
-    HierarchicalNSWALPSIMPLIFIEDPQ<double> &appr_alg,
+    HierarchicalNSWCABLEANN<double> &appr_alg,
     size_t vecdim,
     vector<std::priority_queue<std::pair<double, labeltype>>> &answers,
     size_t k) {
@@ -205,12 +205,12 @@ test_vs_recall(
     double *massQ,
     size_t vecsize,
     size_t qsize,
-    HierarchicalNSWALPSIMPLIFIEDPQ<double> &appr_alg,
+    HierarchicalNSWCABLEANN<double> &appr_alg,
     size_t vecdim,
     vector<std::priority_queue<std::pair<double, labeltype>>> &answers,
     size_t k) {
 
-    std::string csv_file_path = "sift1b_hnswalp_pq_recall_results.csv";
+    std::string csv_file_path = "sift1b_hnswcab_recall_results.csv";
     std::ofstream csv_file(csv_file_path);
     csv_file << "ef,recall,time_us_per_query\n";
 
@@ -247,12 +247,13 @@ inline bool exists_test(const std::string &name) {
 }
 
 
-void sift_test1B_double_hnswalp_pq() {
+void sift_test1B_double_hnswcab() {
     int subset_size_milllions = 1;
     int efConstruction = 200;
     int M = 16;
 
     size_t vecsize = subset_size_milllions * 1000000;
+    size_t cache_size = subset_size_milllions * 10000;  // Cache 10k vectors per million, adjust as needed
 
     size_t qsize = 10000;
     size_t vecdim = 128; // This will be detected from file
@@ -260,7 +261,7 @@ void sift_test1B_double_hnswalp_pq() {
     char path_gt[1024];
     const std::string path_q = "../bigann/bigann_query.bvecs";
     const std::string path_data = "../bigann/bigann_base.bvecs";
-    snprintf(path_index, sizeof(path_index), "sift1b_hnswalp_pq_%dm_ef_%d_M_%d.bin", subset_size_milllions, efConstruction, M);
+    snprintf(path_index, sizeof(path_index), "sift1b_hnswcab_%dm_ef_%d_M_%d.bin", subset_size_milllions, efConstruction, M);
 
     snprintf(path_gt, sizeof(path_gt), "../bigann/gnd/idx_%dM.ivecs", subset_size_milllions);
 
@@ -287,15 +288,15 @@ void sift_test1B_double_hnswalp_pq() {
     }
 
     L2SpaceDouble l2space(vecdim);
-    HierarchicalNSWALPSIMPLIFIEDPQ<double> *appr_alg;
+    HierarchicalNSWCABLEANN<double> *appr_alg;
     
     if (exists_test(path_index)) {
         cout << "Loading index from " << path_index << ":" << endl;
-        appr_alg = new HierarchicalNSWALPSIMPLIFIEDPQ<double>(&l2space, path_index, false);
+        appr_alg = new HierarchicalNSWCABLEANN<double>(&l2space, path_index, true, cache_size, false, vecsize);
         cout << "Actual memory usage: " << getCurrentRSS() / 1000000 << " Mb " << endl;
     } else {
         cout << "Building index:" << endl;
-        appr_alg = new HierarchicalNSWALPSIMPLIFIEDPQ<double>(&l2space, vecsize, M, efConstruction);
+        appr_alg = new HierarchicalNSWCABLEANN<double>(&l2space, vecsize, "DeXOR", M, efConstruction, true);
 
         size_t CHUNK_SIZE = 500000; // 500k chunks
         size_t loaded_count = 0;

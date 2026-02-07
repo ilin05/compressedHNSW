@@ -248,9 +248,9 @@ inline bool exists_test(const std::string &name) {
 
 
 void sift_test1B_double_hnsw() {
-    int subset_size_milllions = 10;
-    int efConstruction = 300;
-    int M = 32;
+    int subset_size_milllions = 1;
+    int efConstruction = 200;
+    int M = 16;
 
     size_t vecsize = subset_size_milllions * 1000000;
 

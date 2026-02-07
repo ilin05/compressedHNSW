@@ -21,7 +21,7 @@ typedef unsigned int tableint;
 typedef unsigned int linklistsizeint;
 
 template<typename dist_t>
-class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
+class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
  public:
     static const tableint MAX_LABEL_OPERATION_LOCKS = 65536;
     static const unsigned char DELETE_MARK = 0x01;
@@ -124,10 +124,17 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
 
     bool use_encoding_algorithm_ = true;
 
-    // 1-bit Quantization Data
-    std::vector<double> dim_means_;
-    std::vector<uint64_t> binary_data_;
-    size_t binary_block_size_ = 0;
+    // PQ Quantization Data
+    size_t pq_m_ = 0;           // Number of sub-quantizers
+    size_t pq_d_sub_ = 0;       // Dimension of sub-vectors
+    static const size_t pq_nbits_ = 8;
+    static const size_t pq_k_ = 1 << pq_nbits_; // 256
+    
+    // Centroids: m_ vectors. Each vector contains k_ * d_sub_ doubles.
+    std::vector<std::vector<double>> pq_centroids_; 
+    
+    // Compressed codes: One contiguous block. N * m_ bytes.
+    std::vector<uint8_t> pq_data_;
 
     // Inline DeXOR Encoding Logic
     void dexor_encode(double value, DeXORState& state, utils::MemoryStreamWriter& writer) const {
@@ -297,24 +304,206 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
         return converter.value;
     }
 
-    inline int hamming_dist(const uint64_t* a, const uint64_t* b, size_t block_size) const {
-        int dist = 0;
-        for(size_t i=0; i<block_size; ++i) {
-            uint64_t xor_val = a[i] ^ b[i];
-            #ifdef _MSC_VER
-                dist += __popcnt64(xor_val);
-            #else
-                dist += __builtin_popcountll(xor_val);
-            #endif
+    // Helper to get squared L2 distance between two sub-vectors
+    inline double dist_l2_sq(const double* a, const double* b, size_t d) const {
+        double dist = 0;
+        for (size_t i = 0; i < d; ++i) {
+            double diff = a[i] - b[i];
+            dist += diff * diff;
         }
         return dist;
     }
 
-    HierarchicalNSWCABLEANN(SpaceInterface<dist_t> *s) {
+    // Train PQ (K-Means per subspace)
+    void train_pq(size_t dim, size_t count) {
+        if (dim % 8 == 0) {
+            pq_m_ = dim / 8;
+            pq_d_sub_ = 8;
+        } else {
+            pq_d_sub_ = 8;
+            pq_m_ = (dim + pq_d_sub_ - 1) / pq_d_sub_;
+        }
+        
+        pq_centroids_.resize(pq_m_);
+        pq_data_.resize(count * pq_m_);
+
+        std::cout << "Training PQ: dim=" << dim << ", m=" << pq_m_ << ", d_sub=" << pq_d_sub_ << ", K=" << pq_k_ << std::endl;
+
+        std::vector<tableint> sample_indices;
+        size_t sample_size = std::min(count, (size_t)200000); 
+        if (count <= sample_size) {
+            sample_indices.resize(count);
+            std::iota(sample_indices.begin(), sample_indices.end(), 0);
+        } else {
+            sample_indices.resize(sample_size);
+            std::vector<tableint> all_indices(count);
+            std::iota(all_indices.begin(), all_indices.end(), 0);
+            std::shuffle(all_indices.begin(), all_indices.end(), level_generator_);
+            std::copy(all_indices.begin(), all_indices.begin() + sample_size, sample_indices.begin());
+        }
+
+        for (size_t m = 0; m < pq_m_; ++m) {
+            size_t d_start = m * pq_d_sub_;
+            size_t current_d_sub = (m == pq_m_ - 1) ? (dim - d_start) : pq_d_sub_;
+            
+            std::vector<std::vector<double>> sub_data(sample_size, std::vector<double>(current_d_sub));
+            
+            // Collect training data for subspace
+            for (size_t i = 0; i < sample_size; ++i) {
+                char* data_ptr = getDataByInternalId(sample_indices[i]);
+                for(size_t d=0; d<current_d_sub; ++d) {
+                    if (data_size_ / dim == sizeof(float)) {
+                         sub_data[i][d] = ((float*)data_ptr)[d_start + d];
+                    } else {
+                         sub_data[i][d] = ((double*)data_ptr)[d_start + d];
+                    }
+                }
+            }
+
+            std::vector<double>& centroids = pq_centroids_[m];
+            centroids.resize(pq_k_ * current_d_sub);
+            
+            std::vector<int> init_perm(sample_size);
+            std::iota(init_perm.begin(), init_perm.end(), 0);
+            std::shuffle(init_perm.begin(), init_perm.end(), level_generator_);
+            
+            for(size_t k=0; k<pq_k_; ++k) {
+                for(size_t d=0; d<current_d_sub; ++d) {
+                    centroids[k * current_d_sub + d] = sub_data[init_perm[k]][d];
+                }
+            }
+
+            int max_iter = 50;
+            std::vector<int> assign(sample_size);
+            std::vector<double> new_centroids(pq_k_ * current_d_sub);
+            std::vector<int> cluster_counts(pq_k_);
+
+            for(int iter=0; iter<max_iter; ++iter) {
+                // E-step
+                #pragma omp parallel for
+                for(int i=0; i<(int)sample_size; ++i) {
+                    double best_dist = std::numeric_limits<double>::max();
+                    int best_k = -1;
+                    for(int k=0; k<(int)pq_k_; ++k) {
+                        double dist = dist_l2_sq(sub_data[i].data(), centroids.data() + k * current_d_sub, current_d_sub);
+                        if(dist < best_dist) {
+                            best_dist = dist;
+                            best_k = k;
+                        }
+                    }
+                    assign[i] = best_k;
+                }
+
+                // M-step
+                std::fill(new_centroids.begin(), new_centroids.end(), 0.0);
+                std::fill(cluster_counts.begin(), cluster_counts.end(), 0);
+
+                for(int i=0; i<(int)sample_size; ++i) {
+                    int k = assign[i];
+                    cluster_counts[k]++;
+                    for(size_t d=0; d<current_d_sub; ++d) {
+                        new_centroids[k * current_d_sub + d] += sub_data[i][d];
+                    }
+                }
+
+                bool changed = false;
+                for(int k=0; k<(int)pq_k_; ++k) {
+                    if(cluster_counts[k] > 0) {
+                         for(size_t d=0; d<current_d_sub; ++d) {
+                            new_centroids[k * current_d_sub + d] /= cluster_counts[k];
+                            // Check convergence
+                            if(std::abs(new_centroids[k * current_d_sub + d] - centroids[k * current_d_sub + d]) > 1e-6) {
+                                changed = true;
+                            }
+                        }
+                    } else {
+                        // Handle empty cluster: re-assign to random point
+                         int rand_idx = std::uniform_int_distribution<int>(0, sample_size-1)(level_generator_);
+                         for(size_t d=0; d<current_d_sub; ++d) {
+                            new_centroids[k * current_d_sub + d] = sub_data[rand_idx][d];
+                        }
+                        changed = true;
+                    }
+                }
+                
+                centroids = new_centroids;
+                if(!changed) break;
+            }
+        }
+        
+        std::cout << "Encoding dataset with PQ..." << std::endl;
+        #pragma omp parallel for
+        for (long long i = 0; i < (long long)count; ++i) {
+            char* data_ptr = getDataByInternalId((tableint)i);
+            for (size_t m = 0; m < pq_m_; ++m) {
+                size_t d_start = m * pq_d_sub_;
+                size_t current_d_sub = (m == pq_m_ - 1) ? (dim - d_start) : pq_d_sub_;
+                
+                std::vector<double> vec_chunk(current_d_sub);
+                for(size_t d=0; d<current_d_sub; ++d) {
+                    if (data_size_ / dim == sizeof(float)) {
+                         vec_chunk[d] = ((float*)data_ptr)[d_start + d];
+                    } else {
+                         vec_chunk[d] = ((double*)data_ptr)[d_start + d];
+                    }
+                }
+
+                double best_dist = std::numeric_limits<double>::max();
+                int best_k = -1;
+                const double* centroids = pq_centroids_[m].data();
+                
+                for(int k=0; k<(int)pq_k_; ++k) {
+                    double dist = dist_l2_sq(vec_chunk.data(), centroids + k * current_d_sub, current_d_sub);
+                    if(dist < best_dist) {
+                        best_dist = dist;
+                        best_k = k;
+                    }
+                }
+                
+                pq_data_[i * pq_m_ + m] = (uint8_t)best_k;
+            }
+        }
+    }
+
+    void compute_adc_table(const void* query_data, std::vector<double>& adc_table) const {
+         size_t dim = *((size_t *) dist_func_param_);
+         std::vector<double> q_vec(dim);
+         if (data_size_ / dim == sizeof(float)) {
+             const float* q = (const float*)query_data;
+             for(size_t i=0; i<dim; ++i) q_vec[i] = q[i];
+         } else {
+             const double* q = (const double*)query_data;
+             for(size_t i=0; i<dim; ++i) q_vec[i] = q[i];
+         }
+
+         adc_table.resize(pq_m_ * pq_k_);
+         
+         for (size_t m = 0; m < pq_m_; ++m) {
+            size_t d_start = m * pq_d_sub_;
+            size_t current_d_sub = (m == pq_m_ - 1) ? (dim - d_start) : pq_d_sub_;
+            const double* q_sub = q_vec.data() + d_start;
+            const double* centroids = pq_centroids_[m].data();
+            
+             for(int k=0; k<(int)pq_k_; ++k) {
+                adc_table[m * pq_k_ + k] = dist_l2_sq(q_sub, centroids + k * current_d_sub, current_d_sub);
+             }
+         }
+    }
+
+    inline double get_pq_dist(tableint internal_id, const std::vector<double>& adc_table) const {
+        double dist = 0;
+        const uint8_t* codes = pq_data_.data() + internal_id * pq_m_;
+        for(size_t m=0; m<pq_m_; ++m) {
+            dist += adc_table[m * pq_k_ + codes[m]];
+        }
+        return dist;
+    }
+
+    HierarchicalNSWCABLEANNPQ(SpaceInterface<dist_t> *s) {
     }
 
 
-    HierarchicalNSWCABLEANN(
+    HierarchicalNSWCABLEANNPQ(
         SpaceInterface<dist_t> *s,
         const std::string &location,
         bool use_encoding_algorithm = true,
@@ -329,7 +518,7 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
     }
 
 
-    HierarchicalNSWCABLEANN(
+    HierarchicalNSWCABLEANNPQ(
         SpaceInterface<dist_t> *s,
         size_t max_elements,
         const std::string &encoding_algorithm_name = "DeXOR",
@@ -387,7 +576,7 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
 
         linkLists_ = (char **) malloc(sizeof(void *) * max_elements_);
         if (linkLists_ == nullptr)
-            throw std::runtime_error("Not enough memory: HierarchicalNSWCABLEANN failed to allocate linklists");
+            throw std::runtime_error("Not enough memory: HierarchicalNSWCABLEANNPQ failed to allocate linklists");
         size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
         mult_ = 1 / log(1.0 * M_);
         revSize_ = 1.0 / mult_;
@@ -400,7 +589,7 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
     }
 
 
-    ~HierarchicalNSWCABLEANN() {
+    ~HierarchicalNSWCABLEANNPQ() {
         clear();
     }
 
@@ -813,14 +1002,14 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
 
 
     // Two-Level Search Base Layer (Algorithm 2 style)
-    // 1. Filter neighbors using Hamming distance (Approximate)
+    // 1. Filter neighbors using PQ Distance (Approximate)
     // 2. Compute Exact distance for top alpha% candidates
     template <bool bare_bone_search = true, bool collect_metrics = false>
     std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst>
     searchBaseLayerTwoLevel(
         tableint ep_id,
         const void *query_data,
-        const uint64_t *query_binary,
+        const std::vector<double>& adc_table,
         size_t ef,
         BaseFilterFunctor* isIdAllowed = nullptr) const {
         
@@ -857,11 +1046,10 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
 
             if (collect_metrics) {
                 metric_hops++;
-                // metric_distance_computations += size; // We do hamming for all, exact for few
             }
 
-            // 1. Collect Unvisited Neighbors & Compute Hamming Distance
-            std::vector<std::pair<int, tableint>> approx_candidates;
+            // 1. Collect Unvisited Neighbors & Compute PQ Distance
+            std::vector<std::pair<double, tableint>> approx_candidates;
             approx_candidates.reserve(size);
 
             for (size_t j = 1; j <= size; j++) {
@@ -869,9 +1057,8 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
                 if (visited_array[candidate_id] != visited_array_tag) {
                     visited_array[candidate_id] = visited_array_tag;
                     
-                    const uint64_t* cand_binary = binary_data_.data() + candidate_id * binary_block_size_;
-                    int h_dist = hamming_dist(query_binary, cand_binary, binary_block_size_);
-                    approx_candidates.push_back({h_dist, candidate_id});
+                    double pq_dist = get_pq_dist(candidate_id, adc_table);
+                    approx_candidates.push_back({pq_dist, candidate_id});
                 }
             }
 
@@ -1359,42 +1546,9 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
 
         size_t dim = data_size_ / sizeof(double);
 
-        // --- 1-bit Quantization (LEANN) ---
-        dim_means_.assign(dim, 0.0);
-        size_t valid_count = 0;
-        
-        // Pass 1: Compute Sums
-        for(size_t i=0; i<cur_element_count; ++i) {
-            if (isMarkedDeleted(i)) continue;
-            const double* vec = (const double*)getDataByInternalId(i);
-            for(size_t d=0; d<dim; ++d) {
-                dim_means_[d] += vec[d];
-            }
-            valid_count++;
-        }
-        
-        if(valid_count > 0) {
-            for(size_t d=0; d<dim; ++d) {
-                dim_means_[d] /= valid_count;
-            }
-        }
-
-        // Pass 2: Generate Binary Codes
-        binary_block_size_ = (dim + 63) / 64;
-        binary_data_.resize(cur_element_count * binary_block_size_, 0);
-        
-        for(size_t i=0; i<cur_element_count; ++i) {
-            if (isMarkedDeleted(i)) continue;
-            const double* vec = (const double*)getDataByInternalId(i);
-            uint64_t* bin_ptr = binary_data_.data() + i * binary_block_size_;
-            
-            for(size_t d=0; d<dim; ++d) {
-                if (vec[d] >= dim_means_[d]) {
-                    bin_ptr[d / 64] |= (1ULL << (d % 64));
-                }
-            }
-        }
-        // ----------------------------------
+        // --- PQ Training ---
+        train_pq(dim, cur_element_count);
+        // -------------------
 
         size_t target_root_count = std::max((size_t)1, cur_element_count / 100);
         
@@ -1681,20 +1835,26 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
                 output.write(linkLists_[i], linkListSize);
         }
 
-        // Save 1-bit quantization data (LEANN)
-        size_t binary_data_size = binary_data_.size();
-        writeBinaryPOD(output, binary_data_size);
-        if(binary_data_size > 0) {
-            output.write(reinterpret_cast<const char*>(binary_data_.data()), binary_data_size * sizeof(uint64_t));
-        }
+        // Save PQ quantization data
+        writeBinaryPOD(output, pq_m_);
+        writeBinaryPOD(output, pq_d_sub_);
         
-        size_t dim_means_size = dim_means_.size();
-        writeBinaryPOD(output, dim_means_size);
-        if(dim_means_size > 0) {
-            output.write(reinterpret_cast<const char*>(dim_means_.data()), dim_means_size * sizeof(double));
+        size_t pq_data_size = pq_data_.size();
+        writeBinaryPOD(output, pq_data_size);
+        if(pq_data_size > 0) {
+            output.write(reinterpret_cast<const char*>(pq_data_.data()), pq_data_size * sizeof(uint8_t));
         }
-        
-        writeBinaryPOD(output, binary_block_size_);
+
+        // Save Centroids
+        bool has_centroids = !pq_centroids_.empty();
+        writeBinaryPOD(output, has_centroids);
+        if(has_centroids) {
+            for(size_t m=0; m<pq_m_; ++m) {
+                 size_t c_size = pq_centroids_[m].size();
+                 writeBinaryPOD(output, c_size); // Should be k_ * d_sub_
+                 output.write(reinterpret_cast<const char*>(pq_centroids_[m].data()), c_size * sizeof(double));
+            }
+        }
 
         output.close();
     }
@@ -1810,22 +1970,28 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
             }
         }
 
-        // Load 1-bit quantization data (LEANN)
-        size_t binary_data_size;
-        readBinaryPOD(input, binary_data_size);
-        if(binary_data_size > 0) {
-            binary_data_.resize(binary_data_size);
-            input.read(reinterpret_cast<char*>(binary_data_.data()), binary_data_size * sizeof(uint64_t));
+        // Load PQ quantization data
+        readBinaryPOD(input, pq_m_);
+        readBinaryPOD(input, pq_d_sub_);
+        
+        size_t pq_data_size;
+        readBinaryPOD(input, pq_data_size);
+        pq_data_.resize(pq_data_size);
+        if(pq_data_size > 0) {
+            input.read(reinterpret_cast<char*>(pq_data_.data()), pq_data_size * sizeof(uint8_t));
         }
         
-        size_t dim_means_size;
-        readBinaryPOD(input, dim_means_size);
-        if(dim_means_size > 0) {
-            dim_means_.resize(dim_means_size);
-            input.read(reinterpret_cast<char*>(dim_means_.data()), dim_means_size * sizeof(double));
+        bool has_centroids;
+        readBinaryPOD(input, has_centroids);
+        pq_centroids_.resize(pq_m_);
+        if(has_centroids) {
+            for(size_t m=0; m<pq_m_; ++m) {
+                size_t c_size;
+                readBinaryPOD(input, c_size);
+                pq_centroids_[m].resize(c_size);
+                input.read(reinterpret_cast<char*>(pq_centroids_[m].data()), c_size * sizeof(double));
+            }
         }
-        
-        readBinaryPOD(input, binary_block_size_);
 
         input.close();
 
@@ -2013,8 +2179,13 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
             throw std::runtime_error("Cannot update point in compacted index");
 
         // update the feature vector associated with existing point with new vector
-        size_t old_pos = level0_element_start_positions_[internalId];
-        memcpy(data_level0_memory_.data() + old_pos + offsetData_, dataPoint, data_size_);
+        size_t dim = data_size_ / sizeof(double);
+        size_t start = level0_element_start_positions_[internalId];
+        // data_level0_memory_ + start is header.
+        // We need data offset. 
+        // In addPoint we did: memcpy(data_level0_memory_.data() + start_pos + offsetData_, data_point, data_bytes);
+        
+        memcpy(data_level0_memory_.data() + start + offsetData_, dataPoint, dim * sizeof(double));
 
         int maxLevelCopy = maxlevel_;
         tableint entryPointCopy = enterpoint_node_;
@@ -2048,8 +2219,8 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
             }
 
             for (auto&& neigh : sNeigh) {
-                if (neigh == internalId)
-                    continue;
+                // if (neigh == internalId)
+                //     continue;
 
                 std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidates;
                 size_t size = sCand.find(neigh) == sCand.end() ? sCand.size() : sCand.size() - 1;  // sCand guaranteed to have size >= 1
@@ -2261,20 +2432,22 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
                 }
             }
         }
+
+        // --- Store Data (Raw) ---
+        size_t dim = data_size_ / sizeof(double);
+        size_t start_pos = data_level0_memory_.size();
+        level0_element_start_positions_[cur_c] = start_pos;
         
-        {
-            size_t start_pos = data_level0_memory_.size();
-            level0_element_start_positions_[cur_c] = start_pos;
-            
-            size_t total_size = offsetData_ + data_size_;
-            data_level0_memory_.resize(start_pos + total_size);
-            
-            memset(data_level0_memory_.data() + start_pos, 0, size_links_level0_);
-            setPrenodeId(cur_c, -1);
-            setExternalLabel(cur_c, label);
-            
-            memcpy(data_level0_memory_.data() + start_pos + offsetData_, data_point, data_size_);
-        }
+        size_t data_bytes = dim * sizeof(double);
+        size_t total_size = offsetData_ + data_bytes; // Header + Data
+        
+        data_level0_memory_.resize(start_pos + total_size);
+        
+        memset(data_level0_memory_.data() + start_pos, 0, size_links_level0_);
+        setPrenodeId(cur_c, -1);
+        setExternalLabel(cur_c, label);
+        memcpy(data_level0_memory_.data() + start_pos + offsetData_, data_point, data_bytes);
+
 
         if (curlevel) {
             // 为非level0的层分配内存
@@ -2288,15 +2461,18 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
 
         if ((signed)enterpoint_copy != -1) {
             for (int level = std::min(curlevel, maxlevelcopy); level >= 0; level--) {
-                std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(
+                 std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(
                         currObj, data_point, level);
-                if (isMarkedDeleted(enterpoint_copy)) {
+                
+                bool epDeleted = isMarkedDeleted(enterpoint_copy);
+                if (epDeleted) {
                     std::vector<double> vec_ep = getOriginalDataByInternalId(enterpoint_copy);
-                    dist_t dist = fstdistfunc_(data_point, vec_ep.data(), dist_func_param_);
-                    top_candidates.emplace(dist, enterpoint_copy);
+                    dist_t d = fstdistfunc_(data_point, vec_ep.data(), dist_func_param_);
+                    top_candidates.emplace(d, enterpoint_copy);
                     if (top_candidates.size() > ef_construction_)
                         top_candidates.pop();
                 }
+
                 currObj = mutuallyConnectNewElement(data_point, cur_c, top_candidates, level, false);
             }
         } else {
@@ -2321,20 +2497,13 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
         if (cur_element_count == 0) return result;
 
 #ifdef TWO_LEVEL_SEARCH
-        // Check if we can use the 1-bit quantization path
-        if (use_encoding_algorithm_ && is_compacted_ && !binary_data_.empty()) {
-             // --- Two-Pass Search with 1-bit Quantization (Algorithm 2) ---
+        // Check if we can use the PQ quantization path
+        if (use_encoding_algorithm_ && is_compacted_ && !pq_data_.empty()) {
+             // --- Two-Pass Search with PQ Quantization (Algorithm 2) ---
 
-            // 1. Quantize Query
-            size_t dim = data_size_ / sizeof(double);
-            std::vector<uint64_t> q_binary(binary_block_size_, 0);
-            const double* q_raw = (const double*)query_data;
-            
-            for(size_t d=0; d<dim; ++d) {
-                if (q_raw[d] >= dim_means_[d]) {
-                    q_binary[d / 64] |= (1ULL << (d % 64));
-                }
-            }
+            // 1. Compute ADC Table
+            std::vector<double> adc_table;
+            compute_adc_table(query_data, adc_table);
 
             // 2. HNSW Routing (Upper Layers)
             tableint currObj = enterpoint_node_;
@@ -2351,8 +2520,8 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
                     int size = getListCount(data);
                     metric_hops++;
                     
-                    // Collect neighbors and compute Hamming distance
-                    std::vector<std::pair<int, tableint>> approx_candidates;
+                    // Collect neighbors and compute PQ distance
+                    std::vector<std::pair<double, tableint>> approx_candidates;
                     approx_candidates.reserve(size);
                     
                     tableint *datal = (tableint *) (data + 1);
@@ -2361,9 +2530,8 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
                         if (cand < 0 || cand > max_elements_)
                             throw std::runtime_error("cand error");
                         
-                        const uint64_t* cand_binary = binary_data_.data() + cand * binary_block_size_;
-                        int h_dist = hamming_dist(q_binary.data(), cand_binary, binary_block_size_);
-                        approx_candidates.push_back({h_dist, cand});
+                        double pq_dist = get_pq_dist(cand, adc_table);
+                        approx_candidates.push_back({pq_dist, cand});
                     }
 
                     // Filter Top Alpha% (e.g., 20%)
@@ -2402,15 +2570,13 @@ class HierarchicalNSWCABLEANN : public AlgorithmInterface<dist_t> {
             // 3. Base Layer Search (Two-Level)
             // Use the same ef as configured to ensure fair comparison of decoding counts
             size_t ef_search = ef_; 
-            // size_t k_approx = std::max(k * 5, (size_t)50); 
-            // size_t ef_search = std::max(ef_, k_approx);
 
             std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidates;
             
             if (isIdAllowed) {
-                candidates = searchBaseLayerTwoLevel<false>(currObj, query_data, q_binary.data(), ef_search, isIdAllowed);
+                candidates = searchBaseLayerTwoLevel<false>(currObj, query_data, adc_table, ef_search, isIdAllowed);
             } else {
-                candidates = searchBaseLayerTwoLevel<true>(currObj, query_data, q_binary.data(), ef_search, isIdAllowed);
+                candidates = searchBaseLayerTwoLevel<true>(currObj, query_data, adc_table, ef_search, isIdAllowed);
             }
 
             // 4. Result Construction (candidates already contains Exact Distances)
