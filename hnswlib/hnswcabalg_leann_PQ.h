@@ -564,7 +564,7 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
         label_offset_ = prenode_offset_ + sizeof(tableint);
         offsetData_ = label_offset_ + sizeof(labeltype);
 
-        data_level0_memory_.reserve(max_elements_ * size_data_per_element_);
+        data_level0_memory_.resize(max_elements_ * size_data_per_element_);
 
         cur_element_count = 0;
 
@@ -631,39 +631,57 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
 
     inline labeltype getExternalLabel(tableint internal_id) const {
         labeltype return_label;
-        size_t offset = is_compacted_ ? sizeof(tableint) : label_offset_;
-        memcpy(&return_label, (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset), sizeof(labeltype));
+        if (is_compacted_) {
+            size_t offset = sizeof(tableint);
+            memcpy(&return_label, (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset), sizeof(labeltype));
+        } else {
+            memcpy(&return_label, (data_level0_memory_.data() + internal_id * size_data_per_element_ + label_offset_), sizeof(labeltype));
+        }
         return return_label;
     }
 
 
     inline void setExternalLabel(tableint internal_id, labeltype label) const {
-        size_t offset = is_compacted_ ? sizeof(tableint) : label_offset_;
-        memcpy((char*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset), &label, sizeof(labeltype));
+        if (is_compacted_) {
+            size_t offset = sizeof(tableint);
+            memcpy((char*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset), &label, sizeof(labeltype));
+        } else {
+            memcpy((char*)(data_level0_memory_.data() + internal_id * size_data_per_element_ + label_offset_), &label, sizeof(labeltype));
+        }
     }
 
 
     inline labeltype *getExternalLabeLp(tableint internal_id) const {
-        size_t offset = is_compacted_ ? sizeof(tableint) : label_offset_;
-        return (labeltype *) (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset);
+        if (is_compacted_) {
+            size_t offset = sizeof(tableint);
+            return (labeltype *) (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset);
+        }
+        return (labeltype *) (data_level0_memory_.data() + internal_id * size_data_per_element_ + label_offset_);
     }
 
     inline tableint getPrenodeId(tableint internal_id) const {
         tableint prenode;
-        size_t offset = is_compacted_ ? 0 : prenode_offset_;
-        memcpy(&prenode, (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset), sizeof(tableint));
+        if (is_compacted_) {
+            size_t offset = 0;
+            memcpy(&prenode, (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset), sizeof(tableint));
+        } else {
+            memcpy(&prenode, (data_level0_memory_.data() + internal_id * size_data_per_element_ + prenode_offset_), sizeof(tableint));
+        }
         return prenode;
     }
 
     inline void setPrenodeId(tableint internal_id, tableint prenode) {
-        size_t offset = is_compacted_ ? 0 : prenode_offset_;
-        memcpy((char*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset), &prenode, sizeof(tableint));
+        if (is_compacted_) {
+            size_t offset = 0;
+            memcpy((char*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset), &prenode, sizeof(tableint));
+        } else {
+            memcpy((char*)(data_level0_memory_.data() + internal_id * size_data_per_element_ + prenode_offset_), &prenode, sizeof(tableint));
+        }
     }
 
     // 数据存储在第0层，每个element的大小都是固定的，size_data_per_element。可以通过HNSW内部的id随机读取数据
     // 如果要使用差分编码压缩data，将无法通过简单的随机读取获取数据。或许需要页表之类的结构进行索引；同时，data需要解压缩。可以在每个element的开头记录上一个data的internal_id，接着回溯到第0个data，然后依次解压缩
     inline char *getDataByInternalId(tableint internal_id) const {
-        size_t offset;
         if (is_compacted_) {
             // Compacted layout: [Prenode (4)] [Label (4/8)] [LinkListSize (2)] [Neighbors (size*4)] [Data...]
             // We need to read LinkListSize to determine Data offset
@@ -671,23 +689,20 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
             size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
             unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + linklist_size_offset));
             // Data starts after neighbors
-            offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
-        } else {
-            offset = offsetData_;
+            size_t offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+            return (char*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset);
         }
-        return (char*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset);
+        return (char*)(data_level0_memory_.data() + internal_id * size_data_per_element_ + offsetData_);
     }
 
     inline char *getDataByInternalId(tableint internal_id, char* data_level0_memory) const {
-        size_t offset;
         if (is_compacted_) {
             size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
             unsigned short int size = *((unsigned short int*)(data_level0_memory + level0_element_start_positions_[internal_id] + linklist_size_offset));
-            offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
-        } else {
-            offset = offsetData_;
+            size_t offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+            return (char*)(data_level0_memory + level0_element_start_positions_[internal_id] + offset);
         }
-        return (char*)(data_level0_memory + level0_element_start_positions_[internal_id] + offset);
+        return (char*)(data_level0_memory + internal_id * size_data_per_element_ + offsetData_);
     }
 
     std::vector<double> getOriginalDataByInternalId(tableint internal_id, bool collect_metrics = false) const {
@@ -1313,7 +1328,7 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
         if (is_compacted_) {
             return (linklistsizeint *) (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + sizeof(tableint) + sizeof(labeltype));
         }
-        return (linklistsizeint *) (data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offsetLevel0_);
+        return (linklistsizeint *) (data_level0_memory_.data() + internal_id * size_data_per_element_ + offsetLevel0_);
     }
 
 
@@ -1321,7 +1336,7 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
         if (is_compacted_) {
             return (linklistsizeint *) (data_level0_memory_ + level0_element_start_positions_[internal_id] + sizeof(tableint) + sizeof(labeltype));
         }
-        return (linklistsizeint *) (data_level0_memory_ + level0_element_start_positions_[internal_id] + offsetLevel0_);
+        return (linklistsizeint *) (data_level0_memory_ + internal_id * size_data_per_element_ + offsetLevel0_);
     }
 
 
