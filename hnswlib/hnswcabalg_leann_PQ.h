@@ -2344,8 +2344,6 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
 
     // label是外部的id。存储在label_lookup_中的是外部id到内部id的映射
     tableint addPoint(const void *data_point, labeltype label, int level) {
-        if (is_compacted_)
-            throw std::runtime_error("Cannot add point in compacted index");
         tableint cur_c = 0;
         {
             // Checking if the element with the same label already exists
@@ -2397,10 +2395,26 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
         tableint currObj = enterpoint_node_;
         tableint enterpoint_copy = enterpoint_node_;
 
+        // 每个节点的数据大小是一定的，size_data_per_element_。在这里为level0分配内存
+        memset(data_level0_memory_.data() + cur_c * size_data_per_element_ + offsetLevel0_, 0, size_data_per_element_);
+
+        // Initialisation of the data and label
+        memcpy(getExternalLabeLp(cur_c), &label, sizeof(labeltype));
+        memcpy(getDataByInternalId(cur_c), data_point, data_size_);
+
+        if (curlevel) {
+            // 为非level0的层分配内存
+            linkLists_[cur_c] = (char *) malloc(size_links_per_element_ * curlevel + 1);
+            if (linkLists_[cur_c] == nullptr)
+                throw std::runtime_error("Not enough memory: addPoint failed to allocate linklist");
+            
+            // 初始化link list为空
+            memset(linkLists_[cur_c], 0, size_links_per_element_ * curlevel + 1);
+        }
+
         if ((signed)currObj != -1) {
             if (curlevel < maxlevelcopy) {
-                std::vector<double> vec_curr = getOriginalDataByInternalId(currObj);
-                dist_t curdist = fstdistfunc_(data_point, vec_curr.data(), dist_func_param_);
+                dist_t curdist = fstdistfunc_(data_point, getDataByInternalId(currObj), dist_func_param_);
                 for (int level = maxlevelcopy; level > curlevel; level--) {
                     bool changed = true;
                     while (changed) {
@@ -2416,8 +2430,7 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
                             tableint cand = datal[i];
                             if (cand < 0 || cand > max_elements_)
                                 throw std::runtime_error("cand error");
-                            std::vector<double> vec_cand = getOriginalDataByInternalId(cand);
-                            dist_t d = fstdistfunc_(data_point, vec_cand.data(), dist_func_param_);
+                            dist_t d = fstdistfunc_(data_point, getDataByInternalId(cand), dist_func_param_);
                             if (d < curdist) {
                                 curdist = d;
                                 currObj = cand;
@@ -2427,48 +2440,21 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
                     }
                 }
             }
-        }
 
-        // --- Store Data (Raw) ---
-        size_t dim = data_size_ / sizeof(double);
-        size_t start_pos = data_level0_memory_.size();
-        level0_element_start_positions_[cur_c] = start_pos;
-        
-        size_t data_bytes = dim * sizeof(double);
-        size_t total_size = offsetData_ + data_bytes; // Header + Data
-        
-        data_level0_memory_.resize(start_pos + total_size);
-        
-        memset(data_level0_memory_.data() + start_pos, 0, size_links_level0_);
-        setPrenodeId(cur_c, -1);
-        setExternalLabel(cur_c, label);
-        memcpy(data_level0_memory_.data() + start_pos + offsetData_, data_point, data_bytes);
-
-
-        if (curlevel) {
-            // 为非level0的层分配内存
-            linkLists_[cur_c] = (char *) malloc(size_links_per_element_ * curlevel + 1);
-            if (linkLists_[cur_c] == nullptr)
-                throw std::runtime_error("Not enough memory: addPoint failed to allocate linklist");
-            
-            // 初始化link list为空
-            memset(linkLists_[cur_c], 0, size_links_per_element_ * curlevel + 1);
-        }
-
-        if ((signed)enterpoint_copy != -1) {
+            bool epDeleted = isMarkedDeleted(enterpoint_copy);
             for (int level = std::min(curlevel, maxlevelcopy); level >= 0; level--) {
-                 std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(
+                if (level > maxlevelcopy || level < 0)  // possible? 这不可能吧？
+                    throw std::runtime_error("Level error");
+
+                // 在level层找到与data_point距离最近的ef个节点，存储在列表中
+                std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(
                         currObj, data_point, level);
-                
-                bool epDeleted = isMarkedDeleted(enterpoint_copy);
                 if (epDeleted) {
-                    std::vector<double> vec_ep = getOriginalDataByInternalId(enterpoint_copy);
-                    dist_t d = fstdistfunc_(data_point, vec_ep.data(), dist_func_param_);
-                    top_candidates.emplace(d, enterpoint_copy);
+                    top_candidates.emplace(fstdistfunc_(data_point, getDataByInternalId(enterpoint_copy), dist_func_param_), enterpoint_copy);
                     if (top_candidates.size() > ef_construction_)
                         top_candidates.pop();
                 }
-
+                // 在level层建立data_point与top_candidates中每一个元素的连接
                 currObj = mutuallyConnectNewElement(data_point, cur_c, top_candidates, level, false);
             }
         } else {
