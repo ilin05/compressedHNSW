@@ -141,8 +141,8 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_build_hnswalp_pq examples/cpp/test_build_hnswalp_pq.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_build_hnswalp_pq hnswlib)
 
-    add_executable(test_build_hnswcab_pq examples/cpp/test_build_hnswcab_pq.cpp ${ENCODING_ALGO_SRC})
-    target_link_libraries(test_build_hnswcab_pq hnswlib)
+    add_executable(test_build_hnswdexor_pq examples/cpp/test_build_hnswdexor_pq.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_build_hnswdexor_pq hnswlib)
 
 
     # tests
