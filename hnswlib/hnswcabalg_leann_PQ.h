@@ -2842,6 +2842,22 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
         return total_size;
     }
 
+    size_t getCompressedIndexSize() const {
+        size_t total_size = 0;
+        // base index size
+        // total_size += size_data_per_element_ * max_elements_;
+        total_size += data_level0_memory_.size();
+        total_size += element_levels_.size() * sizeof(int);
+        total_size += sizeof(void*) * max_elements_;
+        for(size_t i = 0; i < cur_element_count; i++) {
+            int level = element_levels_[i];
+            if (level > 0) {
+                total_size += size_links_per_element_ * level;
+            }
+        }
+        return total_size;
+    }
+
     // 获取getOriginalData的时间
     long getTotalTimeGetOriginalData() const {
         return getOriginalData_time;
