@@ -173,6 +173,8 @@ TestResult test_build_index(const std::string& dataset_name, const std::string& 
 }
 
 int main(int argc, char** argv) {
+    omp_set_num_threads(32);
+
     // 假设从 build/ 目录执行，故默认相对路径如下
     // 用户可根据需要修改
     std::string base_dir = "../datasets/hdf5files/";

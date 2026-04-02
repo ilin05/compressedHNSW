@@ -2828,18 +2828,18 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
         // total_size += level0_element_start_positions_.size() * sizeof(size_t);
         // total_size += element_levels_.size() * sizeof(int);
         
-        total_size += size_data_per_element_ * max_elements_;
-        total_size += element_levels_.size() * sizeof(int);
+        total_size += size_data_per_element_ * cur_element_count;
+        // total_size += element_levels_.size() * sizeof(int);
 
         // linkLists_ 指针数组的大小
-        total_size += max_elements_ * sizeof(void*);
+        // total_size += max_elements_ * sizeof(void*);
 
         // linkLists_ 实际指向的内存大小 (仅统计 level > 0 的元素)
         for (size_t i = 0; i < cur_element_count; i++) {
-            int level = element_levels_[i];
-            if (level > 0) {
-                total_size += size_links_per_element_ * level;
-            }
+            // int level = element_levels_[i];
+            unsigned int linkListSize = element_levels_[i] > 0 ? size_links_per_element_ * element_levels_[i] : 0;
+            total_size += linkListSize;
+            total_size += sizeof(linkListSize);
         }
         
         return total_size;
@@ -2850,13 +2850,13 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
         // base index size
         // total_size += size_data_per_element_ * max_elements_;
         total_size += data_level0_memory_.size();
-        total_size += element_levels_.size() * sizeof(int);
-        total_size += sizeof(void*) * max_elements_;
-        for(size_t i = 0; i < cur_element_count; i++) {
-            int level = element_levels_[i];
-            if (level > 0) {
-                total_size += size_links_per_element_ * level;
-            }
+        // total_size += element_levels_.size() * sizeof(int);
+        // total_size += sizeof(void*) * max_elements_;
+        for (size_t i = 0; i < cur_element_count; i++) {
+            // int level = element_levels_[i];
+            unsigned int linkListSize = element_levels_[i] > 0 ? size_links_per_element_ * element_levels_[i] : 0;
+            total_size += linkListSize;
+            total_size += sizeof(linkListSize);
         }
         return total_size;
     }
