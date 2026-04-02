@@ -2824,10 +2824,13 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
     size_t getIndexSize() const {
         size_t total_size = 0;
         // total_size += sizeof(*this);
-        total_size += data_level0_memory_.size();
-        total_size += level0_element_start_positions_.size() * sizeof(size_t);
-        total_size += element_levels_.size() * sizeof(int);
+        // total_size += data_level0_memory_.size();
+        // total_size += level0_element_start_positions_.size() * sizeof(size_t);
+        // total_size += element_levels_.size() * sizeof(int);
         
+        total_size += size_data_per_element_ * max_elements_;
+        total_size += element_levels_.size() * sizeof(int);
+
         // linkLists_ 指针数组的大小
         total_size += max_elements_ * sizeof(void*);
 
