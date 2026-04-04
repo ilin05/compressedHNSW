@@ -87,7 +87,8 @@ void write_results_to_csv(const std::string& csv_file_path, const std::vector<Te
     }
 }
 
-TestResult test_build_index(const std::string& dataset_name, const std::string& base_dir, const std::string& algo_name) {
+template <typename CodecPolicy>
+TestResult test_build_index_tmpl(const std::string& dataset_name, const std::string& base_dir, const std::string& algo_name) {
     TestResult res;
     res.dataset_name = dataset_name;
     res.algorithm_name = algo_name;
@@ -113,8 +114,8 @@ TestResult test_build_index(const std::string& dataset_name, const std::string& 
     int efConstruction = 200;
     
     cout << "Allocating memory for index..." << endl;
-    HierarchicalNSWCABFRAMEWORK<double>* appr_alg = 
-        new HierarchicalNSWCABFRAMEWORK<double>(&l2space, num_vectors, algo_name, M, efConstruction, true, cache_max_size);
+    HierarchicalNSWCABFRAMEWORK<double, CodecPolicy>* appr_alg = 
+        new HierarchicalNSWCABFRAMEWORK<double, CodecPolicy>(&l2space, num_vectors, M, efConstruction, true, cache_max_size, true);
         
     StopW stopw;
     
@@ -158,6 +159,20 @@ TestResult test_build_index(const std::string& dataset_name, const std::string& 
     delete appr_alg;
 
     return res;
+}
+
+TestResult test_build_index(const std::string& dataset_name, const std::string& base_dir, const std::string& algo_name) {
+    if (algo_name == "DeXOR") {
+        return test_build_index_tmpl<codecs::DeXORCodecPolicy>(dataset_name, base_dir, algo_name);
+    } else if (algo_name == "Gorilla") {
+        return test_build_index_tmpl<codecs::GorillaCodecPolicy>(dataset_name, base_dir, algo_name);
+    } else if (algo_name == "Elf") {
+        return test_build_index_tmpl<codecs::ElfCodecPolicy>(dataset_name, base_dir, algo_name);
+    } else if (algo_name == "Camel") {
+        return test_build_index_tmpl<codecs::CamelCodecPolicy>(dataset_name, base_dir, algo_name);
+    } else {
+        throw std::runtime_error("Unknown algorithm name");
+    }
 }
 
 int main(int argc, char** argv) {
