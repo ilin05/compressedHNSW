@@ -331,7 +331,8 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         bool allow_replace_deleted = false)
         : allow_replace_deleted_(allow_replace_deleted),
           use_encoding_algorithm_(use_encoding_algorithm),
-          cache_max_size_(cache_max_size){
+          cache_max_size_(cache_max_size),
+          encoding_algorithm_name_(encoding_algorithm_name) {
         loadIndex(location, s, max_elements);
     }
 
