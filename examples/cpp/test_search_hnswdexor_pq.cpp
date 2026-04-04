@@ -20,7 +20,7 @@ namespace {
         {"mnist-784-euclidean", 600}, // mnist-784-euclidean: cache_size = rows * 1%
         {"sift-128-euclidean", 10000}, // sift-128-euclidean: cache_size = rows * 1%
         {"gist-960-euclidean", 10000} // gist-960-euclidean: cache_size = rows * 1%
-    }
+    };
 }
 
 class StopW {
