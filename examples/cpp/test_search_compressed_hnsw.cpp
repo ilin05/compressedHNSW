@@ -97,7 +97,8 @@ unsigned int* load_ivecs(const std::string& filename, size_t& num_vectors, size_
     return data;
 }
 
-void test_search_dataset(const std::string& dataset_name, const std::string& base_dir, const std::string& algo_name, std::ofstream& csv_file) {
+template <typename CodecPolicy>
+void test_search_dataset_tmpl(const std::string& dataset_name, const std::string& base_dir, const std::string& algo_name, std::ofstream& csv_file) {
     std::string prefix = dataset_name.substr(0, dataset_name.find_last_of('_'));
     
     std::string query_file = base_dir + dataset_name + "_test.fvecs";
@@ -126,7 +127,7 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
     }
 
     L2SpaceDouble l2space(qdim);
-    HierarchicalNSWCABFRAMEWORK<double>* appr_alg = nullptr;
+    HierarchicalNSWCABFRAMEWORK<double, CodecPolicy>* appr_alg = nullptr;
     
     try {
         cout << "Loading index from " << index_path << "..." << endl;
@@ -135,7 +136,7 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
         if(cache_sizes.find(prefix) != cache_sizes.end()) {
             cache_sz = cache_sizes.at(prefix);
         }
-        appr_alg = new HierarchicalNSWCABFRAMEWORK<double>(&l2space, index_path, true, algo_name, cache_sz);
+        appr_alg = new HierarchicalNSWCABFRAMEWORK<double, CodecPolicy>(&l2space, index_path, true, cache_sz);
         cout << "Index successfully loaded." << endl;
     } catch (std::exception& e) {
         cerr << "Failed to load index: " << e.what() << endl;
@@ -156,34 +157,45 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
         size_t correct = 0;
         StopW stopw;
 
-        // #pragma omp parallel for reduction(+:correct)
-        for (long i = 0; i < (long)qsize; i++) {
-            auto result = appr_alg->searchKnn(massQ + i * qdim, k);
-            std::unordered_set<tableint> gt_set(massQA + i * gt_dim, massQA + i * gt_dim + k);
+        #pragma omp parallel for reduction(+:correct)
+        for (long i = 0; i < (long)qsize; ++i) {
+            std::priority_queue<std::pair<double, labeltype>> result = appr_alg->searchKnn(massQ + i * qdim, k);
+            std::unordered_set<labeltype> gt_set;
+            for (size_t j = 0; j < k; ++j) {
+                gt_set.insert(massQA[i * gt_dim + j]);
+            }
+            
             while (!result.empty()) {
-                if (gt_set.count(result.top().second)) {
+                if (gt_set.find(result.top().second) != gt_set.end()) {
                     correct++;
                 }
                 result.pop();
             }
         }
         
-        double time_us = stopw.getElapsedTimeMicro() / qsize;
-        double recall = (double)correct / (qsize * k);
+        float time_us_per_query = stopw.getElapsedTimeMicro() / qsize;
+        double recall = static_cast<double>(correct) / (k * qsize);
         
-        cout << "ef = " << ef << ": Recall@" << k << " = " << recall * 100 << "%, Time per query = " << time_us << " us" << endl;
-        
+        cout << "ef = " << setw(4) << ef << " | Recall@" << k << ": " << fixed << setprecision(4) << recall
+             << " | Time/Query: " << time_us_per_query << " us" << endl;
+             
         csv_file << dataset_name << "," << algo_name << "," << k << "," << ef << ","
-                 << std::fixed << std::setprecision(4) << recall << ","
-                 << std::fixed << std::setprecision(2) << time_us << "\n";
-
-        if (recall >= 0.99) break;
+                 << recall << "," << time_us_per_query << "\\n";
     }
     
     delete[] massQ;
     delete[] massQA;
     delete appr_alg;
 }
+
+void test_search_dataset(const std::string& dataset_name, const std::string& base_dir, const std::string& algo_name, std::ofstream& csv_file) {
+    if (algo_name == "DeXOR") test_search_dataset_tmpl<codecs::DeXORCodecPolicy>(dataset_name, base_dir, algo_name, csv_file);
+    else if (algo_name == "Gorilla") test_search_dataset_tmpl<codecs::GorillaCodecPolicy>(dataset_name, base_dir, algo_name, csv_file);
+    else if (algo_name == "Elf") test_search_dataset_tmpl<codecs::ElfCodecPolicy>(dataset_name, base_dir, algo_name, csv_file);
+    else if (algo_name == "Camel") test_search_dataset_tmpl<codecs::CamelCodecPolicy>(dataset_name, base_dir, algo_name, csv_file);
+    else throw std::runtime_error("Unknown algorithm: " + algo_name);
+}
+
 
 int main(int argc, char** argv) {
     omp_set_num_threads(32);

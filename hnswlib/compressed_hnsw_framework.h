@@ -20,7 +20,7 @@ namespace hnswlib {
 typedef unsigned int tableint;
 typedef unsigned int linklistsizeint;
 
-template<typename dist_t>
+template<typename dist_t, typename CodecPolicy>
 class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
  public:
     static const tableint MAX_LABEL_OPERATION_LOCKS = 65536;
@@ -79,7 +79,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     std::mutex deleted_elements_lock;  // lock for deleted_elements
     std::unordered_set<tableint> deleted_elements;  // contains internal ids of deleted elements
 
-    std::string encoding_algorithm_name_ = "DeXOR";
+    
 
     // 记录getOriginalData消耗的时间
     mutable std::atomic<long> getOriginalData_time{0};
@@ -94,7 +94,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     size_t cache_max_size_ = 0;
     // mutable std::list<tableint> lru_history_;
     // mutable std::unordered_map<tableint, std::pair<std::vector<double>, std::list<tableint>::iterator>> getOriginalData_cache_;
-    mutable std::unordered_map<tableint, std::vector<codecs::CodecState>> root_state_cache_;
+    mutable std::unordered_map<tableint, std::vector<typename CodecPolicy::StateType>> root_state_cache_;
     mutable std::mutex cache_lock_;
     // mutable std::atomic<int> cache_pop_count_{0};
     // mutable std::atomic<int> getOriginalData_call_count_{0};
@@ -324,15 +324,15 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         const std::string &location,
         bool use_encoding_algorithm = true,
         // TODO3: 添加encoding_algorithm_name参数以支持不同的编码算法
-        const std::string &encoding_algorithm_name = "DeXOR",
+        
         size_t cache_max_size = 0,
         bool nmslib = false,
         size_t max_elements = 0,
         bool allow_replace_deleted = false)
         : allow_replace_deleted_(allow_replace_deleted),
           use_encoding_algorithm_(use_encoding_algorithm),
-          cache_max_size_(cache_max_size),
-          encoding_algorithm_name_(encoding_algorithm_name) {
+          cache_max_size_(cache_max_size)
+          {
         loadIndex(location, s, max_elements);
     }
 
@@ -340,7 +340,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     HierarchicalNSWCABFRAMEWORK(
         SpaceInterface<dist_t> *s,
         size_t max_elements,
-        const std::string &encoding_algorithm_name = "DeXOR",
+        
         size_t M = 16,
         size_t ef_construction = 200,
         bool use_encoding_algorithm = true,
@@ -352,7 +352,6 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             level0_element_start_positions_(max_elements),
             element_levels_(max_elements),
             allow_replace_deleted_(allow_replace_deleted),
-            encoding_algorithm_name_(encoding_algorithm_name),
             use_encoding_algorithm_(use_encoding_algorithm),
             cache_max_size_(cache_max_size) {
         max_elements_ = max_elements;
@@ -548,7 +547,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                 auto it = root_state_cache_.find(internal_id);
                 if (it != root_state_cache_.end()) {
                     // Reconstruct data from state
-                    const std::vector<codecs::CodecState>& states = it->second;
+                    const std::vector<typename CodecPolicy::StateType>& states = it->second;
                     for(size_t i=0; i<dim; ++i) {
                         result[i] = states[i].current_value;
                     }
@@ -575,10 +574,10 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             
             reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
             
-            std::vector<codecs::CodecState> states(dim, codecs::CodecState(codecs::getAlgorithmType(encoding_algorithm_name_))); // Default states
+            std::vector<typename CodecPolicy::StateType> states(dim, typename CodecPolicy::StateType()); // Default states
             auto decode_start = std::chrono::high_resolution_clock::now();
             for(size_t i=0; i<dim; ++i) {
-                result[i] = codecs::CompressedCodec::decode(states[i], reader);
+                result[i] = CodecPolicy::decode(states[i], reader);
             }
             if (collect_metrics) {
                 decoding_count ++;
@@ -594,7 +593,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         // Case 2: Node is a Child (prenode != -1)
         // We need the state AFTER decoding the Root (prenode)
         
-        std::vector<codecs::CodecState> states(dim, codecs::CodecState(codecs::getAlgorithmType(encoding_algorithm_name_)));
+        std::vector<typename CodecPolicy::StateType> states(dim, typename CodecPolicy::StateType());
         bool cache_hit = false;
         
         if (cache_max_size_ > 0) {
@@ -626,7 +625,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             
             auto decode_start = std::chrono::high_resolution_clock::now();
             for(size_t i=0; i<dim; ++i) {
-                codecs::CompressedCodec::decode(states[i], reader);
+                CodecPolicy::decode(states[i], reader);
             }
             if (collect_metrics) {
                 decoding_count ++;
@@ -655,7 +654,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         
         auto decode_start = std::chrono::high_resolution_clock::now();
         for(size_t i=0; i<dim; ++i) {
-            result[i] = codecs::CompressedCodec::decode(states[i], reader);
+            result[i] = CodecPolicy::decode(states[i], reader);
         }
         if (collect_metrics) {
             decoding_count ++;
@@ -1539,19 +1538,19 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             
             std::vector<char> compressed_buffer;
             utils::MemoryStreamWriter writer(&compressed_buffer);
-            std::vector<codecs::CodecState> states(dim, codecs::CodecState(codecs::getAlgorithmType(encoding_algorithm_name_))); 
+            std::vector<typename CodecPolicy::StateType> states(dim, typename CodecPolicy::StateType()); 
             
             if (prenode != -1) {
                 const double* root_data_ptr = (const double*)getDataByInternalId(root);
                 std::vector<char> temp_buffer;
                 utils::MemoryStreamWriter temp_writer(&temp_buffer);
                 for(size_t k=0; k<dim; ++k) {
-                    codecs::CompressedCodec::encode(root_data_ptr[k], states[k], temp_writer);
+                    CodecPolicy::encode(root_data_ptr[k], states[k], temp_writer);
                 }
             }
             
             for(size_t k=0; k<dim; ++k) {
-                codecs::CompressedCodec::encode(my_data_ptr[k], states[k], writer);
+                CodecPolicy::encode(my_data_ptr[k], states[k], writer);
             }
             writer.align();
             
@@ -2788,7 +2787,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                 tableint id = root_nodes[i];
                 
                 // Decode Root to get state
-                std::vector<codecs::CodecState> states(dim, codecs::CodecState(codecs::getAlgorithmType(encoding_algorithm_name_)));
+                std::vector<typename CodecPolicy::StateType> states(dim, typename CodecPolicy::StateType());
                 
                 size_t start, end;
                 size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
@@ -2805,7 +2804,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                 reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
                 
                 for(size_t k=0; k<dim; ++k) {
-                    codecs::CompressedCodec::decode(states[k], reader);
+                    CodecPolicy::decode(states[k], reader);
                 }
                 
                 {

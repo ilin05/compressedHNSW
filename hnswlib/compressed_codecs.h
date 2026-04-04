@@ -28,113 +28,91 @@ inline AlgorithmType getAlgorithmType(const std::string& name) {
     return AlgorithmType::DeXOR; // default
 }
 
-struct CodecState {
-    AlgorithmType algo;
+struct DeXORState {
     double current_value;
-    union {
-        struct {
-            double previous_value;
-            int previous_q;
-            int previous_delta;
-            long long previous_exp;
-            int EL;
-            int contract_step;
-            int rho;
-        } dexor;
-
-        struct {
-            double previous_value;
-            int previous_lead;
-            int previous_tail;
-            bool first;
-        } gorilla;
-
-        struct {
-            long long previous_long_value;
-            int previous_lead;
-            int previous_tail;
-            int previous_betaStar;
-            bool first;
-        } elf;
-
-        struct {
-            long long previous_integer;
-            bool first;
-        } camel;
-    };
-
-    CodecState() : algo(AlgorithmType::DeXOR) { reset(); }
-    explicit CodecState(AlgorithmType a) : algo(a) { reset(); }
-
-    void setAlgorithm(AlgorithmType a) {
-        algo = a;
-        reset();
-    }
-
+    struct {
+        double previous_value;
+        int previous_q;
+        int previous_delta;
+        long long previous_exp;
+        int EL;
+        int contract_step;
+        int rho;
+    } dexor;
+    DeXORState() { reset(); }
     void reset() {
         current_value = 0.0;
-        switch(algo) {
-            case AlgorithmType::DeXOR:
-                dexor.previous_value = 0.0;
-                dexor.previous_q = 0;
-                dexor.previous_delta = 0;
-                dexor.previous_exp = 1023;
-                dexor.EL = 1;
-                dexor.contract_step = 0;
-                dexor.rho = 1;
-                break;
-            case AlgorithmType::Gorilla:
-                gorilla.previous_value = 0.0;
-                gorilla.previous_lead = 0;
-                gorilla.previous_tail = 0;
-                gorilla.first = true;
-                break;
-            case AlgorithmType::Elf:
-                elf.previous_long_value = 0;
-                elf.previous_lead = 0;
-                elf.previous_tail = 0;
-                elf.previous_betaStar = 0;
-                elf.first = true;
-                break;
-            case AlgorithmType::Camel:
-                camel.previous_integer = 0;
-                camel.first = true;
-                break;
-        }
+        dexor.previous_value = 0.0;
+        dexor.previous_q = 0;
+        dexor.previous_delta = 0;
+        dexor.previous_exp = 1023;
+        dexor.EL = 1;
+        dexor.contract_step = 0;
+        dexor.rho = 1;
+    }
+};
+
+struct GorillaState {
+    double current_value;
+    struct {
+        double previous_value;
+        int previous_lead;
+        int previous_tail;
+        bool first;
+    } gorilla;
+    GorillaState() { reset(); }
+    void reset() {
+        current_value = 0.0;
+        gorilla.previous_value = 0.0;
+        gorilla.previous_lead = 0;
+        gorilla.previous_tail = 0;
+        gorilla.first = true;
+    }
+};
+
+struct ElfState {
+    double current_value;
+    struct {
+        long long previous_long_value;
+        int previous_lead;
+        int previous_tail;
+        int previous_betaStar;
+        bool first;
+    } elf;
+    ElfState() { reset(); }
+    void reset() {
+        current_value = 0.0;
+        elf.previous_long_value = 0;
+        elf.previous_lead = 0;
+        elf.previous_tail = 0;
+        elf.previous_betaStar = 0;
+        elf.first = true;
+    }
+};
+
+struct CamelState {
+    double current_value;
+    struct {
+        long long previous_integer;
+        bool first;
+    } camel;
+    CamelState() { reset(); }
+    void reset() {
+        current_value = 0.0;
+        camel.previous_integer = 0;
+        camel.first = true;
     }
 };
 
 class CompressedCodec {
 public:
-    // =============== ENCODE ===============
-    static inline void encode(double value, CodecState& state, utils::MemoryStreamWriter& writer) {
-        state.current_value = value;
-        switch (state.algo) {
-            case AlgorithmType::DeXOR:   encode_dexor(value, state, writer); break;
-            case AlgorithmType::Gorilla: encode_gorilla(value, state, writer); break;
-            case AlgorithmType::Elf:     encode_elf(value, state, writer); break;
-            case AlgorithmType::Camel:   encode_camel(value, state, writer); break;
-        }
-    }
-
-    // =============== DECODE ===============
-    static inline double decode(CodecState& state, utils::MemoryBlockStreamReader& reader) {
-        double out_val = 0.0;
-        switch (state.algo) {
-            case AlgorithmType::DeXOR:   out_val = decode_dexor(state, reader); break;
-            case AlgorithmType::Gorilla: out_val = decode_gorilla(state, reader); break;
-            case AlgorithmType::Elf:     out_val = decode_elf(state, reader); break;
-            case AlgorithmType::Camel:   out_val = decode_camel(state, reader); break;
-        }
-        state.current_value = out_val;
-        return out_val;
-    }
     //     return 0.0;
     // }
 
-private:
+public:
     // --------- DeXOR ---------
-    static inline void encode_dexor(double value, CodecState& state, utils::MemoryStreamWriter& writer) {
+    template <typename StateT>
+    static inline void encode_dexor(double value, StateT& state, utils::MemoryStreamWriter& writer) {
         using namespace encoding_algorithm::dexor;
         int q = DeXORTools::getEnd(value, state.dexor.previous_q);
         int delta = 0;
@@ -185,7 +163,8 @@ private:
         state.dexor.previous_value = value;
     }
 
-    static inline void dexor_exception_handle(double value, CodecState& state, utils::MemoryStreamWriter& writer) {
+    template <typename StateT>
+    static inline void dexor_exception_handle(double value, StateT& state, utils::MemoryStreamWriter& writer) {
         using namespace encoding_algorithm::dexor;
         union { double d; long long l; } u;
         u.d = value;
@@ -219,7 +198,8 @@ private:
         state.dexor.previous_exp = exp;
     }
 
-    static inline double decode_dexor(CodecState& state, utils::MemoryBlockStreamReader& reader) {
+    template <typename StateT>
+    static inline double decode_dexor(StateT& state, utils::MemoryBlockStreamReader& reader) {
         using namespace encoding_algorithm::dexor;
         int con = reader.readInt(2);
         if (con == 3) {
@@ -247,7 +227,8 @@ private:
         return state.dexor.previous_value;
     }
 
-    static inline double dexor_exception_decode(CodecState& state, utils::MemoryBlockStreamReader& reader) {
+    template <typename StateT>
+    static inline double dexor_exception_decode(StateT& state, utils::MemoryBlockStreamReader& reader) {
         using namespace encoding_algorithm::dexor;
         const int bias = DeXORTools::getP2(state.dexor.EL - 1) - 1;
         const long long delta = reader.readLong(state.dexor.EL) - bias;
@@ -286,7 +267,8 @@ private:
     }
 
     // --------- Gorilla ---------
-    static inline void encode_gorilla(double value, CodecState& state, utils::MemoryStreamWriter& writer) {
+    template <typename StateT>
+    static inline void encode_gorilla(double value, StateT& state, utils::MemoryStreamWriter& writer) {
         if (state.gorilla.first) {
             writer.write(value, 64);
             state.gorilla.first = false;
@@ -317,7 +299,8 @@ private:
         state.gorilla.previous_value = value;
     }
 
-    static inline double decode_gorilla(CodecState& state, utils::MemoryBlockStreamReader& reader) {
+    template <typename StateT>
+    static inline double decode_gorilla(StateT& state, utils::MemoryBlockStreamReader& reader) {
         if (state.gorilla.first) {
             state.gorilla.previous_value = reader.readDouble(64);
             state.gorilla.first = false;
@@ -343,7 +326,8 @@ private:
     }
 
     // --------- Elf ---------
-    static inline void encode_elf(double value, CodecState& state, utils::MemoryStreamWriter& writer) {
+    template <typename StateT>
+    static inline void encode_elf(double value, StateT& state, utils::MemoryStreamWriter& writer) {
         using namespace encoding_algorithm::elf;
         if (state.elf.first) {
             writer.write(value, 64);
@@ -404,7 +388,8 @@ private:
         state.elf.previous_long_value = current;
     }
 
-    static inline double decode_elf(CodecState& state, utils::MemoryBlockStreamReader& reader) {
+    template <typename StateT>
+    static inline double decode_elf(StateT& state, utils::MemoryBlockStreamReader& reader) {
         using namespace encoding_algorithm::elf;
         if (state.elf.first) {
             double v = reader.readDouble(64);
@@ -452,7 +437,8 @@ private:
     }
 
     // --------- Camel ---------
-    static inline void encode_camel(double value, CodecState& state, utils::MemoryStreamWriter& writer) {
+    template <typename StateT>
+    static inline void encode_camel(double value, StateT& state, utils::MemoryStreamWriter& writer) {
         using namespace encoding_algorithm::camel;
         long long integer = static_cast<long long>(std::floor(value));
         if (state.camel.first) {
@@ -507,7 +493,8 @@ private:
         state.camel.previous_integer = integer;
     }
 
-    static inline double decode_camel(CodecState& state, utils::MemoryBlockStreamReader& reader) {
+    template <typename StateT>
+    static inline double decode_camel(StateT& state, utils::MemoryBlockStreamReader& reader) {
         using namespace encoding_algorithm::camel;
         if (state.camel.first) {
             double value = reader.readDouble(64);
@@ -549,6 +536,62 @@ private:
         if (c1) dxor = utils::binary_tools::xor_double(static_cast<long long>(vd), 1.0 + dxor) - 1.0;
         
         return static_cast<double>(current_int) + dxor;
+    }
+};
+
+struct DeXORCodecPolicy {
+    using StateType = DeXORState;
+    static constexpr AlgorithmType type = AlgorithmType::DeXOR;
+    static inline void encode(double value, StateType& state, utils::MemoryStreamWriter& writer) {
+        state.current_value = value;
+        CompressedCodec::encode_dexor(value, state, writer);
+    }
+    static inline double decode(StateType& state, utils::MemoryBlockStreamReader& reader) {
+        double out_val = CompressedCodec::decode_dexor(state, reader);
+        state.current_value = out_val;
+        return out_val;
+    }
+};
+
+struct GorillaCodecPolicy {
+    using StateType = GorillaState;
+    static constexpr AlgorithmType type = AlgorithmType::Gorilla;
+    static inline void encode(double value, StateType& state, utils::MemoryStreamWriter& writer) {
+        state.current_value = value;
+        CompressedCodec::encode_gorilla(value, state, writer);
+    }
+    static inline double decode(StateType& state, utils::MemoryBlockStreamReader& reader) {
+        double out_val = CompressedCodec::decode_gorilla(state, reader);
+        state.current_value = out_val;
+        return out_val;
+    }
+};
+
+struct ElfCodecPolicy {
+    using StateType = ElfState;
+    static constexpr AlgorithmType type = AlgorithmType::Elf;
+    static inline void encode(double value, StateType& state, utils::MemoryStreamWriter& writer) {
+        state.current_value = value;
+        CompressedCodec::encode_elf(value, state, writer);
+    }
+    static inline double decode(StateType& state, utils::MemoryBlockStreamReader& reader) {
+        double out_val = CompressedCodec::decode_elf(state, reader);
+        state.current_value = out_val;
+        return out_val;
+    }
+};
+
+struct CamelCodecPolicy {
+    using StateType = CamelState;
+    static constexpr AlgorithmType type = AlgorithmType::Camel;
+    static inline void encode(double value, StateType& state, utils::MemoryStreamWriter& writer) {
+        state.current_value = value;
+        CompressedCodec::encode_camel(value, state, writer);
+    }
+    static inline double decode(StateType& state, utils::MemoryBlockStreamReader& reader) {
+        double out_val = CompressedCodec::decode_camel(state, reader);
+        state.current_value = out_val;
+        return out_val;
     }
 };
 
