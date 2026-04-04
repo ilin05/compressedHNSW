@@ -548,7 +548,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                     // Reconstruct data from state
                     const std::vector<codecs::CodecState>& states = it->second;
                     for(size_t i=0; i<dim; ++i) {
-                        result[i] = states[i].previous_value;
+                        result[i] = states[i].current_value;
                     }
                     return result;
                 }

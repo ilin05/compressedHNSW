@@ -30,6 +30,7 @@ inline AlgorithmType getAlgorithmType(const std::string& name) {
 
 struct CodecState {
     AlgorithmType algo;
+    double current_value;
     union {
         struct {
             double previous_value;
@@ -71,6 +72,7 @@ struct CodecState {
     }
 
     void reset() {
+        current_value = 0.0;
         switch(algo) {
             case AlgorithmType::DeXOR:
                 dexor.previous_value = 0.0;
@@ -106,6 +108,7 @@ class CompressedCodec {
 public:
     // =============== ENCODE ===============
     static inline void encode(double value, CodecState& state, utils::MemoryStreamWriter& writer) {
+        state.current_value = value;
         switch (state.algo) {
             case AlgorithmType::DeXOR:   encode_dexor(value, state, writer); break;
             case AlgorithmType::Gorilla: encode_gorilla(value, state, writer); break;
@@ -116,14 +119,18 @@ public:
 
     // =============== DECODE ===============
     static inline double decode(CodecState& state, utils::MemoryBlockStreamReader& reader) {
+        double out_val = 0.0;
         switch (state.algo) {
-            case AlgorithmType::DeXOR:   return decode_dexor(state, reader);
-            case AlgorithmType::Gorilla: return decode_gorilla(state, reader);
-            case AlgorithmType::Elf:     return decode_elf(state, reader);
-            case AlgorithmType::Camel:   return decode_camel(state, reader);
+            case AlgorithmType::DeXOR:   out_val = decode_dexor(state, reader); break;
+            case AlgorithmType::Gorilla: out_val = decode_gorilla(state, reader); break;
+            case AlgorithmType::Elf:     out_val = decode_elf(state, reader); break;
+            case AlgorithmType::Camel:   out_val = decode_camel(state, reader); break;
         }
-        return 0.0;
+        state.current_value = out_val;
+        return out_val;
     }
+    //     return 0.0;
+    // }
 
 private:
     // --------- DeXOR ---------
