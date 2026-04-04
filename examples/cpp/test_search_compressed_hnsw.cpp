@@ -197,6 +197,7 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
     else if (algo_name == "Gorilla") test_search_dataset_tmpl<codecs::GorillaCodecPolicy>(dataset_name, base_dir, algo_name, csv_file);
     else if (algo_name == "Elf") test_search_dataset_tmpl<codecs::ElfCodecPolicy>(dataset_name, base_dir, algo_name, csv_file);
     else if (algo_name == "Camel") test_search_dataset_tmpl<codecs::CamelCodecPolicy>(dataset_name, base_dir, algo_name, csv_file);
+    else if (algo_name == "DeXORPlus") test_search_dataset_tmpl<codecs::DeXORPlusCodecPolicy>(dataset_name, base_dir, algo_name, csv_file);
     else throw std::runtime_error("Unknown algorithm: " + algo_name);
 }
 
@@ -224,7 +225,8 @@ int main(int argc, char** argv) {
         // "DeXOR"
         "Gorilla", 
         "Elf", 
-        "Camel"
+        "Camel",
+        "DeXORPlus"
     };
 
     std::string csv_file_path = "compressed_hnsw_search_recall_results.csv";

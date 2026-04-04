@@ -170,6 +170,8 @@ TestResult test_build_index(const std::string& dataset_name, const std::string& 
         return test_build_index_tmpl<codecs::ElfCodecPolicy>(dataset_name, base_dir, algo_name);
     } else if (algo_name == "Camel") {
         return test_build_index_tmpl<codecs::CamelCodecPolicy>(dataset_name, base_dir, algo_name);
+    } else if (algo_name == "DeXORPlus") {
+        return test_build_index_tmpl<codecs::DeXORPlusCodecPolicy>(dataset_name, base_dir, algo_name);
     } else {
         throw std::runtime_error("Unknown algorithm name");
     }
@@ -195,7 +197,7 @@ int main(int argc, char** argv) {
     };
 
     vector<string> algorithms = {
-        "DeXOR", "Gorilla", "Elf", "Camel"
+        "DeXOR", "Gorilla", "Elf", "Camel", "DeXORPlus"
     };
     
     std::vector<TestResult> all_results;

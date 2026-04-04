@@ -18,13 +18,15 @@ enum class AlgorithmType {
     DeXOR,
     Gorilla,
     Elf,
-    Camel
+    Camel,
+    DeXORPlus
 };
 
 inline AlgorithmType getAlgorithmType(const std::string& name) {
     if (name == "Gorilla") return AlgorithmType::Gorilla;
     if (name == "Elf") return AlgorithmType::Elf;
     if (name == "Camel") return AlgorithmType::Camel;
+    if (name == "DeXORPlus") return AlgorithmType::DeXORPlus;
     return AlgorithmType::DeXOR; // default
 }
 
@@ -101,6 +103,30 @@ struct CamelState {
         current_value = 0.0;
         camel.previous_integer = 0;
         camel.first = true;
+    }
+};
+
+struct DeXORPlusState {
+    double current_value;
+    struct {
+        double previous_value;
+        int p_q;
+        int p_o;
+        int p_delta;
+        int epsilon;
+    } dexorplus;
+    
+    static int& default_epsilon() { static int eps = -2; return eps; }
+    
+    DeXORPlusState() { reset(default_epsilon()); }
+    DeXORPlusState(int eps) { reset(eps); }
+    void reset(int eps = default_epsilon()) {
+        current_value = 0.0;
+        dexorplus.previous_value = 0.0;
+        dexorplus.p_q = 0;
+        dexorplus.p_o = 0;
+        dexorplus.p_delta = 0;
+        dexorplus.epsilon = eps;
     }
 };
 
@@ -537,6 +563,141 @@ public:
         
         return static_cast<double>(current_int) + dxor;
     }
+
+    // --------- DeXORPlus ---------
+    static inline int getEndWithEpsilon_dexorplus(double value, int epsilon) {
+        using namespace encoding_algorithm::dexor;
+        if (DeXORTools::comp(value, 0, DeXORTools::EQUAL_EPS) == 0) return 0;
+        int q = epsilon;
+        double vq = value / DeXORTools::getP10(q);
+        if (DeXORTools::isInt(vq, DeXORTools::INTEGER_EPS)) {
+            vq = value / DeXORTools::getP10(q + 1);
+            while (DeXORTools::isInt(vq, DeXORTools::INTEGER_EPS)) {
+                q++;
+                vq = value / DeXORTools::getP10(q + 1);
+            }
+            return q;
+        }
+        return epsilon;
+    }
+
+    template <typename StateT>
+    static inline void encode_dexorplus(double value, StateT& state, utils::MemoryStreamWriter& writer) {
+        using namespace encoding_algorithm::dexor;
+        double temp = state.dexorplus.previous_value;
+        int epsilon = state.dexorplus.epsilon;
+        int q = getEndWithEpsilon_dexorplus(value, epsilon);
+
+        int o = std::max(epsilon, q);
+        int delta = 0;
+        double alpha = 0;
+        while (delta < 16) {
+            double pow = DeXORTools::getP10(o);
+            long long a = DeXORTools::truncate(value / pow);
+            long long b = DeXORTools::truncate(temp / pow);
+            if (a == b) {
+                alpha = a * pow;
+                break;
+            }
+            delta++;
+            o++;
+        }
+
+        double residual = value - alpha;
+        double pow_val;
+        long long beta;
+        double beta_star;
+        if (q <= epsilon) {
+            writer.write(true);
+            pow_val = DeXORTools::getP10(epsilon);
+            beta = DeXORTools::truncate(residual / pow_val);
+            beta_star = beta * pow_val;
+            delta = o - epsilon;
+            if (o == state.dexorplus.p_o) {
+                writer.write(true);
+            } else {
+                writer.write(false);
+                state.dexorplus.p_o = o;
+                writer.write((long long)delta, 4);
+            }
+        } else {
+            writer.write(false);
+            pow_val = DeXORTools::getP10(q);
+            beta = DeXORTools::truncate(residual / pow_val);
+            beta_star = beta * pow_val;
+            delta = o - q;
+            if (q == state.dexorplus.p_q) {
+                writer.write(true);
+            } else {
+                writer.write(false);
+                state.dexorplus.p_q = q;
+                writer.write((long long)(q - epsilon - 1), 4);
+            }
+            if (delta == state.dexorplus.p_delta) {
+                writer.write(true);
+            } else {
+                writer.write(false);
+                state.dexorplus.p_delta = delta;
+                writer.write((long long)delta, 4);
+            }
+        }
+
+        long long abs_beta = std::abs((long long)beta);
+        
+        if (DeXORTools::comp(alpha, 0) == 0) {
+            writer.write(value > 0);
+        }
+
+        writer.write(abs_beta, DeXORTools::decimalBits(delta));
+        state.dexorplus.previous_value = alpha + beta_star;
+    }
+
+    template <typename StateT>
+    static inline double decode_dexorplus(StateT& state, utils::MemoryBlockStreamReader& reader) {
+        using namespace encoding_algorithm::dexor;
+        double temp = state.dexorplus.previous_value;
+        int epsilon = state.dexorplus.epsilon;
+
+        double alpha = 0.0;
+        int o, q, delta;
+        if (reader.readBoolean()) {
+            q = epsilon;
+            if (reader.readBoolean()) {
+                o = state.dexorplus.p_o;
+                delta = o - q;
+            } else {
+                delta = reader.readInt(4);
+                o = q + delta;
+            }
+            state.dexorplus.p_o = o;
+        } else {
+            if (reader.readBoolean()) {
+                q = state.dexorplus.p_q;
+            } else {
+                q = reader.readInt(4) + epsilon + 1;
+            }
+            state.dexorplus.p_q = q;
+            if (reader.readBoolean()) {
+                delta = state.dexorplus.p_delta;
+            } else {
+                delta = reader.readInt(4);
+            }
+            state.dexorplus.p_delta = delta;
+        }
+
+        o = q + delta;
+        double pow_val = DeXORTools::getP10(o);
+        alpha = DeXORTools::truncate(temp / pow_val) * pow_val;
+
+        long long sign = alpha > 0 ? 1 : -1;
+        if (DeXORTools::comp(alpha, 0) == 0) sign = reader.readBoolean() ? 1 : -1;
+        long long beta = sign * reader.readLong(DeXORTools::decimalBits(delta));
+        double beta_star = beta * DeXORTools::getP10(q);
+
+        double value = alpha + beta_star;
+        state.dexorplus.previous_value = value;
+        return value;
+    }
 };
 
 struct DeXORCodecPolicy {
@@ -590,6 +751,20 @@ struct CamelCodecPolicy {
     }
     static inline double decode(StateType& state, utils::MemoryBlockStreamReader& reader) {
         double out_val = CompressedCodec::decode_camel(state, reader);
+        state.current_value = out_val;
+        return out_val;
+    }
+};
+
+struct DeXORPlusCodecPolicy {
+    using StateType = DeXORPlusState;
+    static constexpr AlgorithmType type = AlgorithmType::DeXORPlus;
+    static inline void encode(double value, StateType& state, utils::MemoryStreamWriter& writer) {
+        state.current_value = value;
+        CompressedCodec::encode_dexorplus(value, state, writer);
+    }
+    static inline double decode(StateType& state, utils::MemoryBlockStreamReader& reader) {
+        double out_val = CompressedCodec::decode_dexorplus(state, reader);
         state.current_value = out_val;
         return out_val;
     }
