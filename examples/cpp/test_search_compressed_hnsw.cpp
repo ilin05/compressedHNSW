@@ -157,7 +157,7 @@ void test_search_dataset_tmpl(const std::string& dataset_name, const std::string
         size_t correct = 0;
         StopW stopw;
 
-        #pragma omp parallel for reduction(+:correct)
+        // #pragma omp parallel for reduction(+:correct)
         for (long i = 0; i < (long)qsize; ++i) {
             std::priority_queue<std::pair<double, labeltype>> result = appr_alg->searchKnn(massQ + i * qdim, k);
             std::unordered_set<labeltype> gt_set;
