@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <vector>
 #include "../examples/utils/memory_stream_writer.h"
 #include "../examples/utils/memory_block_stream_reader.h"
 #include "../examples/utils/binary_tools.h"
@@ -15,7 +14,12 @@
 namespace hnswlib {
 namespace codecs {
 
-enum class AlgorithmType { DeXOR, Gorilla, Elf, Camel };
+enum class AlgorithmType {
+    DeXOR,
+    Gorilla,
+    Elf,
+    Camel
+};
 
 inline AlgorithmType getAlgorithmType(const std::string& name) {
     if (name == "Gorilla") return AlgorithmType::Gorilla;
@@ -24,80 +28,121 @@ inline AlgorithmType getAlgorithmType(const std::string& name) {
     return AlgorithmType::DeXOR; // default
 }
 
-// ---------------- DeXOR Policy ----------------
-struct DeXORState {
-    double current_value = 0.0;
-    double previous_value = 0.0;
-    int previous_q = 0;
-    int previous_delta = 0;
-    long long previous_exp = 1023;
-    int EL = 1;
-    int contract_step = 0;
-    int rho = 1;
+struct CodecState {
+    AlgorithmType algo;
+    double current_value;
+    union {
+        struct {
+            double previous_value;
+            int previous_q;
+            int previous_delta;
+            long long previous_exp;
+            int EL;
+            int contract_step;
+            int rho;
+        } dexor;
+
+        struct {
+            double previous_value;
+            int previous_lead;
+            int previous_tail;
+            bool first;
+        } gorilla;
+
+        struct {
+            long long previous_long_value;
+            int previous_lead;
+            int previous_tail;
+            int previous_betaStar;
+            bool first;
+        } elf;
+
+        struct {
+            long long previous_integer;
+            bool first;
+        } camel;
+    };
+
+    CodecState() : algo(AlgorithmType::DeXOR) { reset(); }
+    explicit CodecState(AlgorithmType a) : algo(a) { reset(); }
+
+    void setAlgorithm(AlgorithmType a) {
+        algo = a;
+        reset();
+    }
 
     void reset() {
         current_value = 0.0;
-        previous_value = 0.0;
-        previous_q = 0;
-        previous_delta = 0;
-        previous_exp = 1023;
-        EL = 1;
-        contract_step = 0;
-        rho = 1;
+        switch(algo) {
+            case AlgorithmType::DeXOR:
+                dexor.previous_value = 0.0;
+                dexor.previous_q = 0;
+                dexor.previous_delta = 0;
+                dexor.previous_exp = 1023;
+                dexor.EL = 1;
+                dexor.contract_step = 0;
+                dexor.rho = 1;
+                break;
+            case AlgorithmType::Gorilla:
+                gorilla.previous_value = 0.0;
+                gorilla.previous_lead = 0;
+                gorilla.previous_tail = 0;
+                gorilla.first = true;
+                break;
+            case AlgorithmType::Elf:
+                elf.previous_long_value = 0;
+                elf.previous_lead = 0;
+                elf.previous_tail = 0;
+                elf.previous_betaStar = 0;
+                elf.first = true;
+                break;
+            case AlgorithmType::Camel:
+                camel.previous_integer = 0;
+                camel.first = true;
+                break;
+        }
     }
 };
 
-struct DeXORCodec {
-    using StateType = DeXORState;
-    static std::string name() { return "DeXOR"; }
-
-    static inline void dexor_exception_handle(double value, StateType& state, utils::MemoryStreamWriter& writer) {
-        using namespace encoding_algorithm::dexor;
-        union { double d; long long l; } u;
-        u.d = value;
-        long long exp = DeXORTools::segment(u.l, 2, 12);
-        long long delta = exp - state.previous_exp;
-        int bias = DeXORTools::getP2(state.EL - 1) - 1;
-
-        if (delta >= -bias && delta <= bias) {
-            writer.write(delta + bias, state.EL);
-            writer.write(u.l < 0);
-            writer.write(u.l, 52);
-
-            if (state.EL > 1) {
-                int su_bias = DeXORTools::getP2(state.EL - 2) - 1;
-                if(delta >= -su_bias && delta <= su_bias) {
-                    state.contract_step++;
-                } else {
-                    state.contract_step = 0;
-                }
-                if (state.contract_step == state.rho) {
-                    state.EL--;
-                    state.contract_step = 0;
-                }
-            }
-        } else {
-            writer.write(DeXORTools::getP2(state.EL) - 1, state.EL);
-            writer.write(u.l, 64);
-            state.contract_step = 0;
-
-            if (state.EL < 10) {
-                state.EL++;
-            }
+class CompressedCodec {
+public:
+    // =============== ENCODE ===============
+    static inline void encode(double value, CodecState& state, utils::MemoryStreamWriter& writer) {
+        state.current_value = value;
+        switch (state.algo) {
+            case AlgorithmType::DeXOR:   encode_dexor(value, state, writer); break;
+            case AlgorithmType::Gorilla: encode_gorilla(value, state, writer); break;
+            case AlgorithmType::Elf:     encode_elf(value, state, writer); break;
+            case AlgorithmType::Camel:   encode_camel(value, state, writer); break;
         }
-        state.previous_exp = exp;
     }
 
-    static inline void encode(double value, StateType& state, utils::MemoryStreamWriter& writer) {
-        state.current_value = value;
+    // =============== DECODE ===============
+    static inline double decode(CodecState& state, utils::MemoryBlockStreamReader& reader) {
+        double out_val = 0.0;
+        switch (state.algo) {
+            case AlgorithmType::DeXOR:   out_val = decode_dexor(state, reader); break;
+            case AlgorithmType::Gorilla: out_val = decode_gorilla(state, reader); break;
+            case AlgorithmType::Elf:     out_val = decode_elf(state, reader); break;
+            case AlgorithmType::Camel:   out_val = decode_camel(state, reader); break;
+        }
+        state.current_value = out_val;
+        return out_val;
+    }
+    //     return 0.0;
+    // }
+
+private:
+    // --------- DeXOR ---------
+    static inline void encode_dexor(double value, CodecState& state, utils::MemoryStreamWriter& writer) {
         using namespace encoding_algorithm::dexor;
-        int q = DeXORTools::getEnd(value, state.previous_q);
+        int q = DeXORTools::getEnd(value, state.dexor.previous_q);
         int delta = 0;
         double alpha = 0;
         while (delta < 16) {
             double pow = DeXORTools::getP10(q + delta);
             long long a = DeXORTools::truncate(value / pow);
-            long long b = DeXORTools::truncate(state.previous_value / pow);
+            long long b = DeXORTools::truncate(state.dexor.previous_value / pow);
             if (a == b) {
                 alpha = a * pow;
                 break;
@@ -117,8 +162,8 @@ struct DeXORCodec {
         }
 
         beta = std::llabs(beta);
-        bool flag = q == state.previous_q;
-        if (flag && delta == state.previous_delta) {
+        bool flag = q == state.dexor.previous_q;
+        if (flag && delta == state.dexor.previous_delta) {
             writer.write(true);
             writer.write(false);
         } else {
@@ -126,10 +171,10 @@ struct DeXORCodec {
             writer.write(flag);
             if (!flag) {
                 writer.write(q + 20, 5);
-                state.previous_q = q;
+                state.dexor.previous_q = q;
             }
             writer.write(delta, 4);
-            state.previous_delta = delta;
+            state.dexor.previous_delta = delta;
         }
 
         if (DeXORTools::comp(alpha, 0) == 0) {
@@ -137,206 +182,174 @@ struct DeXORCodec {
         }
 
         writer.write(beta, DeXORTools::decimalBits(delta));
-        state.previous_value = value;
+        state.dexor.previous_value = value;
     }
 
-    static inline double dexor_exception_decode(StateType& state, utils::MemoryBlockStreamReader& reader) {
+    static inline void dexor_exception_handle(double value, CodecState& state, utils::MemoryStreamWriter& writer) {
         using namespace encoding_algorithm::dexor;
-        int bias = DeXORTools::getP2(state.EL - 1) - 1;
-        long long delta = reader.readLong(state.EL) - bias;
-        uint64_t lv = 0;
+        union { double d; long long l; } u;
+        u.d = value;
+        long long exp = DeXORTools::segment(u.l, 2, 12);
+        long long delta = exp - state.dexor.previous_exp;
+        int bias = DeXORTools::getP2(state.dexor.EL - 1) - 1;
 
         if (delta >= -bias && delta <= bias) {
-            state.previous_exp += delta;
-            uint64_t sign = reader.readLong(1);
-            uint64_t mantissa = reader.readLong(52);
-            lv = (sign << 63) | ((uint64_t)state.previous_exp << 52) | mantissa;
+            writer.write(delta + bias, state.dexor.EL);
+            writer.write(u.l < 0);
+            writer.write(u.l, 52);
 
-            if (state.EL > 1) {
-                int su_bias = DeXORTools::getP2(state.EL - 2) - 1;
-                if (delta >= -su_bias && delta <= su_bias) {
-                    state.contract_step++;
+            if (state.dexor.EL > 1) {
+                int su_bias = DeXORTools::getP2(state.dexor.EL - 2) - 1;
+                if(delta >= -su_bias && delta <= su_bias) {
+                    state.dexor.contract_step++;
                 } else {
-                    state.contract_step = 0;
+                    state.dexor.contract_step = 0;
                 }
-                if (state.contract_step == state.rho) {
-                    state.EL--;
-                    state.contract_step = 0;
+                if (state.dexor.contract_step == state.dexor.rho) {
+                    state.dexor.EL--;
+                    state.dexor.contract_step = 0;
                 }
             }
         } else {
-            lv = reader.readLong(64);
-            state.previous_exp = DeXORTools::segment((long long)lv, 2, 12);
-            if (state.EL < 10) {
-                state.EL++;
-                state.contract_step = 0;
-            }
+            writer.write(DeXORTools::getP2(state.dexor.EL) - 1, state.dexor.EL);
+            writer.write(u.l, 64);
+            state.dexor.contract_step = 0;
+            if (state.dexor.EL < 10) state.dexor.EL++;
         }
-        union { uint64_t bits; double value; } converter{};
-        converter.bits = lv;
-        return converter.value;
+        state.dexor.previous_exp = exp;
     }
 
-    static inline double decode(StateType& state, utils::MemoryBlockStreamReader& reader) {
+    static inline double decode_dexor(CodecState& state, utils::MemoryBlockStreamReader& reader) {
         using namespace encoding_algorithm::dexor;
         int con = reader.readInt(2);
         if (con == 3) {
-            double v = dexor_exception_decode(state, reader);
-            state.previous_value = v;
-            state.current_value = v;
-            return v;
+            return dexor_exception_decode(state, reader);
         }
-
         if (con == 0 || con == 1) {
-            if (con == 0) {
-                state.previous_q = reader.readInt(5) - 20;
-            }
-            state.previous_delta = reader.readInt(4);
+            if (con == 0) state.dexor.previous_q = reader.readInt(5) - 20;
+            state.dexor.previous_delta = reader.readInt(4);
         }
-
-        double pow = DeXORTools::getP10(state.previous_q + state.previous_delta);
-        double truncated = DeXORTools::truncate(state.previous_value / pow);
-        double previous_alpha = truncated * pow;
+        
+        const double pow_val = DeXORTools::getP10(state.dexor.previous_q + state.dexor.previous_delta);
+        const double truncated = static_cast<double>(DeXORTools::truncate(state.dexor.previous_value / pow_val));
+        double previous_alpha = truncated * pow_val;
 
         long long sign = previous_alpha > 0 ? 1LL : -1LL;
         if (DeXORTools::comp(previous_alpha, 0) == 0) {
             sign = reader.readBoolean() ? 1LL : -1LL;
         }
 
-        int bits = DeXORTools::decimalBits(state.previous_delta);
+        const int bits = DeXORTools::decimalBits(state.dexor.previous_delta);
         long long magnitude = bits > 0 ? reader.readLong(bits) : 0;
-        double beta = (sign * magnitude) * DeXORTools::getP10(state.previous_q);
+        const double beta = static_cast<double>(sign * magnitude) * DeXORTools::getP10(state.dexor.previous_q);
 
-        state.previous_value = previous_alpha + beta;
-        state.current_value = state.previous_value;
-        return state.previous_value;
+        state.dexor.previous_value = previous_alpha + beta;
+        return state.dexor.previous_value;
     }
-};
 
-// ---------------- Gorilla Policy ----------------
-struct GorillaState {
-    double current_value = 0.0;
-    double previous_value = 0.0;
-    int previous_lead = 0;
-    int previous_tail = 0;
-    bool first = true;
+    static inline double dexor_exception_decode(CodecState& state, utils::MemoryBlockStreamReader& reader) {
+        using namespace encoding_algorithm::dexor;
+        const int bias = DeXORTools::getP2(state.dexor.EL - 1) - 1;
+        const long long delta = reader.readLong(state.dexor.EL) - bias;
+        uint64_t lv = 0;
 
-    void reset() {
-        current_value = 0.0;
-        previous_value = 0.0;
-        previous_lead = 0;
-        previous_tail = 0;
-        first = true;
-    }
-};
+        if (delta >= -bias && delta <= bias) {
+            state.dexor.previous_exp += delta;
+            const uint64_t sign = static_cast<uint64_t>(reader.readLong(1));
+            const uint64_t mantissa = static_cast<uint64_t>(reader.readLong(52));
+            lv = (sign << 63) | (static_cast<uint64_t>(state.dexor.previous_exp) << 52) | mantissa;
 
-struct GorillaCodec {
-    using StateType = GorillaState;
-    static std::string name() { return "Gorilla"; }
-
-    static inline void encode(double value, StateType& state, utils::MemoryStreamWriter& writer) {
-        state.current_value = value;
-        union { double d; long long l; } u_val, u_prev;
-        u_val.d = value;
-        u_prev.d = state.previous_value;
-
-        if (state.first) {
-            writer.write(u_val.l, 64);
-            state.first = false;
-            state.previous_value = value;
-            return;
-        }
-
-        long long xor_val = u_val.l ^ u_prev.l;
-        if (xor_val == 0) {
-            writer.write(false);
-            return;
-        }
-        writer.write(true);
-
-        int lead = __builtin_clzll(xor_val);
-        int tail = __builtin_ctzll(xor_val);
-
-        if (lead >= state.previous_lead && tail >= state.previous_tail) {
-            writer.write(false);
-            writer.write(xor_val >> state.previous_tail, 64 - state.previous_lead - state.previous_tail);
+            if (state.dexor.EL > 1) {
+                const int su_bias = DeXORTools::getP2(state.dexor.EL - 2) - 1;
+                if (delta >= -su_bias && delta <= su_bias) {
+                    state.dexor.contract_step++;
+                } else {
+                    state.dexor.contract_step = 0;
+                }
+                if (state.dexor.contract_step == state.dexor.rho) {
+                    state.dexor.EL--;
+                    state.dexor.contract_step = 0;
+                }
+            }
         } else {
-            writer.write(true);
-            writer.write(lead, 6);
-            writer.write(64 - lead - tail, 6);
-            writer.write(xor_val >> tail, 64 - lead - tail);
-            state.previous_lead = lead;
-            state.previous_tail = tail;
+            lv = static_cast<uint64_t>(reader.readLong(64));
+            state.dexor.previous_exp = DeXORTools::segment(static_cast<long long>(lv), 2, 12);
+            if (state.dexor.EL < 10) {
+                state.dexor.EL++;
+                state.dexor.contract_step = 0;
+            }
         }
-        state.previous_value = value;
+
+        union { uint64_t bits; double value; } converter{};
+        converter.bits = lv;
+        return converter.value;
     }
 
-    static inline double decode(StateType& state, utils::MemoryBlockStreamReader& reader) {
-        if (state.first) {
-            union { long long l; double d; } u;
-            u.l = reader.readLong(64);
-            state.previous_value = u.d;
-            state.first = false;
-            state.current_value = u.d;
-            return u.d;
+    // --------- Gorilla ---------
+    static inline void encode_gorilla(double value, CodecState& state, utils::MemoryStreamWriter& writer) {
+        if (state.gorilla.first) {
+            writer.write(value, 64);
+            state.gorilla.first = false;
+        } else {
+            if (value == state.gorilla.previous_value) {
+                writer.write(true);
+            } else {
+                writer.write(false);
+                long long xor_val = utils::binary_tools::xor_double(value, state.gorilla.previous_value);
+                int lead = utils::binary_tools::leadZeros(xor_val, 64);
+                int tail = utils::binary_tools::tailZeros(xor_val, 64);
+                if (lead >= state.gorilla.previous_lead && tail >= state.gorilla.previous_tail) {
+                    writer.write(true);
+                    int len = 64 - state.gorilla.previous_lead - state.gorilla.previous_tail;
+                    writer.write(static_cast<long long>(static_cast<unsigned long long>(xor_val) >> state.gorilla.previous_tail), len);
+                } else {
+                    writer.write(false);
+                    int lim_lead = std::min(lead, 31);
+                    writer.write(lim_lead, 5);
+                    int len = 64 - lim_lead - tail;
+                    writer.write(len - 1, 6);
+                    writer.write(static_cast<long long>(static_cast<unsigned long long>(xor_val) >> tail), len);
+                }
+                state.gorilla.previous_lead = lead;
+                state.gorilla.previous_tail = tail;
+            }
         }
-
-        if (!reader.readBoolean()) {
-            state.current_value = state.previous_value;
-            return state.previous_value;
-        }
-
-        if (reader.readBoolean()) {
-            state.previous_lead = reader.readInt(6);
-            int len = reader.readInt(6);
-            if (len == 0) len = 64;
-            state.previous_tail = 64 - state.previous_lead - len;
-        }
-
-        int length = 64 - state.previous_lead - state.previous_tail;
-        long long xor_val = reader.readLong(length);
-        xor_val <<= state.previous_tail;
-
-        union { double d; long long l; } u;
-        u.d = state.previous_value;
-        u.l ^= xor_val;
-        state.previous_value = u.d;
-        state.current_value = u.d;
-        return u.d;
+        state.gorilla.previous_value = value;
     }
-};
 
-// ---------------- Elf Policy ----------------
-struct ElfState {
-    double current_value = 0.0;
-    long long previous_long_value = 0;
-    int previous_lead = 0;
-    int previous_tail = 0;
-    int previous_betaStar = 0;
-    bool first = true;
-
-    void reset() {
-        current_value = 0.0;
-        previous_long_value = 0;
-        previous_lead = 0;
-        previous_tail = 0;
-        previous_betaStar = 0;
-        first = true;
+    static inline double decode_gorilla(CodecState& state, utils::MemoryBlockStreamReader& reader) {
+        if (state.gorilla.first) {
+            state.gorilla.previous_value = reader.readDouble(64);
+            state.gorilla.first = false;
+        } else {
+            if (reader.readBoolean()) {
+                return state.gorilla.previous_value;
+            }
+            long long xor_val = 0;
+            if (reader.readBoolean()) {
+                int len = 64 - state.gorilla.previous_lead - state.gorilla.previous_tail;
+                xor_val = reader.readLong(len) << state.gorilla.previous_tail;
+            } else {
+                int lim_lead = reader.readInt(5);
+                int len = reader.readInt(6) + 1;
+                int tail = 64 - len - lim_lead;
+                xor_val = reader.readLong(len) << tail;
+            }
+            state.gorilla.previous_lead = utils::binary_tools::leadZeros(xor_val, 64);
+            state.gorilla.previous_tail = utils::binary_tools::tailZeros(xor_val, 64);
+            state.gorilla.previous_value = utils::binary_tools::xor_double(xor_val, state.gorilla.previous_value);
+        }
+        return state.gorilla.previous_value;
     }
-};
 
-struct ElfCodec {
-    using StateType = ElfState;
-    static std::string name() { return "Elf"; }
-
-    static inline void encode(double value, StateType& state, utils::MemoryStreamWriter& writer) {
+    // --------- Elf ---------
+    static inline void encode_elf(double value, CodecState& state, utils::MemoryStreamWriter& writer) {
         using namespace encoding_algorithm::elf;
-        state.current_value = value;
-        if (state.first) {
+        if (state.elf.first) {
             writer.write(value, 64);
             union { double d; unsigned long long ull; } u; u.d = value;
-            state.previous_long_value = u.ull;
-            state.first = false;
+            state.elf.previous_long_value = u.ull;
+            state.elf.first = false;
             return;
         }
 
@@ -344,35 +357,35 @@ struct ElfCodec {
         if (value == 0.0 || std::isinf(value)) {
             writer.write(false);
         } else {
-            auto alphaBeta = Elf64Utils::getAlphaAndBetaStar(value, state.previous_betaStar);
-            int exponent = static_cast<int>((u.ull >> 52) & 0x7FFULL);
-            int gAlpha = Elf64Utils::getFAlpha(alphaBeta.first) + exponent - 1023;
+            auto alphaBeta = Elf64Utils::getAlphaAndBetaStar(value, state.elf.previous_betaStar); 
+            int exponent = static_cast<int>((u.ull >> 52) & 0x7FFULL);      
+            int gAlpha = Elf64Utils::getFAlpha(alphaBeta.first) + exponent - 1023;  
             int eraseBits = 52 - gAlpha;
             int betaStar = alphaBeta.second;
 
             unsigned long long mask;
             if (eraseBits <= 0) mask = std::numeric_limits<unsigned long long>::max();
-            else mask = std::numeric_limits<unsigned long long>::max() << (static_cast<unsigned int>(eraseBits) & 0x3F);
+            else mask = std::numeric_limits<unsigned long long>::max() << (static_cast<unsigned int>(eraseBits) & 0x3F);     
 
             unsigned long long delta = (~mask) & u.ull;
             if (betaStar < 16 && delta != 0 && eraseBits > 4) {
                 writer.write((betaStar | 0x10), 5);
-                state.previous_betaStar = betaStar;
+                state.elf.previous_betaStar = betaStar;
                 u.ull = mask & u.ull;
             } else {
                 writer.write(false);
             }
         }
         long long current = u.ull;
-        unsigned long long xor_val = u.ull ^ static_cast<unsigned long long>(state.previous_long_value);
+        unsigned long long xor_val = u.ull ^ static_cast<unsigned long long>(state.elf.previous_long_value);
 
         int lead = std::min(utils::binary_tools::leadZeros(static_cast<long long>(xor_val), 64), 7);
         int tail = utils::binary_tools::tailZeros(static_cast<long long>(xor_val), 64);
 
-        if (xor_val != 0 && lead == state.previous_lead && tail >= state.previous_tail) {
+        if (xor_val != 0 && lead == state.elf.previous_lead && tail >= state.elf.previous_tail) {
             writer.write(0, 2);
-            int len = 64 - state.previous_lead - state.previous_tail;
-            writer.write(static_cast<long long>(xor_val >> state.previous_tail), len);
+            int len = 64 - state.elf.previous_lead - state.elf.previous_tail;
+            writer.write(static_cast<long long>(xor_val >> state.elf.previous_tail), len);
         } else if (xor_val == 0) {
             writer.write(1, 2);
         } else {
@@ -386,18 +399,18 @@ struct ElfCodec {
             writer.write(static_cast<long long>(xor_val >> tail), len);
         }
 
-        state.previous_lead = lead;
-        state.previous_tail = tail;
-        state.previous_long_value = current;
+        state.elf.previous_lead = lead;
+        state.elf.previous_tail = tail;
+        state.elf.previous_long_value = current;
     }
 
-    static inline double decode(StateType& state, utils::MemoryBlockStreamReader& reader) {
+    static inline double decode_elf(CodecState& state, utils::MemoryBlockStreamReader& reader) {
         using namespace encoding_algorithm::elf;
-        if (state.first) {
+        if (state.elf.first) {
             double v = reader.readDouble(64);
             union { double d; long long ll; } u; u.d = v;
-            state.previous_long_value = u.ll;
-            state.first = false;
+            state.elf.previous_long_value = u.ll;
+            state.elf.first = false;
             return v;
         }
 
@@ -408,23 +421,23 @@ struct ElfCodec {
         int c2 = reader.readInt(2);
         long long xor_val = 0;
         if (c2 == 0) {
-            int len = 64 - state.previous_lead - state.previous_tail;
-            xor_val = reader.readLong(len) << state.previous_tail;
-            state.previous_lead = std::min(utils::binary_tools::leadZeros(xor_val, 64), 7);
-            state.previous_tail = utils::binary_tools::tailZeros(xor_val, 64);
+            int len = 64 - state.elf.previous_lead - state.elf.previous_tail;
+            xor_val = reader.readLong(len) << state.elf.previous_tail;
+            state.elf.previous_lead = std::min(utils::binary_tools::leadZeros(xor_val, 64), 7);
+            state.elf.previous_tail = utils::binary_tools::tailZeros(xor_val, 64);
         } else if (c2 == 1) {
-            state.previous_lead = 7;
-            state.previous_tail = 64;
+            state.elf.previous_lead = 7;
+            state.elf.previous_tail = 64;
         } else {
-            state.previous_lead = reader.readInt(3);
+            state.elf.previous_lead = reader.readInt(3);
             int len = (c2 == 2) ? (reader.readInt(4) + 1) : (reader.readInt(6) + 1);
-            state.previous_tail = 64 - len - state.previous_lead;
-            xor_val = reader.readLong(len) << state.previous_tail;
+            state.elf.previous_tail = 64 - len - state.elf.previous_lead;
+            xor_val = reader.readLong(len) << state.elf.previous_tail;
         }
-
-        state.previous_long_value = static_cast<long long>(static_cast<unsigned long long>(state.previous_long_value) ^ static_cast<unsigned long long>(xor_val));
-        union { long long ll; double d; } u; u.ll = state.previous_long_value;
-
+        
+        state.elf.previous_long_value = static_cast<long long>(static_cast<unsigned long long>(state.elf.previous_long_value) ^ static_cast<unsigned long long>(xor_val));
+        union { long long ll; double d; } u; u.ll = state.elf.previous_long_value;
+        
         if (c1) {
             double vPrime = u.d;
             int sp = Elf64Utils::getSP(std::fabs(vPrime));
@@ -437,80 +450,105 @@ struct ElfCodec {
         }
         return u.d;
     }
-};
 
-// ---------------- Camel Policy ----------------
-struct CamelState {
-    double current_value = 0.0;
-    long long previous_integer = 0;
-    bool first = true;
-
-    void reset() {
-        current_value = 0.0;
-        previous_integer = 0;
-        first = true;
-    }
-};
-
-struct CamelCodec {
-    using StateType = CamelState;
-    static std::string name() { return "Camel"; }
-
-    static inline void encode(double value, StateType& state, utils::MemoryStreamWriter& writer) {
+    // --------- Camel ---------
+    static inline void encode_camel(double value, CodecState& state, utils::MemoryStreamWriter& writer) {
         using namespace encoding_algorithm::camel;
-        state.current_value = value;
-        union { double d; long long l; } cur; cur.d = value;
-        if (state.first) {
-            writer.write(cur.l, 64);
-            state.previous_integer = cur.l;
-            state.first = false;
-            return;
+        long long integer = static_cast<long long>(std::floor(value));
+        if (state.camel.first) {
+            writer.write(value, 64);
+            state.camel.first = false;
+        } else {
+            long long diff = integer - state.camel.previous_integer;
+            if (diff >= -1 && diff <= 1) {
+                writer.write(static_cast<long long>(diff + 1), 2);
+            } else {
+                writer.write(3, 2);
+                bool non_negative = diff >= 0;
+                writer.write(non_negative);
+                long long abs_diff = diff >= 0 ? diff : -diff;
+                bool large = abs_diff >= 8;
+                writer.write(large);
+                writer.write(abs_diff, large ? 16 : 3);
+            }
+
+            double dec = value - static_cast<double>(integer);
+            int l = CamelTools::decimal_count(value);
+            writer.write(l - 1, 2);
+            double dxor = dec;
+            if (dec >= CamelTools::quick_pow2(-l)) {
+                writer.write(true);
+                dxor = CamelTools::calculate_dxor(dec, l);
+                long long vd_bits = utils::binary_tools::xor_double(1.0 + dec, 1.0 + dxor);
+                unsigned long long shifted = static_cast<unsigned long long>(vd_bits) >> (52 - l);
+                writer.write(static_cast<long long>(shifted), l);
+            } else {
+                writer.write(false);
+            }
+
+            long long ldxor = static_cast<long long>(std::llround(dxor * CamelTools::quick_pow10(l)));
+            if (l == 1) writer.write(ldxor, 3);
+            else if (l == 2) {
+                bool gt8 = ldxor >= 8; writer.write(gt8); writer.write(ldxor, gt8 ? 5 : 3);
+            } else if (l == 3) {
+                const int thresholds[3] = {2, 8, 32};
+                const int cost_bits[4] = {1, 3, 5, -l + CamelTools::calculate_max(l)};
+                int code = 0;
+                while (code < 3 && ldxor >= thresholds[code]) code++;
+                writer.write(code, 2); writer.write(ldxor, cost_bits[code]);
+            } else if (l == 4) {
+                const int thresholds[3] = {16, 64, 256};
+                const int cost_bits[4] = {4, 6, 8, -l + CamelTools::calculate_max(l)};
+                int code = 0;
+                while (code < 3 && ldxor >= thresholds[code]) code++;
+                writer.write(code, 2); writer.write(ldxor, cost_bits[code]);
+            }
+        }
+        state.camel.previous_integer = integer;
+    }
+
+    static inline double decode_camel(CodecState& state, utils::MemoryBlockStreamReader& reader) {
+        using namespace encoding_algorithm::camel;
+        if (state.camel.first) {
+            double value = reader.readDouble(64);
+            state.camel.previous_integer = CamelTools::truncate(value);
+            state.camel.first = false;
+            return value;
         }
 
-        long long current_integer = cur.l;
-        long long delta = current_integer - state.previous_integer;
+        long long diff = reader.readLong(2);
+        long long current_int;
+        if (diff <= 2) {
+            current_int = state.camel.previous_integer + diff - 1;
+        } else {
+            long long sign = reader.readBoolean() ? 1 : -1;
+            bool gt8 = reader.readBoolean();
+            long long magnitude = reader.readLong(gt8 ? 16 : 3);
+            current_int = state.camel.previous_integer + sign * magnitude;
+        }
+        state.camel.previous_integer = current_int;
+
+        int l = reader.readInt(2) + 1;
+        long long ldxor = 0;
+        bool c1 = reader.readBoolean();
+        unsigned long long vd = 0;
+        if (c1 && l > 0) vd = static_cast<unsigned long long>(reader.readLong(l)) << (52 - l);
+
+        if (l == 1) ldxor = reader.readLong(3);
+        else if (l == 2) {
+            bool gt8 = reader.readBoolean(); ldxor = reader.readLong(gt8 ? 5 : 3);
+        } else if (l == 3) {
+            const int cost_bits[4] = {1, 3, 5, -l + CamelTools::calculate_max(l)};
+            int code = reader.readInt(2); ldxor = reader.readLong(cost_bits[code]);
+        } else if (l == 4) {
+            const int cost_bits[4] = {4, 6, 8, -l + CamelTools::calculate_max(l)};
+            int code = reader.readInt(2); ldxor = reader.readLong(cost_bits[code]);
+        }
+
+        double dxor = static_cast<double>(ldxor) / CamelTools::quick_pow10(l);
+        if (c1) dxor = utils::binary_tools::xor_double(static_cast<long long>(vd), 1.0 + dxor) - 1.0;
         
-        if (delta == 0) {
-            writer.write(0, 2);
-        } else if (delta >= -128 && delta <= 127) {
-            writer.write(1, 2);
-            writer.write(delta + 128, 8);
-        } else if (delta >= -32768 && delta <= 32767) {
-            writer.write(2, 2);
-            writer.write(delta + 32768, 16);
-        } else {
-            writer.write(3, 2);
-            writer.write(current_integer, 64);
-        }
-        state.previous_integer = current_integer;
-    }
-
-    static inline double decode(StateType& state, utils::MemoryBlockStreamReader& reader) {
-        using namespace encoding_algorithm::camel;
-        if (state.first) {
-            state.previous_integer = reader.readLong(64);
-            state.first = false;
-            union { long long l; double d; } u; u.l = state.previous_integer;
-            state.current_value = u.d;
-            return u.d;
-        }
-
-        int flag = reader.readInt(2);
-        if (flag == 0) {
-            // unchanged
-        } else if (flag == 1) {
-            long long delta = reader.readLong(8) - 128;
-            state.previous_integer += delta;
-        } else if (flag == 2) {
-            long long delta = reader.readLong(16) - 32768;
-            state.previous_integer += delta;
-        } else {
-            state.previous_integer = reader.readLong(64);
-        }
-
-        union { long long l; double d; } u; u.l = state.previous_integer;
-        state.current_value = u.d;
-        return u.d;
+        return static_cast<double>(current_int) + dxor;
     }
 };
 

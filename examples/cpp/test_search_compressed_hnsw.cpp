@@ -126,7 +126,7 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
     }
 
     L2SpaceDouble l2space(qdim);
-    AlgorithmInterface<double>* appr_alg = nullptr;
+    HierarchicalNSWCABFRAMEWORK<double>* appr_alg = nullptr;
     
     try {
         cout << "Loading index from " << index_path << "..." << endl;
@@ -135,19 +135,7 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
         if(cache_sizes.find(prefix) != cache_sizes.end()) {
             cache_sz = cache_sizes.at(prefix);
         }
-        
-        if (algo_name == "DeXOR") {
-            appr_alg = new HierarchicalNSWCABFRAMEWORK<double, codecs::DeXORCodec>(&l2space, index_path, true, algo_name, cache_sz);
-        } else if (algo_name == "Gorilla") {
-            appr_alg = new HierarchicalNSWCABFRAMEWORK<double, codecs::GorillaCodec>(&l2space, index_path, true, algo_name, cache_sz);
-        } else if (algo_name == "Elf") {
-            appr_alg = new HierarchicalNSWCABFRAMEWORK<double, codecs::ElfCodec>(&l2space, index_path, true, algo_name, cache_sz);
-        } else if (algo_name == "Camel") {
-            appr_alg = new HierarchicalNSWCABFRAMEWORK<double, codecs::CamelCodec>(&l2space, index_path, true, algo_name, cache_sz);
-        } else {
-            appr_alg = new HierarchicalNSWCABFRAMEWORK<double, codecs::DeXORCodec>(&l2space, index_path, true, algo_name, cache_sz);
-        }
-
+        appr_alg = new HierarchicalNSWCABFRAMEWORK<double>(&l2space, index_path, true, algo_name, cache_sz);
         cout << "Index successfully loaded." << endl;
     } catch (std::exception& e) {
         cerr << "Failed to load index: " << e.what() << endl;
@@ -164,12 +152,7 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
     vector<size_t> efs = {10, 20, 30, 40, 50, 60, 80, 100, 120, 150, 200, 300, 400};
     
     for (size_t ef : efs) {
-        
-        if (auto p = dynamic_cast<HierarchicalNSWCABFRAMEWORK<double, codecs::DeXORCodec>*>(appr_alg)) p->setEf(ef);
-        else if (auto p = dynamic_cast<HierarchicalNSWCABFRAMEWORK<double, codecs::GorillaCodec>*>(appr_alg)) p->setEf(ef);
-        else if (auto p = dynamic_cast<HierarchicalNSWCABFRAMEWORK<double, codecs::ElfCodec>*>(appr_alg)) p->setEf(ef);
-        else if (auto p = dynamic_cast<HierarchicalNSWCABFRAMEWORK<double, codecs::CamelCodec>*>(appr_alg)) p->setEf(ef);
-
+        appr_alg->setEf(ef);
         size_t correct = 0;
         StopW stopw;
 
@@ -222,10 +205,10 @@ int main(int argc, char** argv) {
     };
 
     vector<string> algorithms = {
-        "DeXOR",
-        "Gorilla", 
-        "Elf", 
-        "Camel"
+        "DeXOR"
+        // "Gorilla", 
+        // "Elf", 
+        // "Camel"
     };
 
     std::string csv_file_path = "compressed_hnsw_search_recall_results.csv";
