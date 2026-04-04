@@ -110,7 +110,7 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
     
     std::string query_file = base_dir + dataset_name + "_test.fvecs";
     std::string gt_file = base_dir + dataset_name + "_neighbors.ivecs";
-    std::string index_path = dataset_name + "_train.fvecs__hnswcableann_pq_pq.bin";
+    std::string index_path = dataset_name + "_train.fvecs_hnswcableann_pq.bin";
 
     
     cout << "\n==============================================" << endl;
