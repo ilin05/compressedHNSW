@@ -157,6 +157,7 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
     cout << "Testing Recall@" << k << " by varying ef..." << endl;
 
     vector<size_t> efs = {10, 20, 30, 40, 50, 60, 80, 100, 120, 150, 200, 300, 400, 500};
+    // vector<size_t> efs = {10, 20, 30, 40, 50};
     
     for (size_t ef : efs) {
         appr_alg->setEf(ef);
@@ -166,7 +167,7 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
         StopW stopw;
         
         // 可选开启多线程测QPS，如果是测单线程Latency这里请去掉 #pragma omp parallel for
-        #pragma omp parallel for reduction(+:correct)
+        // #pragma omp parallel for reduction(+:correct)
         for (long i = 0; i < (long)qsize; i++) {
             std::priority_queue<std::pair<double, labeltype>> result = appr_alg->searchKnn(massQ + qdim * i, k);
             
@@ -192,7 +193,7 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
              
         csv_file << dataset_name << "," << k << "," << ef << "," << recall << "," << time_us_per_query << "\n";
         
-        if (recall >= 0.999) break; // 如果 recall 已经接近 1 就不需要测更大的 ef 了
+        if (recall >= 0.99) break; // 如果 recall 已经接近 1 就不需要测更大的 ef 了
     }
     
     delete[] massQ;
