@@ -1,4 +1,6 @@
-#pragma once
+﻿import sys
+
+new_h = '''#pragma once
 
 #include <string>
 #include <algorithm>
@@ -502,3 +504,7 @@ struct CamelCodec {
 
 } // namespace codecs
 } // namespace hnswlib
+'''
+
+with open(r'd:\ZJU\SuDIS\hnswlib_cpp_py\hnswlib\compressed_codecs.h', 'w', encoding='utf-8') as f:
+    f.write(new_h)
