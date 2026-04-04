@@ -333,95 +333,109 @@ struct ElfCodec {
         using namespace encoding_algorithm::elf;
         state.current_value = value;
         if (state.first) {
-            union { double d; long long l; } u; u.d = value;
-            writer.write(u.l, 64);
-            state.previous_long_value = u.l;
+            writer.write(value, 64);
+            union { double d; unsigned long long ull; } u; u.d = value;
+            state.previous_long_value = u.ull;
             state.first = false;
             return;
         }
 
-        Elf64_Tools::Elf64_Data data = Elf64_Tools::getElf64Data(value);
-        int alphaStar = data.alphaStar;
-        int betaStar = data.betaStar;
-        if (betaStar == state.previous_betaStar) {
+        union { double d; unsigned long long ull; } u; u.d = value;
+        if (value == 0.0 || std::isinf(value)) {
             writer.write(false);
-            long long xor_val = alphaStar ^ state.previous_long_value;
-            if (xor_val == 0) {
-                writer.write(false);
+        } else {
+            auto alphaBeta = Elf64Utils::getAlphaAndBetaStar(value, state.previous_betaStar);
+            int exponent = static_cast<int>((u.ull >> 52) & 0x7FFULL);
+            int gAlpha = Elf64Utils::getFAlpha(alphaBeta.first) + exponent - 1023;
+            int eraseBits = 52 - gAlpha;
+            int betaStar = alphaBeta.second;
+
+            unsigned long long mask;
+            if (eraseBits <= 0) mask = std::numeric_limits<unsigned long long>::max();
+            else mask = std::numeric_limits<unsigned long long>::max() << (static_cast<unsigned int>(eraseBits) & 0x3F);
+
+            unsigned long long delta = (~mask) & u.ull;
+            if (betaStar < 16 && delta != 0 && eraseBits > 4) {
+                writer.write((betaStar | 0x10), 5);
+                state.previous_betaStar = betaStar;
+                u.ull = mask & u.ull;
             } else {
-                writer.write(true);
-                int lead = __builtin_clzll(xor_val);
-                int tail = __builtin_ctzll(xor_val);
-                if (lead >= state.previous_lead && tail >= state.previous_tail) {
-                    writer.write(false);
-                    writer.write(xor_val >> state.previous_tail, 64 - state.previous_lead - state.previous_tail);
-                } else {
-                    writer.write(true);
-                    writer.write(lead, 6);
-                    writer.write(64 - lead - tail, 6);
-                    writer.write(xor_val >> tail, 64 - lead - tail);
-                    state.previous_lead = lead;
-                    state.previous_tail = tail;
-                }
+                writer.write(false);
             }
-            state.previous_long_value = alphaStar;
+        }
+        long long current = u.ull;
+        unsigned long long xor_val = u.ull ^ static_cast<unsigned long long>(state.previous_long_value);
+
+        int lead = std::min(utils::binary_tools::leadZeros(static_cast<long long>(xor_val), 64), 7);
+        int tail = utils::binary_tools::tailZeros(static_cast<long long>(xor_val), 64);
+
+        if (xor_val != 0 && lead == state.previous_lead && tail >= state.previous_tail) {
+            writer.write(0, 2);
+            int len = 64 - state.previous_lead - state.previous_tail;
+            writer.write(static_cast<long long>(xor_val >> state.previous_tail), len);
+        } else if (xor_val == 0) {
+            writer.write(1, 2);
         } else {
             writer.write(true);
-            writer.write(betaStar, 4);
-            long long xor_val = alphaStar ^ state.previous_long_value;
-            if (xor_val == 0) {
-                writer.write(false);
+            int len = 64 - lead - tail;
+            if (len <= 16) {
+                writer.write(false); writer.write(lead, 3); writer.write(len - 1, 4);
             } else {
-                writer.write(true);
-                int lead = __builtin_clzll(xor_val);
-                int tail = __builtin_ctzll(xor_val);
-                if (lead >= state.previous_lead && tail >= state.previous_tail) {
-                    writer.write(false);
-                    writer.write(xor_val >> state.previous_tail, 64 - state.previous_lead - state.previous_tail);
-                } else {
-                    writer.write(true);
-                    writer.write(lead, 6);
-                    writer.write(64 - lead - tail, 6);
-                    writer.write(xor_val >> tail, 64 - lead - tail);
-                    state.previous_lead = lead;
-                    state.previous_tail = tail;
-                }
+                writer.write(true); writer.write(lead, 3); writer.write(len - 1, 6);
             }
-            state.previous_betaStar = betaStar;
-            state.previous_long_value = alphaStar;
+            writer.write(static_cast<long long>(xor_val >> tail), len);
         }
+
+        state.previous_lead = lead;
+        state.previous_tail = tail;
+        state.previous_long_value = current;
     }
 
     static inline double decode(StateType& state, utils::MemoryBlockStreamReader& reader) {
         using namespace encoding_algorithm::elf;
         if (state.first) {
-            state.previous_long_value = reader.readLong(64);
+            double v = reader.readDouble(64);
+            union { double d; long long ll; } u; u.d = v;
+            state.previous_long_value = u.ll;
             state.first = false;
-            union { long long l; double d; } u; u.l = state.previous_long_value;
-            state.current_value = u.d;
-            return u.d;
+            return v;
         }
 
-        if (reader.readBoolean()) {
-            state.previous_betaStar = reader.readInt(4);
+        bool c1 = reader.readBoolean();
+        int betaStar = 0;
+        if (c1) betaStar = reader.readInt(4);
+
+        int c2 = reader.readInt(2);
+        long long xor_val = 0;
+        if (c2 == 0) {
+            int len = 64 - state.previous_lead - state.previous_tail;
+            xor_val = reader.readLong(len) << state.previous_tail;
+            state.previous_lead = std::min(utils::binary_tools::leadZeros(xor_val, 64), 7);
+            state.previous_tail = utils::binary_tools::tailZeros(xor_val, 64);
+        } else if (c2 == 1) {
+            state.previous_lead = 7;
+            state.previous_tail = 64;
+        } else {
+            state.previous_lead = reader.readInt(3);
+            int len = (c2 == 2) ? (reader.readInt(4) + 1) : (reader.readInt(6) + 1);
+            state.previous_tail = 64 - len - state.previous_lead;
+            xor_val = reader.readLong(len) << state.previous_tail;
         }
 
-        if (reader.readBoolean()) {
-            if (reader.readBoolean()) {
-                state.previous_lead = reader.readInt(6);
-                int len = reader.readInt(6);
-                if (len == 0) len = 64;
-                state.previous_tail = 64 - state.previous_lead - len;
+        state.previous_long_value = static_cast<long long>(static_cast<unsigned long long>(state.previous_long_value) ^ static_cast<unsigned long long>(xor_val));
+        union { long long ll; double d; } u; u.ll = state.previous_long_value;
+
+        if (c1) {
+            double vPrime = u.d;
+            int sp = Elf64Utils::getSP(std::fabs(vPrime));
+            if (betaStar == 0) {
+                double res = Elf64Utils::get10iN(-sp - 1);
+                return vPrime < 0 ? -res : res;
+            } else {
+                return Elf64Utils::roundUp(vPrime, betaStar - sp - 1);
             }
-            int length = 64 - state.previous_lead - state.previous_tail;
-            long long xor_val = reader.readLong(length);
-            xor_val <<= state.previous_tail;
-            state.previous_long_value ^= xor_val;
         }
-        
-        double v = Elf64_Tools::getValues(state.previous_long_value, state.previous_betaStar);
-        state.current_value = v;
-        return v;
+        return u.d;
     }
 };
 

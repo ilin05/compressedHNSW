@@ -102,7 +102,7 @@ TestResult run_build_test_for_codec(
 {
     TestResult res;
     res.dataset_name = dataset_name;
-    res.algo_name = algo_name;
+    res.algorithm_name = algo_name;
     res.build_time = 0.0;
     res.compress_time = 0.0;
     res.data_compression_ratio = 0.0;
