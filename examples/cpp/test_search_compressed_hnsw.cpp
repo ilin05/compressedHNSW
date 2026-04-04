@@ -221,10 +221,10 @@ int main(int argc, char** argv) {
     };
 
     vector<string> algorithms = {
-        "DeXOR"
-        // "Gorilla", 
-        // "Elf", 
-        // "Camel"
+        // "DeXOR"
+        "Gorilla", 
+        "Elf", 
+        "Camel"
     };
 
     std::string csv_file_path = "compressed_hnsw_search_recall_results.csv";
