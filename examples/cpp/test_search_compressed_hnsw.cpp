@@ -181,6 +181,10 @@ void test_search_dataset_tmpl(const std::string& dataset_name, const std::string
              
         csv_file << dataset_name << "," << algo_name << "," << k << "," << ef << ","
                  << recall << "," << time_us_per_query << "\\n";
+    
+        if(recall >= 0.99){
+            break;
+        }
     }
     
     delete[] massQ;
