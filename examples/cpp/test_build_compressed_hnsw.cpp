@@ -113,8 +113,8 @@ TestResult test_build_index(const std::string& dataset_name, const std::string& 
     int efConstruction = 200;
     
     cout << "Allocating memory for index..." << endl;
-    HierarchicalNSWCABLEANNPQ<double>* appr_alg = 
-        new HierarchicalNSWCABLEANNPQ<double>(&l2space, num_vectors, algo_name, M, efConstruction, true, cache_max_size);
+    HierarchicalNSWCABFRAMEWORK<double>* appr_alg = 
+        new HierarchicalNSWCABFRAMEWORK<double>(&l2space, num_vectors, algo_name, M, efConstruction, true, cache_max_size);
         
     StopW stopw;
     
@@ -173,10 +173,10 @@ int main(int argc, char** argv) {
     }
 
     vector<string> datasets = {
-        "fashion-mnist-784-euclidean_train.fvecs",
+        // "fashion-mnist-784-euclidean_train.fvecs",
         // "gist-960-euclidean_train.fvecs",
         // "mnist-784-euclidean_train.fvecs",
-        // "sift-128-euclidean_train.fvecs"
+        "sift-128-euclidean_train.fvecs"
     };
 
     vector<string> algorithms = {

@@ -155,7 +155,7 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
         size_t correct = 0;
         StopW stopw;
 
-        #pragma omp parallel for reduction(+:correct)
+        // #pragma omp parallel for reduction(+:correct)
         for (long i = 0; i < (long)qsize; i++) {
             auto result = appr_alg->searchKnn(massQ + i * qdim, k);
             std::unordered_set<tableint> gt_set(massQA + i * gt_dim, massQA + i * gt_dim + k);
@@ -175,6 +175,8 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
         csv_file << dataset_name << "," << algo_name << "," << k << "," << ef << ","
                  << std::fixed << std::setprecision(4) << recall << ","
                  << std::fixed << std::setprecision(2) << time_us << "\n";
+
+        if (recall >= 0.99) break;
     }
     
     delete[] massQ;
