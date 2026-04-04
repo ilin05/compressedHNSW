@@ -222,7 +222,7 @@ int main(int argc, char** argv) {
     };
 
     vector<string> algorithms = {
-        // "DeXOR",
+        "DeXOR",
         // "Gorilla", 
         // "Elf", 
         // "Camel",
