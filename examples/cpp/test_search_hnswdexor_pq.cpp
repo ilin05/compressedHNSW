@@ -214,9 +214,9 @@ int main(int argc, char** argv) {
 
     // 这里填入 HDF5 提取出来的数据集前缀基础名称
     vector<string> base_datasets = {
-        "fashion-mnist-784-euclidean",
-        "gist-960-euclidean",
-        "mnist-784-euclidean",
+        // "fashion-mnist-784-euclidean",
+        // "gist-960-euclidean",
+        // "mnist-784-euclidean",
         "sift-128-euclidean"
     };
 
