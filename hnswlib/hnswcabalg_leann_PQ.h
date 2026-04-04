@@ -26,6 +26,7 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
     static const tableint MAX_LABEL_OPERATION_LOCKS = 65536;
     static const unsigned char DELETE_MARK = 0x01;
 
+    // TODO1: 将DecodeState独立出一个模块，以便在不同的编码算法中复用。之后可能要扩展至其他编码算法，如Camel, DeXORPlus等
     // DeXOR State Structure
     struct DeXORState {
         double previous_value = 0.0;
@@ -112,12 +113,12 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
 
     // data cache for getOriginalDataByInternalId
     size_t cache_max_size_ = 0;
-    mutable std::list<tableint> lru_history_;
+    // mutable std::list<tableint> lru_history_;
     // mutable std::unordered_map<tableint, std::pair<std::vector<double>, std::list<tableint>::iterator>> getOriginalData_cache_;
     mutable std::unordered_map<tableint, std::vector<DeXORState>> root_state_cache_;
     mutable std::mutex cache_lock_;
-    mutable std::atomic<int> cache_pop_count_{0};
-    mutable std::atomic<int> getOriginalData_call_count_{0};
+    // mutable std::atomic<int> cache_pop_count_{0};
+    // mutable std::atomic<int> getOriginalData_call_count_{0};
     
     // Flag to indicate if the index has been compacted
     bool is_compacted_ = false;
@@ -136,6 +137,7 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
     // Compressed codes: One contiguous block. N * m_ bytes.
     std::vector<uint8_t> pq_data_;
 
+    // TODO2：将encoding_algorithm_name_、pq_centroids_、pq_data_等与编码算法相关的成员变量独立出一个模块，以便在不同的编码算法中复用和扩展
     // Inline DeXOR Encoding Logic
     void dexor_encode(double value, DeXORState& state, utils::MemoryStreamWriter& writer) const {
         using namespace encoding_algorithm::dexor;
@@ -314,6 +316,7 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
         return dist;
     }
 
+    // TODO3: PQ量化部分独立出来，以便在不同的编码算法中复用和扩展
     // Train PQ (K-Means per subspace)
     void train_pq(size_t dim, size_t count) {
         if (dim % 8 == 0) {
@@ -465,6 +468,7 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
         }
     }
 
+    // compute_adc_table computes the ADC table for a given query vector. The adc_table is a precomputed distance table that stores the distance between each sub-vector of the query and the corresponding centroids in each subspace. This allows for fast distance computation during search by simply looking up the precomputed distances instead of calculating them on-the-fly.
     void compute_adc_table(const void* query_data, std::vector<double>& adc_table) const {
          size_t dim = *((size_t *) dist_func_param_);
          std::vector<double> q_vec(dim);
@@ -507,6 +511,7 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
         SpaceInterface<dist_t> *s,
         const std::string &location,
         bool use_encoding_algorithm = true,
+        // TODO3: 添加encoding_algorithm_name参数以支持不同的编码算法
         size_t cache_max_size = 0,
         bool nmslib = false,
         size_t max_elements = 0,
@@ -597,7 +602,7 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
         data_level0_memory_.clear();
         data_level0_memory_.shrink_to_fit();
         root_state_cache_.clear();
-        lru_history_.clear();
+        // lru_history_.clear();
         for (tableint i = 0; i < cur_element_count; i++) {
             if (element_levels_[i] > 0)
                 free(linkLists_[i]);
@@ -705,6 +710,7 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
         return (char*)(data_level0_memory + internal_id * size_data_per_element_ + offsetData_);
     }
 
+    // TODO4: 为了验证减少解压缩路径长度的效果，需要修改当前的逻辑，解压缩不一定只有root -> child两层节点，可能存在多层节点（child的child），因此需要在getOriginalDataByInternalId中增加一个循环，直到prenode为-1为止。同时，需要记录每个节点的状态，以便在解压缩时使用。
     std::vector<double> getOriginalDataByInternalId(tableint internal_id, bool collect_metrics = false) const {
         // auto start_time = std::chrono::high_resolution_clock::now();
 
@@ -958,11 +964,8 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
 //                    if (candidate_id == 0) continue;
 #ifdef USE_SSE
                 if (j + 1 < size) {
-                    // std::cout << "Prefetching data for neighbor " << j + 1 << std::endl;
                     _mm_prefetch((char *) (visited_array + *(datal + j + 1)), _MM_HINT_T0);
-                    // std::cout << "_mm_prefetch visited_array done." << std::endl;
                     _mm_prefetch(getDataByInternalId(*(datal + j + 1)), _MM_HINT_T0);
-                    // std::cout << "_mm_prefetch data done." << std::endl;
                 }
 #endif
                 // 如果candidate已经访问过（对应论文中，如果e属于v，无操作，循环次数加1）
@@ -970,12 +973,9 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
                 // 没有访问过，将已访问列表中并入candidate
                 visited_array[candidate_id] = visited_array_tag;
                 // 根据candidate的id号获取这个candidate元素，也就是currObj1
-                // std::cout << "Visiting candidate " << candidate_id << std::endl;
                 // char *currObj1 = (getDataByInternalId(candidate_id));
                 std::vector<double> currObjVec = getOriginalDataByInternalId(candidate_id);
                 const void* currObj1 = currObjVec.data();
-
-                // std::cout << "Data for candidate retrieved." << std::endl;
                 // 计算currObj1到data point之间的距离，对应于论文中的distance(e, q)
                 dist_t dist1 = fstdistfunc_(data_point, currObj1, dist_func_param_);
                 // 取出top_candidates中距离data point最远的元素并比较大小
@@ -1002,8 +1002,6 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
                     }
                 }
             }
-
-            // std::cout << "Top candidates size: " << top_candidates.size() << ", lower bound: " << lowerBound << std::endl;
         }
         visited_list_pool_->releaseVisitedList(vl);
 
@@ -1089,6 +1087,7 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
                     batch_ids.push_back(approx_candidates[i].second);
                 }
 
+                // TODO5: 替换成原本的getOriginalDataByInternalId接口
                 std::vector<std::vector<double>> batch_data = getBatchOriginalDataByInternalId(batch_ids);
 
                 for (size_t i = 0; i < candidates_to_check; ++i) {
@@ -1551,6 +1550,7 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
         data_level0_memory_.shrink_to_fit();
     }
 
+    // TODO6: 添加参数，是否控制差分编码链的长度，如果要控制的话，应该怎么控制？
     void compress_dataset() {
         if (is_compacted_) return;
         if (!use_encoding_algorithm_) return;
@@ -2927,13 +2927,13 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
         }
     }
 
-    int getCachePopCount() const {
-        return cache_pop_count_;
-    }
+    // int getCachePopCount() const {
+    //     return cache_pop_count_;
+    // }
 
-    int getGetOriginalDataCallCount() const {
-        return getOriginalData_call_count_;
-    }
+    // int getGetOriginalDataCallCount() const {
+    //     return getOriginalData_call_count_;
+    // }
 
     std::vector<size_t> getLevel0ElementStartPositions() const {
         return level0_element_start_positions_;
