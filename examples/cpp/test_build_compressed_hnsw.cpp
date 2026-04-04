@@ -197,7 +197,11 @@ int main(int argc, char** argv) {
     };
 
     vector<string> algorithms = {
-        "DeXOR", "Gorilla", "Elf", "Camel", "DeXORPlus"
+        // "DeXOR", 
+        // "Gorilla", 
+        // "Elf", 
+        // "Camel", 
+        "DeXORPlus"
     };
     
     std::vector<TestResult> all_results;
