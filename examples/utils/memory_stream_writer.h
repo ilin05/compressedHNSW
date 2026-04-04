@@ -106,6 +106,15 @@ namespace utils {
             }
         }
 
+        void write(double value, int size) {
+            union {
+                double d;
+                uint64_t l;
+            } u;
+            u.d = value;
+            write(static_cast<long long>(u.l), size);
+        }
+
         void write(int value, int size) override {
             write(static_cast<long long>(value), size);
         }
