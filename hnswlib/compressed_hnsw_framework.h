@@ -324,6 +324,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         const std::string &location,
         bool use_encoding_algorithm = true,
         // TODO3: 添加encoding_algorithm_name参数以支持不同的编码算法
+        const std::string &encoding_algorithm_name = "DeXOR",
         size_t cache_max_size = 0,
         bool nmslib = false,
         size_t max_elements = 0,

@@ -130,11 +130,12 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
     
     try {
         cout << "Loading index from " << index_path << "..." << endl;
-        int cache_sz = 600;
+        // int cache_sz = 600;
+        int cache_sz = cache_sizes.at(dataset_name);
         if(cache_sizes.find(prefix) != cache_sizes.end()) {
             cache_sz = cache_sizes.at(prefix);
         }
-        appr_alg = new HierarchicalNSWCABFRAMEWORK<double>(&l2space, index_path, true, cache_sz);
+        appr_alg = new HierarchicalNSWCABFRAMEWORK<double>(&l2space, index_path, true, algo_name, cache_sz);
         cout << "Index successfully loaded." << endl;
     } catch (std::exception& e) {
         cerr << "Failed to load index: " << e.what() << endl;
@@ -197,10 +198,10 @@ int main(int argc, char** argv) {
     }
 
     vector<string> base_datasets = {
-        "fashion-mnist-784-euclidean",
+        // "fashion-mnist-784-euclidean",
         // "gist-960-euclidean",
         // "mnist-784-euclidean",
-        // "sift-128-euclidean"
+        "sift-128-euclidean"
     };
 
     vector<string> algorithms = {
