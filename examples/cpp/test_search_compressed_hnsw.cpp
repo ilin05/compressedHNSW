@@ -180,7 +180,7 @@ void test_search_dataset_tmpl(const std::string& dataset_name, const std::string
              << " | Time/Query: " << time_us_per_query << " us" << endl;
              
         csv_file << dataset_name << "," << algo_name << "," << k << "," << ef << ","
-                 << recall << "," << time_us_per_query << "\\n";
+                 << recall << "," << time_us_per_query << "\n";
     
         if(recall >= 0.99){
             break;
