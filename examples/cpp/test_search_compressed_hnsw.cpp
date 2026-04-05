@@ -223,9 +223,9 @@ int main(int argc, char** argv) {
 
     vector<string> algorithms = {
         "DeXOR",
-        // "Gorilla", 
-        // "Elf", 
-        // "Camel",
+        "Gorilla", 
+        "Elf", 
+        "Camel",
         "DeXORPlus"
     };
 
