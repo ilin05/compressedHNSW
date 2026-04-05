@@ -190,19 +190,39 @@ int main(int argc, char** argv) {
     }
 
     vector<string> datasets = {
-        // "fashion-mnist-784-euclidean_train.fvecs",
-        // "gist-960-euclidean_train.fvecs",
-        // "mnist-784-euclidean_train.fvecs",
+        "fashion-mnist-784-euclidean_train.fvecs",
+        "gist-960-euclidean_train.fvecs",
+        "mnist-784-euclidean_train.fvecs",
         "sift-128-euclidean_train.fvecs"
     };
 
     vector<string> algorithms = {
-        // "DeXOR", 
-        // "Gorilla", 
-        // "Elf", 
-        // "Camel", 
+        "DeXOR", 
+        "Gorilla", 
+        "Elf", 
+        "Camel", 
         "DeXORPlus"
     };
+
+    for(int i = 1; i < argc; ++i){
+        std::string arg = argv[i];
+        if(arg == "--dataset" && i + 1 < argc){
+            datasets.clear(); // 如果指定了 --dataset 就只测试指定的数据集
+            while(i + 1 < argc && std::string(argv[i+1]).substr(0, 2) != "--"){
+                datasets.push_back(argv[++i]);
+            }
+        } else if(arg == "--algorithm" && i + 1 < argc){
+            algorithms.clear(); // 如果指定了 --algorithm 就只测试指定的算法
+            while(i + 1 < argc && std::string(argv[i+1]).substr(0, 2) != "--"){
+                algorithms.push_back(argv[++i]);
+            }
+        } else if(arg == "--base_dir" && i + 1 < argc){
+            base_dir = argv[++i];
+        } else {
+            std::cerr << "Unknown or incomplete argument: " << arg << std::endl;
+            return -1;
+        }
+    }
     
     std::vector<TestResult> all_results;
 

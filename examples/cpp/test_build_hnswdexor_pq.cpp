@@ -194,6 +194,16 @@ int main(int argc, char** argv) {
         "mnist-784-euclidean_train.fvecs",
         "sift-128-euclidean_train.fvecs"
     };
+
+    for(int i = 1; i < argc; ++i) {
+        string arg = argv[i];
+        if (arg == "--dataset" && i + 1 < argc) {
+            datasets.clear();
+            while(i + 1 < argc && argv[i + 1][0] != '-') {
+                datasets.push_back(argv[++i]);
+            }
+        }
+    }
     
     std::vector<TestResult> all_results;
 

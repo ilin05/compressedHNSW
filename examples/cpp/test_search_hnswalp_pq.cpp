@@ -210,6 +210,17 @@ int main(int argc, char** argv) {
         "sift-128-euclidean"
     };
 
+    // 解析命令行参数，允许用户指定要测试的数据集
+    for(int i = 1; i < argc; ++i) {
+        string arg = argv[i];
+        if (arg == "--dataset" && i + 1 < argc) {
+            base_datasets.clear();
+            while(i + 1 < argc && argv[i + 1][0] != '-') {
+                base_datasets.push_back(argv[++i]);
+            }
+        }
+    }
+
     std::string csv_file_path = "hnswalp_simplified_pq_search_recall_results.csv";
     std::ofstream csv_file(csv_file_path);
     csv_file << "Dataset,K,ef,Recall,TimePerQuery(us)\n";

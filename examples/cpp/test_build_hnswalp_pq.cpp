@@ -193,6 +193,17 @@ int main(int argc, char** argv) {
         "mnist-784-euclidean_train.fvecs",
         "sift-128-euclidean_train.fvecs"
     };
+
+    // 解析命令行参数，允许用户指定要测试的数据集
+    for(int i = 1; i < argc; ++i) {
+        string arg = argv[i];
+        if (arg == "--dataset" && i + 1 < argc) {
+            datasets.clear();
+            while(i + 1 < argc && argv[i + 1][0] != '-') {
+                datasets.push_back(argv[++i]);
+            }
+        }
+    }
     
     std::vector<TestResult> all_results;
 
