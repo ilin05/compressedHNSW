@@ -116,7 +116,7 @@ struct DeXORPlusState {
         int epsilon;
     } dexorplus;
     
-    static int& default_epsilon() { static int eps = -2; return eps; }
+    static int& default_epsilon() { static int eps = -3; return eps; }
     
     DeXORPlusState() { reset(default_epsilon()); }
     DeXORPlusState(int eps) { reset(eps); }
