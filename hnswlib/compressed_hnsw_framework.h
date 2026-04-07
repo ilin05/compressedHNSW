@@ -104,6 +104,12 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
     bool use_encoding_algorithm_ = true;
 
+    bool use_tls_ = false;
+    double tls_ratio_ = 0.2;
+
+    void setUseTls(bool use) { use_tls_ = use; }
+    void setTlsRatio(double ratio) { tls_ratio_ = ratio; }
+
     // PQ Quantization Data
     size_t pq_m_ = 0;           // Number of sub-quantizers
     size_t pq_d_sub_ = 0;       // Dimension of sub-vectors
@@ -886,7 +892,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
             // 2. Filter Top Alpha% (e.g., 20%)
             if (!approx_candidates.empty()) {
-                size_t candidates_to_check = (size_t)(approx_candidates.size() * 0.2); 
+                size_t candidates_to_check = (size_t)(approx_candidates.size() * tls_ratio_); 
                 if (candidates_to_check < 2) candidates_to_check = std::min(approx_candidates.size(), (size_t)2);
                 
                 std::partial_sort(approx_candidates.begin(), 
@@ -2308,7 +2314,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
 #ifdef TWO_LEVEL_SEARCH
         // Check if we can use the PQ quantization path
-        if (use_encoding_algorithm_ && is_compacted_ && !pq_data_.empty()) {
+        if (use_tls_ && use_encoding_algorithm_ && is_compacted_ && !pq_data_.empty()) {
              // --- Two-Pass Search with PQ Quantization (Algorithm 2) ---
 
             // 1. Compute ADC Table
@@ -2346,7 +2352,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
                     // Filter Top Alpha% (e.g., 20%)
                     if (!approx_candidates.empty()) {
-                        size_t candidates_to_check = (size_t)(approx_candidates.size() * 0.2);
+                        size_t candidates_to_check = (size_t)(approx_candidates.size() * tls_ratio_);
                         if (candidates_to_check < 2) candidates_to_check = std::min(approx_candidates.size(), (size_t)2);
                         
                         std::partial_sort(approx_candidates.begin(), 

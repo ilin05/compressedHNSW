@@ -98,7 +98,7 @@ unsigned int* load_ivecs(const std::string& filename, size_t& num_vectors, size_
 }
 
 template <typename CodecPolicy>
-void test_search_dataset_tmpl(const std::string& dataset_name, const std::string& base_dir, const std::string& algo_name, std::ofstream& csv_file) {
+void test_search_dataset_tmpl(const std::string& dataset_name, const std::string& base_dir, const std::string& algo_name, std::ofstream& csv_file, bool use_tls, double tls_ratio) {
     std::string prefix = dataset_name.substr(0, dataset_name.find_last_of('_'));
     
     std::string query_file = base_dir + dataset_name + "_test.fvecs";
@@ -137,6 +137,8 @@ void test_search_dataset_tmpl(const std::string& dataset_name, const std::string
             cache_sz = cache_sizes.at(prefix);
         }
         appr_alg = new HierarchicalNSWCABFRAMEWORK<double, CodecPolicy>(&l2space, index_path, true, cache_sz);
+        appr_alg->setUseTls(use_tls);
+        appr_alg->setTlsRatio(tls_ratio);
         cout << "Index successfully loaded." << endl;
     } catch (std::exception& e) {
         cerr << "Failed to load index: " << e.what() << endl;
@@ -192,12 +194,12 @@ void test_search_dataset_tmpl(const std::string& dataset_name, const std::string
     delete appr_alg;
 }
 
-void test_search_dataset(const std::string& dataset_name, const std::string& base_dir, const std::string& algo_name, std::ofstream& csv_file) {
-    if (algo_name == "DeXOR") test_search_dataset_tmpl<codecs::DeXORCodecPolicy>(dataset_name, base_dir, algo_name, csv_file);
-    else if (algo_name == "Gorilla") test_search_dataset_tmpl<codecs::GorillaCodecPolicy>(dataset_name, base_dir, algo_name, csv_file);
-    else if (algo_name == "Elf") test_search_dataset_tmpl<codecs::ElfCodecPolicy>(dataset_name, base_dir, algo_name, csv_file);
-    else if (algo_name == "Camel") test_search_dataset_tmpl<codecs::CamelCodecPolicy>(dataset_name, base_dir, algo_name, csv_file);
-    else if (algo_name == "DeXORPlus") test_search_dataset_tmpl<codecs::DeXORPlusCodecPolicy>(dataset_name, base_dir, algo_name, csv_file);
+void test_search_dataset(const std::string& dataset_name, const std::string& base_dir, const std::string& algo_name, std::ofstream& csv_file, bool use_tls, double tls_ratio) {
+    if (algo_name == "DeXOR") test_search_dataset_tmpl<codecs::DeXORCodecPolicy>(dataset_name, base_dir, algo_name, csv_file, use_tls, tls_ratio);
+    else if (algo_name == "Gorilla") test_search_dataset_tmpl<codecs::GorillaCodecPolicy>(dataset_name, base_dir, algo_name, csv_file, use_tls, tls_ratio);
+    else if (algo_name == "Elf") test_search_dataset_tmpl<codecs::ElfCodecPolicy>(dataset_name, base_dir, algo_name, csv_file, use_tls, tls_ratio);
+    else if (algo_name == "Camel") test_search_dataset_tmpl<codecs::CamelCodecPolicy>(dataset_name, base_dir, algo_name, csv_file, use_tls, tls_ratio);
+    else if (algo_name == "DeXORPlus") test_search_dataset_tmpl<codecs::DeXORPlusCodecPolicy>(dataset_name, base_dir, algo_name, csv_file, use_tls, tls_ratio);
     else throw std::runtime_error("Unknown algorithm: " + algo_name);
 }
 
@@ -228,6 +230,9 @@ int main(int argc, char** argv) {
         "Camel",
         "DeXORPlus"
     };
+    
+    bool use_tls = false;
+    double tls_ratio = 0.2;
 
     for(int i = 1; i < argc; ++i){
         std::string arg = argv[i];
@@ -243,6 +248,10 @@ int main(int argc, char** argv) {
             }
         } else if(arg == "--base_dir" && i + 1 < argc){
             base_dir = argv[++i];
+        } else if(arg == "--use_tls" && i + 1 < argc){
+            use_tls = std::stoi(argv[++i]) != 0;
+        } else if(arg == "--tls_ratio" && i + 1 < argc){
+            tls_ratio = std::stod(argv[++i]);
         } else {
             std::cerr << "Unknown or incomplete argument: " << arg << std::endl;
             return -1;
@@ -259,7 +268,7 @@ int main(int argc, char** argv) {
 
     for (const auto& ds : base_datasets) {
         for (const auto& algo : algorithms) {
-            test_search_dataset(ds, base_dir, algo, csv_file);
+            test_search_dataset(ds, base_dir, algo, csv_file, use_tls, tls_ratio);
         }
     }
     
