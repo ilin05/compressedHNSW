@@ -171,14 +171,14 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
             }
         }
         
-        double time_us_per_query = stopw.getElapsedTimeMicro() / qsize;
+        double time_ms_per_query = stopw.getElapsedTimeMicro() / 1000.0 / qsize;
         double recall = 1.0 * correct / total;
         
         cout << "ef: " << setw(3) << ef 
              << " | recall: " << fixed << setprecision(4) << recall 
-             << " | time/query: " << fixed << setprecision(2) << time_us_per_query << " us" << endl;
+             << " | time/query: " << fixed << setprecision(2) << time_ms_per_query << " ms" << endl;
              
-        csv_file << dataset_name << "," << k << "," << ef << "," << recall << "," << time_us_per_query << "\n";
+        csv_file << dataset_name << "," << k << "," << ef << "," << recall << "," << time_ms_per_query << "\n";
         
         if (recall >= 0.99) break; // 如果 recall 已经接近 1 就不需要测更大的 ef 了
     }
@@ -220,7 +220,7 @@ int main(int argc, char** argv) {
 
     std::string csv_file_path = "hnsw_search_recall_results.csv";
     std::ofstream csv_file(csv_file_path);
-    csv_file << "Dataset,K,ef,Recall,TimePerQuery(us)\n";
+    csv_file << "Dataset,K,ef,Recall,TimePerQuery(ms)\n";
 
     for (const auto& ds : base_datasets) {
         test_search_dataset(ds, base_dir, csv_file);
