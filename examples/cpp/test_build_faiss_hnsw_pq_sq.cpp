@@ -81,7 +81,7 @@ int main() {
                 index = faiss::index_factory(dim, factory_string.c_str(), faiss::METRIC_L2);
             } else if (algo == "HNSWPQ") {
                 // Use PQ with M = dim / 8, so each subvector is 8 dimensions (encoded in 1 byte)
-                int M = dim / 8;
+                int M_pq = dim / 8;
                 // e.g. "HNSW32,PQ16" or similar
                 std::string factory_string = "HNSW" + std::to_string(M_hnsw) + ",PQ" + std::to_string(M_pq);
                 index = faiss::index_factory(dim, factory_string.c_str(), faiss::METRIC_L2);
