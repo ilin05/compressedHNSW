@@ -60,6 +60,20 @@ if(HNSWLIB_EXAMPLES)
       "encoding_algorithms/elf/*.cpp"
       "encoding_algorithms/camel/*.cpp")
 
+    # ----- faiss -----
+    set(FAISS_ENABLE_PYTHON OFF CACHE BOOL "" FORCE)
+    set(FAISS_ENABLE_GPU OFF CACHE BOOL "" FORCE)
+    set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    add_subdirectory(third_party/faiss-1.14.1 EXCLUDE_FROM_ALL)
+    include_directories(third_party/faiss-1.14.1)
+
+    add_executable(test_build_faiss_hnsw_pq_sq examples/cpp/test_build_faiss_hnsw_pq_sq.cpp)
+    target_link_libraries(test_build_faiss_hnsw_pq_sq faiss OpenMP::OpenMP_CXX)
+
+    add_executable(test_search_faiss_hnsw_pq_sq examples/cpp/test_search_faiss_hnsw_pq_sq.cpp)
+    target_link_libraries(test_search_faiss_hnsw_pq_sq faiss OpenMP::OpenMP_CXX)
+    # -----------------
+
     add_executable(example_search examples/cpp/example_search.cpp)
     target_link_libraries(example_search hnswlib)
 
