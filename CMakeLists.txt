@@ -61,6 +61,7 @@ if(HNSWLIB_EXAMPLES)
       "encoding_algorithms/camel/*.cpp")
 
     # ----- faiss -----
+    find_package(OpenMP REQUIRED)
     set(FAISS_ENABLE_PYTHON OFF CACHE BOOL "" FORCE)
     set(FAISS_ENABLE_GPU OFF CACHE BOOL "" FORCE)
     set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
