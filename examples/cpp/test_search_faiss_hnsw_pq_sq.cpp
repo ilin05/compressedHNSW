@@ -115,7 +115,7 @@ int main() {
             
             vector<size_t> efs = {10, 20, 40, 80, 120, 200, 400, 600, 800, 1000};
             int k = 10;
-            vector<idx_t> I(qsize * k);
+            vector<faiss::idx_t> I(qsize * k);
             vector<float> D(qsize * k);
 
             for (size_t ef : efs) {
