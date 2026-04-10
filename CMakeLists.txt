@@ -171,6 +171,12 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_build_compressed_hnsw examples/cpp/test_build_compressed_hnsw.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_build_compressed_hnsw hnswlib)
 
+    add_executable(test_build_hnsw examples/cpp/test_build_hnsw.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_build_hnsw hnswlib)
+
+    add_executable(test_search_hnsw examples/cpp/test_search_hnsw.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_search_hnsw hnswlib)
+
     # tests
     add_executable(multivector_search_test tests/cpp/multivector_search_test.cpp)
     target_link_libraries(multivector_search_test hnswlib)
