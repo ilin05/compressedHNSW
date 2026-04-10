@@ -59,6 +59,10 @@ int main() {
 
     vector<string> algos = {"HNSWSQ", "HNSWPQ"};
 
+    // 严谨对齐 hnswlib 构建参数
+    int M_hnsw = 16;
+    int efConstruction = 200;
+
     for (const auto& ds : datasets) {
         std::string filepath = base_dir + ds;
         size_t n, dim;
@@ -73,15 +77,25 @@ int main() {
 
             if (algo == "HNSWSQ") {
                 // SQ8 compresses to 1 byte per dimension.
-                std::string factory_string = "HNSW32,SQ8";
+                std::string factory_string = "HNSW" + std::to_string(M_hnsw) + ",SQ8";
                 index = faiss::index_factory(dim, factory_string.c_str(), faiss::METRIC_L2);
             } else if (algo == "HNSWPQ") {
                 // Use PQ with M = dim / 8, so each subvector is 8 dimensions (encoded in 1 byte)
                 int M = dim / 8;
                 // e.g. "HNSW32,PQ16" or similar
-                std::string factory_string = "HNSW32,PQ" + std::to_string(M);
+                std::string factory_string = "HNSW" + std::to_string(M_hnsw) + ",PQ" + std::to_string(M_pq);
                 index = faiss::index_factory(dim, factory_string.c_str(), faiss::METRIC_L2);
             }
+
+            // 对齐 efConstruction
+            faiss::IndexHNSW* hnsw_idx = dynamic_cast<faiss::IndexHNSW*>(index);
+            if(hnsw_idx != nullptr){
+                hnsw_idx->hnsw.efConstruction = efConstruction;
+            } else {
+                cerr << "Failed to cast to IndexHNSW to set efConstruction!" << endl;
+            }
+
+            cout << "Building " << algo << " with HNSW M=" << M_hnsw << " efConstruction=" << efConstruction << endl;
 
             StopW sw;
             index->train(n, data);
