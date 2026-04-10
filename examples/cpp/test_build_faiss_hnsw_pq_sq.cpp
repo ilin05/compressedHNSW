@@ -77,7 +77,7 @@ int main() {
 
             if (algo == "HNSWSQ") {
                 // SQ8 compresses to 1 byte per dimension.
-                std::string factory_string = "HNSW" + std::to_string(M_hnsw) + ",SQ8";
+                std::string factory_string = "HNSW" + std::to_string(M_hnsw) + ",SQ4";
                 index = faiss::index_factory(dim, factory_string.c_str(), faiss::METRIC_L2);
             } else if (algo == "HNSWPQ") {
                 // Use PQ with M = dim / 8, so each subvector is 8 dimensions (encoded in 1 byte)

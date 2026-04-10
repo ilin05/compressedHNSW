@@ -68,7 +68,7 @@ unsigned int* load_ivecs(const std::string& filename, size_t& num_vectors, size_
 }
 
 int main() {
-    omp_set_num_threads(32);
+    omp_set_num_threads(1);
     std::string base_dir = "../datasets/hdf5files/";
     vector<string> datasets = {
         "fashion-mnist-784-euclidean",
