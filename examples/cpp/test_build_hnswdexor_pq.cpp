@@ -181,12 +181,12 @@ int main(int argc, char** argv) {
     std::string base_dir = "../datasets/hdf5files/";
     
     // 允许通过命令行传参自定义基础路径
-    if(argc > 1) {
-        base_dir = argv[1];
-        if (base_dir.back() != '/' && base_dir.back() != '\\') {
-            base_dir += "/";
-        }
-    }
+    // if(argc > 1) {
+    //     base_dir = argv[1];
+    //     if (base_dir.back() != '/' && base_dir.back() != '\\') {
+    //         base_dir += "/";
+    //     }
+    // }
 
     vector<string> datasets = {
         "fashion-mnist-784-euclidean_train.fvecs",

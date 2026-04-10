@@ -195,12 +195,12 @@ int main(int argc, char** argv) {
     // 根据 HDF5 处理出的前缀名推断
     std::string base_dir = "../datasets/hdf5files/";
     
-    if(argc > 1) {
-        base_dir = argv[1];
-        if (base_dir.back() != '/' && base_dir.back() != '\\') {
-            base_dir += "/";
-        }
-    }
+    // if(argc > 1) {
+    //     base_dir = argv[1];
+    //     if (base_dir.back() != '/' && base_dir.back() != '\\') {
+    //         base_dir += "/";
+    //     }
+    // }
 
     // 这里填入 HDF5 提取出来的数据集前缀基础名称
     vector<string> base_datasets = {
