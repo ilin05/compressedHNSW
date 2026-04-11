@@ -9,7 +9,6 @@
 #include <map>
 
 #include "../../hnswlib/hnswlib.h"
-#include "../../hnswlib/hnswalg_simplified_alp_PQ.h"
 
 using namespace std;
 using namespace hnswlib;

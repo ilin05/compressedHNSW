@@ -135,9 +135,9 @@ TestResult test_build_index(const std::string& dataset_name, const std::string& 
     cout << "Graph Construction Time: " << res.build_time << " seconds" << endl;
     
     stopw.reset();
-    cout << "Compressing dataset using PQ + ALP..." << endl;
+    cout << "Compressing dataset using PQ + DeXOR..." << endl;
     
-    // 开始运行PQ和ALP的压缩
+    // 开始运行PQ和DeXOR的压缩
     appr_alg->compress_dataset();
     
     res.compress_time = 1e-6 * stopw.getElapsedTimeMicro();
