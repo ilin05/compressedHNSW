@@ -16,3 +16,5 @@ datasets/*
 tests/cpp/bigann/*
 tests/cpp/downloads/*
 bigann/*
+script/*.bin
+script/*.log
