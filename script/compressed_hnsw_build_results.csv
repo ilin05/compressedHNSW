@@ -1,0 +1,13 @@
+Dataset,Algorithm,BuildTime(s),CompressTime(s),DataCompressionRatio,IndexCompressionRatio
+fashion-mnist-784-euclidean_train.fvecs,Camel,6.3555,29.6684,3.8087,3.7225
+fashion-mnist-784-euclidean_train.fvecs,Gorilla,7.3305,29.3598,1.7505,1.7543
+fashion-mnist-784-euclidean_train.fvecs,Elf,7.4574,28.4820,4.7569,4.5968
+gist-960-euclidean_train.fvecs,Camel,368.0372,387.8009,3.5791,3.5267
+gist-960-euclidean_train.fvecs,Gorilla,472.1897,387.2831,0.0000,0.9818
+gist-960-euclidean_train.fvecs,Elf,401.9707,439.7453,18.9752,1.6404
+mnist-784-euclidean_train.fvecs,Camel,9.1403,29.1827,5.4328,5.1406
+mnist-784-euclidean_train.fvecs,Gorilla,9.5757,27.1449,4.1738,4.0204
+mnist-784-euclidean_train.fvecs,Elf,9.4423,27.4701,8.1933,7.4634
+sift-128-euclidean_train.fvecs,Camel,66.7478,54.0041,3.4667,2.9081
+sift-128-euclidean_train.fvecs,Gorilla,67.5124,52.6140,1.1496,1.1766
+sift-128-euclidean_train.fvecs,Elf,69.4174,52.3111,3.6820,3.0375
