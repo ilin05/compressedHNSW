@@ -231,8 +231,9 @@ if(HNSWLIB_EXAMPLES)
 
     add_executable(main tests/cpp/main.cpp tests/cpp/sift_1b.cpp tests/cpp/sift_1b_double_hnsw.cpp tests/cpp/sift_1b_double_hnswalp.cpp tests/cpp/sift_1b_double_hnswalp_pq.cpp tests/cpp/sift_1b_double_hnswcab.cpp tests/cpp/sift_1b_double_hnswcab_pq.cpp)
     target_link_libraries(main hnswlib)
+    
     # Uncomment the following line to enable Two-Level Search in the main test executable
-    target_compile_definitions(main PRIVATE TWO_LEVEL_SEARCH)
+    target_compile_definitions(main test_search_hnswdexor_pq test_search_hnswalp_pq test_search_compressed_hnsw test_search_bigann_hnsw test_search_bigann_hnswalp_pq test_search_bigann_hnswdexor_pq test_search_bigann_compressed_hnsw PRIVATE TWO_LEVEL_SEARCH)
     # Uncomment the following line to enable uncompressed hubs in the main test executable
-    target_compile_definitions(main PRIVATE SELECT_HUBS_FOR_CACHE)
+    target_compile_definitions(main test_search_hnswdexor_pq test_search_hnswalp_pq test_search_compressed_hnsw test_search_bigann_hnsw test_search_bigann_hnswalp_pq test_search_bigann_hnswdexor_pq test_search_bigann_compressed_hnsw PRIVATE SELECT_HUBS_FOR_CACHE)
 endif()
