@@ -1,0 +1,3 @@
+Dataset,SubsetMillion,Vectors,Dim,BuildTime(s),CompressTime(s),DataCompressionRatio,IndexCompressionRatio,IndexFile
+bigann_1M,1,1000000,128,55.895942,13.213297,7.848081,4.882539,bigann_1M_hnswalp_pq.bin
+bigann_10M,10,10000000,128,799.740834,36.318393,7.845435,4.846144,bigann_10M_hnswalp_pq.bin

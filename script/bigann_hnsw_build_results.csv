@@ -1,0 +1,3 @@
+Dataset,SubsetMillion,Vectors,Dim,BuildTime(s),IndexSize(Bytes),IndexFile
+bigann_1M,1,1000000,128,55.461240,1172565616,bigann_1M_hnsw.bin
+bigann_10M,10,10000000,128,735.179103,11725338416,bigann_10M_hnsw.bin
