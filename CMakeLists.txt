@@ -73,6 +73,12 @@ if(HNSWLIB_EXAMPLES)
 
     add_executable(test_search_faiss_hnsw_pq_sq examples/cpp/test_search_faiss_hnsw_pq_sq.cpp)
     target_link_libraries(test_search_faiss_hnsw_pq_sq faiss OpenMP::OpenMP_CXX)
+
+    add_executable(test_build_bigann_faiss_hnsw_pq_sq examples/cpp/test_build_bigann_faiss_hnsw_pq_sq.cpp)
+    target_link_libraries(test_build_bigann_faiss_hnsw_pq_sq faiss OpenMP::OpenMP_CXX)
+
+    add_executable(test_search_bigann_faiss_hnsw_pq_sq examples/cpp/test_search_bigann_faiss_hnsw_pq_sq.cpp)
+    target_link_libraries(test_search_bigann_faiss_hnsw_pq_sq faiss OpenMP::OpenMP_CXX)
     # -----------------
 
     add_executable(example_search examples/cpp/example_search.cpp)
@@ -176,6 +182,30 @@ if(HNSWLIB_EXAMPLES)
 
     add_executable(test_search_hnsw examples/cpp/test_search_hnsw.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_search_hnsw hnswlib)
+
+    add_executable(test_build_bigann_hnsw examples/cpp/test_build_bigann_hnsw.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_build_bigann_hnsw hnswlib)
+
+    add_executable(test_search_bigann_hnsw examples/cpp/test_search_bigann_hnsw.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_search_bigann_hnsw hnswlib)
+
+    add_executable(test_build_bigann_hnswalp_pq examples/cpp/test_build_bigann_hnswalp_pq.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_build_bigann_hnswalp_pq hnswlib)
+
+    add_executable(test_search_bigann_hnswalp_pq examples/cpp/test_search_bigann_hnswalp_pq.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_search_bigann_hnswalp_pq hnswlib)
+
+    add_executable(test_build_bigann_hnswdexor_pq examples/cpp/test_build_bigann_hnswdexor_pq.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_build_bigann_hnswdexor_pq hnswlib)
+
+    add_executable(test_search_bigann_hnswdexor_pq examples/cpp/test_search_bigann_hnswdexor_pq.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_search_bigann_hnswdexor_pq hnswlib)
+
+    add_executable(test_build_bigann_compressed_hnsw examples/cpp/test_build_bigann_compressed_hnsw.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_build_bigann_compressed_hnsw hnswlib)
+
+    add_executable(test_search_bigann_compressed_hnsw examples/cpp/test_search_bigann_compressed_hnsw.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_search_bigann_compressed_hnsw hnswlib)
 
     # tests
     add_executable(multivector_search_test tests/cpp/multivector_search_test.cpp)

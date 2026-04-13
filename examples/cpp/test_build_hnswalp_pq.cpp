@@ -215,7 +215,7 @@ int main(int argc, char** argv) {
     }
     
     // 输出到 CSV 文件
-    write_results_to_csv("build_compression_results.csv", all_results);
+    write_results_to_csv("hnsw_alp_pq_build_compression_results.csv", all_results);
     
     cout << "\nAll build tests completed." << endl;
     return 0;

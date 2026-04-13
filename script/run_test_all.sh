@@ -11,7 +11,7 @@ echo "==================================="
 # bash run_build_hnswdexor_pq.sh
 # bash run_build_faiss_hnsw_PQ.sh
 # bash run_build_faiss_hnsw_SQ.sh
-# bash test_build_compressed_hnsw_framework/run_search_hnswdexor_pq.sh
+# bash test_build_compressed_hnsw_framework/run_build_compressed_hnsw_framework.sh
 
 echo "==================================="
 echo "2. Running Search Tests"
