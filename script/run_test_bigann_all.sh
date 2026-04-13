@@ -19,8 +19,8 @@ echo "==================================="
 bash run_search_bigann_hnsw.sh
 bash run_search_bigann_hnswalp_pq.sh
 bash run_search_bigann_hnswdexor_pq.sh
-bash test_search_bigann_faiss_hnsw_PQ.sh
-bash test_search_bigann_faiss_hnsw_SQ.sh
+# bash test_search_bigann_faiss_hnsw_PQ.sh
+# bash test_search_bigann_faiss_hnsw_SQ.sh
 # bash test_search_compressed_hnsw_framework/run_search_bigann_compressed_hnsw_framework.sh
 ../build/test_search_bigann_faiss_hnsw_pq_sq --algorithm HNSWPQ HNSWSQ --pq_m 4 8 ----sq_nbits 4 8 --dataset bigann_1M bigann_10M
 
