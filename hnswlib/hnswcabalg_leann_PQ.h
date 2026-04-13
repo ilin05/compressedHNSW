@@ -856,7 +856,7 @@ class HierarchicalNSWCABLEANNPQ : public AlgorithmInterface<dist_t> {
     std::vector<std::vector<double>> getBatchOriginalDataByInternalId(const std::vector<tableint>& internal_ids) const {
         std::vector<std::vector<double>> results(internal_ids.size());
         
-        #pragma omp parallel for schedule(dynamic)
+        // #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < internal_ids.size(); ++i) {
             results[i] = getOriginalDataByInternalId(internal_ids[i], false);
         }
