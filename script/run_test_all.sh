@@ -16,8 +16,8 @@ echo "==================================="
 echo "==================================="
 echo "2. Running Search Tests"
 echo "==================================="
-bash run_search_hnsw.sh
-bash run_search_hnswalp_pq.sh
+# bash run_search_hnsw.sh
+# bash run_search_hnswalp_pq.sh
 bash run_search_hnswdexor_pq.sh
 # bash test_search_faiss_hnsw_PQ.sh
 # bash test_search_faiss_hnsw_SQ.sh
