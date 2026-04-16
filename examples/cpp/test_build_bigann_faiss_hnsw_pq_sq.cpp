@@ -126,7 +126,7 @@ int main(int argc, char** argv) {
                         cerr << "Skip invalid PQ param p=" << p << " for dim=" << dim << endl;
                         continue;
                     }
-                    factory = "HNSW" + to_string(M_hnsw) + ",PQ" + to_string(M_pq);
+                    factory = "HNSW" + to_string(M_hnsw) + ",PQ" + to_string(M_pq) + "x16";
                 } else {
                     string sq_suffix = (p == 16) ? "SQfp16" : "SQ" + to_string(p);
                     factory = "HNSW" + to_string(M_hnsw) + "," + sq_suffix;
