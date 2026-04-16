@@ -81,6 +81,10 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         return access_counts_;
     }
 
+    std::vector<int> getNodeLevels() const {
+        return element_levels_;
+    }
+
     std::vector<int> getNodeDegrees() const {
         std::vector<int> degrees(cur_element_count);
         for (size_t i = 0; i < cur_element_count; i++) {
@@ -220,9 +224,11 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     // 数据存储在第0层，每个element的大小都是固定的，size_data_per_element。可以通过HNSW内部的id随机读取数据
     // 如果要使用差分编码压缩data，将无法通过简单的随机读取获取数据。或许需要页表之类的结构进行索引；同时，data需要解压缩。可以在每个element的开头记录上一个data的internal_id，接着回溯到第0个data，然后依次解压缩
     inline char *getDataByInternalId(tableint internal_id) const {
-        // if (internal_id < access_counts_.size()) {
-        //     access_counts_[internal_id]++;
-        // }
+        #ifdef HNSWLIB_ENABLE_ACCESS_COUNT
+        if (internal_id < access_counts_.size()) {
+            access_counts_[internal_id]++;
+        }
+        #endif
         
         // auto start = std::chrono::high_resolution_clock::now();
         char* result = data_level0_memory_ + internal_id * size_data_per_element_ + offsetData_;
