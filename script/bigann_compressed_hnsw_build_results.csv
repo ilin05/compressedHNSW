@@ -1,0 +1,7 @@
+Dataset,SubsetMillion,Algorithm,Vectors,Dim,BuildTime(s),CompressTime(s),DataCompressionRatio,IndexCompressionRatio,IndexFile
+bigann_1M,1,Camel,1000000,128,66.443985,54.449677,3.344138,2.802196,bigann_1M_Camel_pq.bin
+bigann_1M,1,Gorilla,1000000,128,70.161506,55.115142,1.117171,1.141967,bigann_1M_Gorilla_pq.bin
+bigann_1M,1,Elf,1000000,128,69.215894,53.982210,3.589009,2.948762,bigann_1M_Elf_pq.bin
+bigann_10M,10,Camel,10000000,128,909.723092,1129.808816,0.000000,2.839404,bigann_10M_Camel_pq.bin
+bigann_10M,10,Gorilla,10000000,128,906.364510,1148.174751,22.658826,1.153902,bigann_10M_Gorilla_pq.bin
+bigann_10M,10,Elf,10000000,128,905.654951,1342.136689,0.000000,2.968894,bigann_10M_Elf_pq.bin
