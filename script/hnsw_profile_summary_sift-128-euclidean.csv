@@ -1,0 +1,2 @@
+dataset,queries,dim,k,ef,recall,node_count
+sift-128-euclidean,10000,128,1,100,0.9856,1000000
