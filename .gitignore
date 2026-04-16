@@ -21,3 +21,4 @@ script/*.log
 script/*.py
 script/compression_plots/*
 script/recall_latency_plots/*
+script/plots/*

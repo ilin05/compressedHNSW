@@ -118,7 +118,7 @@ int main(int argc, char** argv) {
                     index = faiss::index_factory(dim, factory_string.c_str(), faiss::METRIC_L2);
                 } else if (algo == "HNSWPQ") {
                     int M_pq = dim / n_val;
-                    std::string factory_string = "HNSW" + std::to_string(M_hnsw) + ",PQ" + std::to_string(M_pq);
+                    std::string factory_string = "HNSW" + std::to_string(M_hnsw) + ",PQ" + std::to_string(M_pq) + "x16";    // 每一维使用 16 个 bit 进行编码
                     index = faiss::index_factory(dim, factory_string.c_str(), faiss::METRIC_L2);
                 }
 
