@@ -47,34 +47,6 @@ float* load_fvecs(const std::string& filename, size_t& num_vectors, size_t& dim)
     return data;
 }
 
-static bool resolve_hnswpq_params(
-        size_t dim,
-        int p,
-        size_t n_train,
-        int& M_pq,
-        int& pq_nbits) {
-    if (p <= 0) {
-        return false;
-    }
-    int base_M_pq = static_cast<int>(dim) / p;
-    if (base_M_pq <= 0) {
-        return false;
-    }
-
-    if (n_train >= 65536) {
-        M_pq = base_M_pq;
-        pq_nbits = 16;
-    } else {
-        M_pq = base_M_pq * 2;
-        pq_nbits = 8;
-    }
-
-    if (M_pq <= 0 || (dim % static_cast<size_t>(M_pq) != 0)) {
-        return false;
-    }
-    return true;
-}
-
 int main(int argc, char** argv) {
     omp_set_num_threads(32);
     std::string base_dir = "../datasets/hdf5files/";
@@ -146,16 +118,13 @@ int main(int argc, char** argv) {
                     std::string factory_string = "HNSW" + std::to_string(M_hnsw) + "," + sq_suffix;
                     index = faiss::index_factory(dim, factory_string.c_str(), faiss::METRIC_L2);
                 } else if (algo == "HNSWPQ") {
-                    int M_pq = 0;
-                    int pq_nbits = 0;
-                    if (!resolve_hnswpq_params(dim, n_val, n, M_pq, pq_nbits)) {
-                        cerr << "Skip invalid HNSWPQ setting: p=" << n_val
-                             << ", dim=" << dim << ", n_train=" << n << endl;
+                    int M_pq = static_cast<int>(dim) / n_val;
+                    if (M_pq <= 0) {
+                        cerr << "Skip invalid HNSWPQ setting: p=" << n_val << ", dim=" << dim << endl;
                         continue;
                     }
                     std::string factory_string = "HNSW" + std::to_string(M_hnsw) + ",PQ" +
-                            std::to_string(M_pq) + "x" + std::to_string(pq_nbits);
-                    current_algo_name += "_M" + std::to_string(M_pq) + "x" + std::to_string(pq_nbits);
+                            std::to_string(M_pq);
                     index = faiss::index_factory(dim, factory_string.c_str(), faiss::METRIC_L2);
                 }
 
