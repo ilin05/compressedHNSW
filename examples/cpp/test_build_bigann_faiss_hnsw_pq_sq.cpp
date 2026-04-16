@@ -41,6 +41,34 @@ static size_t file_size_bytes(const string& path) {
     return static_cast<size_t>(in.tellg());
 }
 
+static bool resolve_hnswpq_params(
+        size_t dim,
+        int p,
+        size_t n_train,
+        int& M_pq,
+        int& pq_nbits) {
+    if (p <= 0) {
+        return false;
+    }
+    int base_M_pq = static_cast<int>(dim) / p;
+    if (base_M_pq <= 0) {
+        return false;
+    }
+
+    if (n_train >= 65536) {
+        M_pq = base_M_pq;
+        pq_nbits = 16;
+    } else {
+        M_pq = base_M_pq * 2;
+        pq_nbits = 8;
+    }
+
+    if (M_pq <= 0 || (dim % static_cast<size_t>(M_pq) != 0)) {
+        return false;
+    }
+    return true;
+}
+
 int main(int argc, char** argv) {
     omp_set_num_threads(32);
 
@@ -120,19 +148,23 @@ int main(int argc, char** argv) {
             const vector<int>& params = (algo == "HNSWPQ") ? pq_ms : sq_nbits;
             for (int p : params) {
                 string factory;
+                string current_algo_name = algo + "_" + to_string(p);
                 if (algo == "HNSWPQ") {
-                    int M_pq = static_cast<int>(dim) / p;
-                    if (M_pq <= 0) {
-                        cerr << "Skip invalid PQ param p=" << p << " for dim=" << dim << endl;
+                    int M_pq = 0;
+                    int pq_nbits = 0;
+                    if (!resolve_hnswpq_params(dim, p, train_count, M_pq, pq_nbits)) {
+                        cerr << "Skip invalid HNSWPQ setting: p=" << p
+                             << ", dim=" << dim << ", n_train=" << train_count << endl;
                         continue;
                     }
-                    factory = "HNSW" + to_string(M_hnsw) + ",PQ" + to_string(M_pq) + "x16";
+                    factory = "HNSW" + to_string(M_hnsw) + ",PQ" + to_string(M_pq) + "x" + to_string(pq_nbits);
+                    current_algo_name += "_M" + to_string(M_pq) + "x" + to_string(pq_nbits);
                 } else {
                     string sq_suffix = (p == 16) ? "SQfp16" : "SQ" + to_string(p);
                     factory = "HNSW" + to_string(M_hnsw) + "," + sq_suffix;
                 }
 
-                cout << "\n=== Building " << algo << "(" << p << ") for "
+                cout << "\n=== Building " << current_algo_name << " for "
                      << bigann_test_utils::subset_label(subset_m) << " with " << factory << " ===" << endl;
 
                 faiss::Index* index = nullptr;
@@ -168,7 +200,7 @@ int main(int argc, char** argv) {
                 }
                 const double add_s = timer.getElapsedTimeMicro() / 1e6;
 
-                string index_path = bigann_test_utils::subset_label(subset_m) + "_" + algo + "_" + to_string(p) + ".bin";
+                string index_path = bigann_test_utils::subset_label(subset_m) + "_" + current_algo_name + ".bin";
                 faiss::write_index(index, index_path.c_str());
                 const size_t idx_bytes = file_size_bytes(index_path);
 

@@ -47,6 +47,51 @@ float* load_fvecs(const std::string& filename, size_t& num_vectors, size_t& dim)
     return data;
 }
 
+static bool load_fvecs_meta(const std::string& filename, size_t& num_vectors, size_t& dim) {
+    std::ifstream input(filename, std::ios::binary);
+    if (!input) {
+        return false;
+    }
+    int32_t d;
+    input.read((char*)&d, 4);
+    if (!input) {
+        return false;
+    }
+    dim = static_cast<size_t>(d);
+    input.seekg(0, std::ios::end);
+    size_t file_size = static_cast<size_t>(input.tellg());
+    num_vectors = file_size / (4 + dim * 4);
+    return true;
+}
+
+static bool resolve_hnswpq_params(
+        size_t dim,
+        int p,
+        size_t n_train,
+        int& M_pq,
+        int& pq_nbits) {
+    if (p <= 0) {
+        return false;
+    }
+    int base_M_pq = static_cast<int>(dim) / p;
+    if (base_M_pq <= 0) {
+        return false;
+    }
+
+    if (n_train >= 65536) {
+        M_pq = base_M_pq;
+        pq_nbits = 16;
+    } else {
+        M_pq = base_M_pq * 2;
+        pq_nbits = 8;
+    }
+
+    if (M_pq <= 0 || (dim % static_cast<size_t>(M_pq) != 0)) {
+        return false;
+    }
+    return true;
+}
+
 unsigned int* load_ivecs(const std::string& filename, size_t& num_vectors, size_t& dim) {
     std::ifstream input(filename, std::ios::binary);
     if (!input) {
@@ -120,20 +165,39 @@ int main(int argc, char** argv) {
     for (const auto& ds_base : datasets) {
         std::string query_file = base_dir + ds_base + "_test.fvecs";
         std::string gt_file = base_dir + ds_base + "_neighbors.ivecs";
+        std::string train_file = base_dir + ds_base + "_train.fvecs";
 
         size_t qsize, qdim;
         float* queries = nullptr;
         unsigned int* gt = nullptr;
+        size_t n_train = 0, train_dim = 0;
         try {
             queries = load_fvecs(query_file, qsize, qdim);
             size_t gt_num, gt_dim;
             gt = load_ivecs(gt_file, gt_num, gt_dim);
         } catch (...) { continue; }
 
+        if (!load_fvecs_meta(train_file, n_train, train_dim) || train_dim != qdim) {
+            cerr << "Failed to load training metadata for " << train_file << endl;
+            delete[] queries;
+            if (gt) delete[] gt;
+            continue;
+        }
+
         for (const auto& algo : algos) {
             std::vector<int> ns = (algo == "HNSWPQ") ? pq_ms : sq_nbits;
             for (int n_val : ns) {
                 std::string current_algo_name = algo + "_" + std::to_string(n_val);
+                if (algo == "HNSWPQ") {
+                    int M_pq = 0;
+                    int pq_nbits = 0;
+                    if (!resolve_hnswpq_params(qdim, n_val, n_train, M_pq, pq_nbits)) {
+                        cerr << "Skip invalid HNSWPQ setting in search: p=" << n_val
+                             << ", dim=" << qdim << ", n_train=" << n_train << endl;
+                        continue;
+                    }
+                    current_algo_name += "_M" + std::to_string(M_pq) + "x" + std::to_string(pq_nbits);
+                }
                 std::string index_path = ds_base + "_train.fvecs_" + current_algo_name + ".bin";
                 cout << "Loading " << index_path << endl;
 

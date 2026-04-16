@@ -33,6 +33,34 @@ static vector<float> to_float_buffer(const double* src, size_t n) {
     return out;
 }
 
+static bool resolve_hnswpq_params(
+        size_t dim,
+        int p,
+        size_t n_train,
+        int& M_pq,
+        int& pq_nbits) {
+    if (p <= 0) {
+        return false;
+    }
+    int base_M_pq = static_cast<int>(dim) / p;
+    if (base_M_pq <= 0) {
+        return false;
+    }
+
+    if (n_train >= 65536) {
+        M_pq = base_M_pq;
+        pq_nbits = 16;
+    } else {
+        M_pq = base_M_pq * 2;
+        pq_nbits = 8;
+    }
+
+    if (M_pq <= 0 || (dim % static_cast<size_t>(M_pq) != 0)) {
+        return false;
+    }
+    return true;
+}
+
 int main(int argc, char** argv) {
     omp_set_num_threads(1);
 
@@ -46,6 +74,7 @@ int main(int argc, char** argv) {
     size_t qsize = 10000;
     size_t k = 1;
     vector<size_t> efs = {10, 20, 40, 80, 120, 200, 400, 600, 800, 1000};
+    size_t train_size = 1000000;
 
     for (int i = 1; i < argc; ++i) {
         string arg = argv[i];
@@ -57,6 +86,8 @@ int main(int argc, char** argv) {
             qsize = static_cast<size_t>(stoull(argv[++i]));
         } else if (arg == "--k" && i + 1 < argc) {
             k = static_cast<size_t>(stoull(argv[++i]));
+        } else if (arg == "--train_size" && i + 1 < argc) {
+            train_size = static_cast<size_t>(stoull(argv[++i]));
         } else if (arg == "--algorithm" && i + 1 < argc) {
             algos.clear();
             while (i + 1 < argc && argv[i + 1][0] != '-') {
@@ -90,6 +121,8 @@ int main(int argc, char** argv) {
     csv << "Dataset,Algorithm,Param,K,ef,Recall,TimePerQuery(ms)\n";
 
     for (size_t subset_m : subsets) {
+        const size_t vec_count = subset_m * 1000000ULL;
+        const size_t train_count = std::min(train_size, vec_count);
         string gt_file = gt_dir + "/idx_" + to_string(subset_m) + "M.ivecs";
         vector<vector<unsigned int>> gt;
         if (!bigann_test_utils::load_gt_ivecs_topk(gt_file, qsize, k, gt)) {
@@ -100,7 +133,19 @@ int main(int argc, char** argv) {
         for (const auto& algo : algos) {
             const vector<int>& params = (algo == "HNSWPQ") ? pq_ms : sq_nbits;
             for (int p : params) {
-                string index_path = bigann_test_utils::subset_label(subset_m) + "_" + algo + "_" + to_string(p) + ".bin";
+                string current_algo_name = algo + "_" + to_string(p);
+                if (algo == "HNSWPQ") {
+                    int M_pq = 0;
+                    int pq_nbits = 0;
+                    if (!resolve_hnswpq_params(static_cast<size_t>(qdim), p, train_count, M_pq, pq_nbits)) {
+                        cerr << "Skip invalid HNSWPQ setting in search: p=" << p
+                             << ", dim=" << qdim << ", n_train=" << train_count << endl;
+                        continue;
+                    }
+                    current_algo_name += "_M" + to_string(M_pq) + "x" + to_string(pq_nbits);
+                }
+
+                string index_path = bigann_test_utils::subset_label(subset_m) + "_" + current_algo_name + ".bin";
                 faiss::Index* index = nullptr;
                 try {
                     index = faiss::read_index(index_path.c_str());
@@ -109,7 +154,7 @@ int main(int argc, char** argv) {
                     continue;
                 }
 
-                cout << "\n=== Searching " << algo << "(" << p << ") on "
+                 cout << "\n=== Searching " << current_algo_name << " on "
                      << bigann_test_utils::subset_label(subset_m) << " ===" << endl;
 
                 vector<faiss::idx_t> I(qsize * k);
@@ -139,7 +184,7 @@ int main(int argc, char** argv) {
                     cout << "ef=" << ef << " recall=" << fixed << setprecision(4) << recall
                          << " time=" << setprecision(3) << time_ms << " ms" << endl;
 
-                    csv << bigann_test_utils::subset_label(subset_m) << ',' << algo << ',' << p << ',' << k << ',' << ef
+                    csv << bigann_test_utils::subset_label(subset_m) << ',' << current_algo_name << ',' << p << ',' << k << ',' << ef
                         << ',' << fixed << setprecision(6) << recall << ',' << time_ms << "\n";
 
                     if (recall >= 0.99) break;
