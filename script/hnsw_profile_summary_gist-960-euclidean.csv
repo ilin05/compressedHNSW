@@ -1,0 +1,2 @@
+dataset,queries,dim,k,ef,recall,node_count
+gist-960-euclidean,1000,960,1,100,0.872,1000000
