@@ -12,7 +12,7 @@ bash run_build_bigann_faiss_hnsw_PQ.sh
 echo "==================================="
 echo "2. Running Search HNSWPQ Tests"
 echo "==================================="
-bash run_search_hnswdexor_pq.sh
+bash test_search_faiss_hnsw_PQ.sh
 bash test_search_bigann_faiss_hnsw_PQ.sh
 
 echo "==================================="
