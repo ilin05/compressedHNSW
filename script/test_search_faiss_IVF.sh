@@ -7,4 +7,4 @@ echo "Testing Faiss IVF Search"
 	--dataset fashion-mnist-784-euclidean gist-960-euclidean mnist-784-euclidean sift-128-euclidean bigann_1M bigann_10M \
 	--algorithm IVFFlat \
 	--nlist 1024 \
-	--nprobe 1 2 4 8 16 32
+	--nprobe 1 2 4 8 16 32 48 64
