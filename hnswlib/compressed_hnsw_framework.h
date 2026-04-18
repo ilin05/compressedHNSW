@@ -1326,12 +1326,17 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         data_level0_memory_.shrink_to_fit();
     }
 
-    // TODO6: 添加参数，是否控制差分编码链的长度，如果要控制的话，应该怎么控制？
-    void compress_dataset() {
+    // compress_chain_max_length 表示包含 root 在内的最大链长。
+    // 默认值为 2：root -> child，与历史逻辑保持一致。
+    void compress_dataset(size_t compress_chain_max_length = 2) {
         if (is_compacted_) return;
         if (!use_encoding_algorithm_) return;
 
         size_t dim = data_size_ / sizeof(double);
+        if (compress_chain_max_length < 2) {
+            compress_chain_max_length = 2;
+        }
+        const size_t max_hops = compress_chain_max_length - 1;
 
         // --- PQ Training ---
         train_pq(dim, cur_element_count);
@@ -1339,8 +1344,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
         size_t target_root_count = std::max((size_t)1, cur_element_count / 100);
         
-        std::vector<tableint> assigned_root(cur_element_count, -1);
-        std::vector<dist_t> min_dist(cur_element_count, std::numeric_limits<dist_t>::max());
+        std::vector<tableint> assigned_root(cur_element_count, (tableint)-1);
         std::vector<bool> is_root(cur_element_count, false);
 
         // 1. Select Roots (Top 1% by level)
@@ -1358,7 +1362,6 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             
             is_root[idx] = true;
             assigned_root[idx] = idx;
-            min_dist[idx] = 0;
             roots_found++;
         }
         
@@ -1368,7 +1371,6 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                  if(!isMarkedDeleted(i)) {
                      is_root[i] = true;
                      assigned_root[i] = i;
-                     min_dist[i] = 0;
                      roots_found++;
                      break;
                  }
@@ -1377,40 +1379,55 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
         std::cout << "Compression: Selected " << roots_found << " roots." << std::endl;
 
-        // 2. Assign Roots (Label Propagation)
-        int max_iters = 100; 
-        bool changed = true;
-        
+        // 2. Assign prenode
+        // assigned_prenode[i] = -1 表示 root；否则为其父节点。
+        std::vector<tableint> assigned_prenode(cur_element_count, (tableint)-1);
+        std::vector<int> chain_depth(cur_element_count, -1);  // root depth = 0
+
+        for (size_t i = 0; i < cur_element_count; ++i) {
+            if (isMarkedDeleted(i)) continue;
+            if (is_root[i]) {
+                assigned_prenode[i] = (tableint)-1;
+                chain_depth[i] = 0;
+            }
+        }
+
         // Reusable buffers for distance calculation
         std::vector<double> vec_i(dim);
-        std::vector<double> vec_root(dim);
+        std::vector<double> vec_j(dim);
 
-        for(int iter=0; iter<max_iters && changed; ++iter) {
-            changed = false;
-            for(size_t i=0; i<cur_element_count; ++i) {
-                if (isMarkedDeleted(i)) continue;
-                if (is_root[i]) continue; // Roots stay roots
+        if (compress_chain_max_length == 2) {
+            // 历史逻辑：每个非root节点直接挂到最近 root（通过邻居传播 + 全局兜底）。
+            std::vector<dist_t> min_dist(cur_element_count, std::numeric_limits<dist_t>::max());
+            for (size_t i = 0; i < cur_element_count; ++i) {
+                if (!isMarkedDeleted(i) && is_root[i]) {
+                    min_dist[i] = 0;
+                }
+            }
 
-                // Read vec_i once
-                memcpy(vec_i.data(), getDataByInternalId(i), dim * sizeof(double));
-                
-                // Check neighbors
-                unsigned int* data = get_linklist_at_level(i, 0);
-                int size = getListCount(data);
-                tableint* neighbors = (tableint*)(data + 1);
-                
-                for(int j=0; j<size; ++j) {
-                    tableint neighbor = neighbors[j];
-                    tableint neighbor_root = assigned_root[neighbor];
-                    
-                    if(neighbor_root != -1) {
-                        if(neighbor_root == assigned_root[i]) continue;
+            int max_iters = 100;
+            bool changed = true;
+            for (int iter = 0; iter < max_iters && changed; ++iter) {
+                changed = false;
+                for (size_t i = 0; i < cur_element_count; ++i) {
+                    if (isMarkedDeleted(i)) continue;
+                    if (is_root[i]) continue;
 
-                        // Calculate distance to neighbor's root
-                        memcpy(vec_root.data(), getDataByInternalId(neighbor_root), dim * sizeof(double));
-                        dist_t d = fstdistfunc_(vec_i.data(), vec_root.data(), dist_func_param_);
-                        
-                        if(d < min_dist[i]) {
+                    memcpy(vec_i.data(), getDataByInternalId(i), dim * sizeof(double));
+
+                    unsigned int* data = get_linklist_at_level(i, 0);
+                    int size = getListCount(data);
+                    tableint* neighbors = (tableint*)(data + 1);
+
+                    for (int j = 0; j < size; ++j) {
+                        tableint neighbor = neighbors[j];
+                        tableint neighbor_root = assigned_root[neighbor];
+                        if (neighbor_root == (tableint)-1) continue;
+                        if (neighbor_root == assigned_root[i]) continue;
+
+                        memcpy(vec_j.data(), getDataByInternalId(neighbor_root), dim * sizeof(double));
+                        dist_t d = fstdistfunc_(vec_i.data(), vec_j.data(), dist_func_param_);
+                        if (d < min_dist[i]) {
                             min_dist[i] = d;
                             assigned_root[i] = neighbor_root;
                             changed = true;
@@ -1418,31 +1435,134 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                     }
                 }
             }
-        }
-        
-        // Handle unassigned nodes (assign to nearest root found via brute force)
-        std::vector<tableint> root_indices;
-        for(size_t i=0; i<cur_element_count; ++i) {
-            if(is_root[i]) root_indices.push_back(i);
+
+            for (size_t i = 0; i < cur_element_count; ++i) {
+                if (!isMarkedDeleted(i) && !is_root[i] && assigned_root[i] == (tableint)-1) {
+                    dist_t best_d = std::numeric_limits<dist_t>::max();
+                    tableint best_r = (tableint)-1;
+                    memcpy(vec_i.data(), getDataByInternalId(i), dim * sizeof(double));
+
+                    for (size_t r = 0; r < cur_element_count; ++r) {
+                        if (!is_root[r]) continue;
+                        memcpy(vec_j.data(), getDataByInternalId(r), dim * sizeof(double));
+                        dist_t d = fstdistfunc_(vec_i.data(), vec_j.data(), dist_func_param_);
+                        if (d < best_d) {
+                            best_d = d;
+                            best_r = (tableint)r;
+                        }
+                    }
+                    assigned_root[i] = best_r;
+                }
+            }
+
+            for (size_t i = 0; i < cur_element_count; ++i) {
+                if (isMarkedDeleted(i)) continue;
+                if (is_root[i]) {
+                    assigned_prenode[i] = (tableint)-1;
+                    chain_depth[i] = 0;
+                } else {
+                    assigned_prenode[i] = assigned_root[i];
+                    chain_depth[i] = 1;
+                }
+            }
+        } else {
+            // 新逻辑：限制最大链长，允许非root作为中间节点。
+            std::vector<bool> assigned(cur_element_count, false);
+            for (size_t i = 0; i < cur_element_count; ++i) {
+                if (isMarkedDeleted(i)) continue;
+                if (is_root[i]) {
+                    assigned[i] = true;
+                }
+            }
+
+            bool changed = true;
+            int max_iters = static_cast<int>(max_hops) * 100;
+            for (int iter = 0; iter < max_iters && changed; ++iter) {
+                changed = false;
+                for (size_t i = 0; i < cur_element_count; ++i) {
+                    if (isMarkedDeleted(i) || assigned[i]) continue;
+
+                    memcpy(vec_i.data(), getDataByInternalId(i), dim * sizeof(double));
+
+                    unsigned int* data = get_linklist_at_level(i, 0);
+                    int size = getListCount(data);
+                    tableint* neighbors = (tableint*)(data + 1);
+
+                    dist_t best_d = std::numeric_limits<dist_t>::max();
+                    tableint best_parent = (tableint)-1;
+                    int best_parent_depth = -1;
+
+                    for (int j = 0; j < size; ++j) {
+                        tableint nb = neighbors[j];
+                        if (nb >= cur_element_count) continue;
+                        if (isMarkedDeleted(nb)) continue;
+                        if (!assigned[nb]) continue;
+                        if (chain_depth[nb] < 0) continue;
+                        if ((size_t)chain_depth[nb] >= max_hops) continue;
+
+                        memcpy(vec_j.data(), getDataByInternalId(nb), dim * sizeof(double));
+                        dist_t d = fstdistfunc_(vec_i.data(), vec_j.data(), dist_func_param_);
+                        if (d < best_d) {
+                            best_d = d;
+                            best_parent = nb;
+                            best_parent_depth = chain_depth[nb];
+                        }
+                    }
+
+                    if (best_parent != (tableint)-1) {
+                        assigned_prenode[i] = best_parent;
+                        chain_depth[i] = best_parent_depth + 1;
+                        assigned[i] = true;
+                        changed = true;
+                    }
+                }
+            }
+
+            // 兜底：图不连通时，挂到最近且仍可扩展的已分配节点。
+            for (size_t i = 0; i < cur_element_count; ++i) {
+                if (isMarkedDeleted(i) || assigned[i]) continue;
+
+                memcpy(vec_i.data(), getDataByInternalId(i), dim * sizeof(double));
+                dist_t best_d = std::numeric_limits<dist_t>::max();
+                tableint best_parent = (tableint)-1;
+                int best_parent_depth = -1;
+
+                for (size_t j = 0; j < cur_element_count; ++j) {
+                    if (!assigned[j]) continue;
+                    if (isMarkedDeleted(j)) continue;
+                    if ((size_t)chain_depth[j] >= max_hops) continue;
+
+                    memcpy(vec_j.data(), getDataByInternalId(j), dim * sizeof(double));
+                    dist_t d = fstdistfunc_(vec_i.data(), vec_j.data(), dist_func_param_);
+                    if (d < best_d) {
+                        best_d = d;
+                        best_parent = (tableint)j;
+                        best_parent_depth = chain_depth[j];
+                    }
+                }
+
+                if (best_parent != (tableint)-1) {
+                    assigned_prenode[i] = best_parent;
+                    chain_depth[i] = best_parent_depth + 1;
+                    assigned[i] = true;
+                } else {
+                    // 极端退化场景：把该点作为 root。
+                    assigned_prenode[i] = (tableint)-1;
+                    chain_depth[i] = 0;
+                    assigned[i] = true;
+                }
+            }
         }
 
+        std::vector<tableint> root_indices;
         for(size_t i=0; i<cur_element_count; ++i) {
-             if(!isMarkedDeleted(i) && assigned_root[i] == -1) {
-                 dist_t best_d = std::numeric_limits<dist_t>::max();
-                 tableint best_r = -1;
-                 memcpy(vec_i.data(), getDataByInternalId(i), dim * sizeof(double));
-                 
-                 for(tableint r : root_indices) {
-                     memcpy(vec_root.data(), getDataByInternalId(r), dim * sizeof(double));
-                     dist_t d = fstdistfunc_(vec_i.data(), vec_root.data(), dist_func_param_);
-                     if(d < best_d) {
-                         best_d = d;
-                         best_r = r;
-                     }
-                 }
-                 assigned_root[i] = best_r;
-             }
+            if(!isMarkedDeleted(i) && assigned_prenode[i] == (tableint)-1) {
+                root_indices.push_back((tableint)i);
+            }
         }
+
+        std::cout << "Compression: chain max length = " << compress_chain_max_length
+                  << ", actual roots = " << root_indices.size() << std::endl;
 
         // 3. Compress and Rebuild Memory
         std::vector<char> new_memory;
@@ -1457,14 +1577,14 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         
         for (size_t i = 0; i < cur_element_count; ++i) {
             if (isMarkedDeleted(i)) {
-                assigned_root[i] = i; 
+                assigned_prenode[i] = (tableint)-1;
+                chain_depth[i] = 0;
             }
             
             size_t new_start = new_memory.size();
             new_start_positions[i] = new_start;
-            
-            tableint root = assigned_root[i];
-            tableint prenode = (i == root) ? -1 : root;
+
+            tableint prenode = assigned_prenode[i];
             
             // --- Copy Header ---
             size_t prenode_size = sizeof(tableint);
@@ -1504,11 +1624,25 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             std::vector<typename CodecPolicy::StateType> states(dim, typename CodecPolicy::StateType()); 
             
             if (prenode != -1) {
-                const double* root_data_ptr = (const double*)getDataByInternalId(root);
+                // 回放 prenode 链上的原始数据，构造编码状态。
+                std::vector<tableint> chain;
+                tableint cursor = prenode;
+                while (cursor != (tableint)-1) {
+                    chain.push_back(cursor);
+                    cursor = assigned_prenode[cursor];
+                    if (chain.size() > compress_chain_max_length + 4) {
+                        break;
+                    }
+                }
+                std::reverse(chain.begin(), chain.end());
+
                 std::vector<char> temp_buffer;
                 utils::MemoryStreamWriter temp_writer(&temp_buffer);
-                for(size_t k=0; k<dim; ++k) {
-                    CodecPolicy::encode(root_data_ptr[k], states[k], temp_writer);
+                for (tableint id : chain) {
+                    const double* parent_data_ptr = (const double*)getDataByInternalId(id);
+                    for (size_t k = 0; k < dim; ++k) {
+                        CodecPolicy::encode(parent_data_ptr[k], states[k], temp_writer);
+                    }
                 }
             }
             
