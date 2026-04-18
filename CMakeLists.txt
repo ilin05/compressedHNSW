@@ -183,6 +183,12 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_build_compressed_hnsw examples/cpp/test_build_compressed_hnsw.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_build_compressed_hnsw hnswlib)
 
+    add_executable(test_build_compressed_hnsw_ablation examples/cpp/test_build_compressed_hnsw_ablation.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_build_compressed_hnsw_ablation hnswlib)
+
+    add_executable(test_search_compressed_hnsw_ablation examples/cpp/test_search_compressed_hnsw_ablation.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_search_compressed_hnsw_ablation hnswlib)
+
     add_executable(test_build_hnsw examples/cpp/test_build_hnsw.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_build_hnsw hnswlib)
 
@@ -252,6 +258,8 @@ if(HNSWLIB_EXAMPLES)
       test_search_hnswdexor_pq
       test_build_compressed_hnsw
       test_search_compressed_hnsw
+      test_build_compressed_hnsw_ablation
+      test_search_compressed_hnsw_ablation
       test_build_bigann_hnswalp_pq
       test_search_bigann_hnswalp_pq
       test_build_bigann_hnswdexor_pq

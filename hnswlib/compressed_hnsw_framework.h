@@ -1328,15 +1328,19 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
     // compress_chain_max_length 表示包含 root 在内的最大链长。
     // 默认值为 2：root -> child，与历史逻辑保持一致。
-    void compress_dataset(size_t compress_chain_max_length = 2) {
+    // 当 compress_chain_max_length = -1 时表示不限制链长。
+    void compress_dataset(int compress_chain_max_length = 2) {
         if (is_compacted_) return;
         if (!use_encoding_algorithm_) return;
 
         size_t dim = data_size_ / sizeof(double);
-        if (compress_chain_max_length < 2) {
+        bool unlimited_chain = (compress_chain_max_length < 0);
+        if (!unlimited_chain && compress_chain_max_length < 2) {
             compress_chain_max_length = 2;
         }
-        const size_t max_hops = compress_chain_max_length - 1;
+        const size_t max_hops = unlimited_chain
+                                    ? std::numeric_limits<size_t>::max()
+                                    : static_cast<size_t>(compress_chain_max_length - 1);
 
         // --- PQ Training ---
         train_pq(dim, cur_element_count);
@@ -1396,7 +1400,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         std::vector<double> vec_i(dim);
         std::vector<double> vec_j(dim);
 
-        if (compress_chain_max_length == 2) {
+        if (!unlimited_chain && compress_chain_max_length == 2) {
             // 历史逻辑：每个非root节点直接挂到最近 root（通过邻居传播 + 全局兜底）。
             std::vector<dist_t> min_dist(cur_element_count, std::numeric_limits<dist_t>::max());
             for (size_t i = 0; i < cur_element_count; ++i) {
@@ -1476,7 +1480,9 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             }
 
             bool changed = true;
-            int max_iters = static_cast<int>(max_hops) * 100;
+            int max_iters = unlimited_chain
+                                ? std::max<int>(1000, static_cast<int>(cur_element_count) * 2)
+                                : static_cast<int>(max_hops) * 100;
             for (int iter = 0; iter < max_iters && changed; ++iter) {
                 changed = false;
                 for (size_t i = 0; i < cur_element_count; ++i) {
@@ -1498,7 +1504,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                         if (isMarkedDeleted(nb)) continue;
                         if (!assigned[nb]) continue;
                         if (chain_depth[nb] < 0) continue;
-                        if ((size_t)chain_depth[nb] >= max_hops) continue;
+                        if (!unlimited_chain && (size_t)chain_depth[nb] >= max_hops) continue;
 
                         memcpy(vec_j.data(), getDataByInternalId(nb), dim * sizeof(double));
                         dist_t d = fstdistfunc_(vec_i.data(), vec_j.data(), dist_func_param_);
@@ -1530,7 +1536,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                 for (size_t j = 0; j < cur_element_count; ++j) {
                     if (!assigned[j]) continue;
                     if (isMarkedDeleted(j)) continue;
-                    if ((size_t)chain_depth[j] >= max_hops) continue;
+                    if (!unlimited_chain && (size_t)chain_depth[j] >= max_hops) continue;
 
                     memcpy(vec_j.data(), getDataByInternalId(j), dim * sizeof(double));
                     dist_t d = fstdistfunc_(vec_i.data(), vec_j.data(), dist_func_param_);
@@ -1561,7 +1567,8 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             }
         }
 
-        std::cout << "Compression: chain max length = " << compress_chain_max_length
+        std::cout << "Compression: chain max length = "
+              << (unlimited_chain ? -1 : compress_chain_max_length)
                   << ", actual roots = " << root_indices.size() << std::endl;
 
         // 3. Compress and Rebuild Memory
@@ -1630,7 +1637,8 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                 while (cursor != (tableint)-1) {
                     chain.push_back(cursor);
                     cursor = assigned_prenode[cursor];
-                    if (chain.size() > compress_chain_max_length + 4) {
+                    if (!unlimited_chain &&
+                        chain.size() > static_cast<size_t>(compress_chain_max_length) + 4) {
                         break;
                     }
                 }
