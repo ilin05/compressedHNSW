@@ -74,6 +74,12 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_search_faiss_hnsw_pq_sq examples/cpp/test_search_faiss_hnsw_pq_sq.cpp)
     target_link_libraries(test_search_faiss_hnsw_pq_sq faiss OpenMP::OpenMP_CXX)
 
+    add_executable(test_build_faiss_ivf examples/cpp/test_build_faiss_ivf.cpp)
+    target_link_libraries(test_build_faiss_ivf faiss OpenMP::OpenMP_CXX)
+
+    add_executable(test_search_faiss_ivf examples/cpp/test_search_faiss_ivf.cpp)
+    target_link_libraries(test_search_faiss_ivf faiss OpenMP::OpenMP_CXX)
+
     add_executable(test_build_bigann_faiss_hnsw_pq_sq examples/cpp/test_build_bigann_faiss_hnsw_pq_sq.cpp)
     target_link_libraries(test_build_bigann_faiss_hnsw_pq_sq faiss OpenMP::OpenMP_CXX)
 
