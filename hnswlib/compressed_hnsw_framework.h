@@ -529,143 +529,100 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         return (char*)(data_level0_memory + internal_id * size_data_per_element_ + offsetData_);
     }
 
-    // TODO4: 为了验证减少解压缩路径长度的效果，需要修改当前的逻辑，解压缩不一定只有root -> child两层节点，可能存在多层节点（child的child），因此需要在getOriginalDataByInternalId中增加一个循环，直到prenode为-1为止。同时，需要记录每个节点的状态，以便在解压缩时使用。
+    // 支持任意长度的差分编码链：从目标节点沿 prenode 回溯到 root 或缓存锚点，再逐段前向解码。
     std::vector<double> getOriginalDataByInternalId(tableint internal_id, bool collect_metrics = false) const {
-        // auto start_time = std::chrono::high_resolution_clock::now();
-
-        if(!use_encoding_algorithm_ || !is_compacted_) {
+        if (!use_encoding_algorithm_ || !is_compacted_) {
             size_t dim = data_size_ / sizeof(double);
             std::vector<double> result(dim);
             char* data_ptr = getDataByInternalId(internal_id);
             memcpy(result.data(), data_ptr, dim * sizeof(double));
             return result;
         }
-        
-        size_t dim = *((size_t *) dist_func_param_);
+
+        size_t dim = *((size_t*) dist_func_param_);
         std::vector<double> result(dim);
-        
-        tableint prenode = getPrenodeId(internal_id);
-        
-        // Case 1: Node is a Root (prenode == -1)
-        if (prenode == (tableint)-1) {
-            // Check cache for state
+
+        std::vector<typename CodecPolicy::StateType> states(dim, typename CodecPolicy::StateType());
+        std::vector<tableint> decode_path;
+
+        // 从目标节点向前回溯：直到 root（prenode=-1）或命中缓存锚点。
+        tableint cursor = internal_id;
+        bool found_anchor_in_cache = false;
+        while (true) {
             if (cache_max_size_ > 0) {
-                auto it = root_state_cache_.find(internal_id);
+                auto it = root_state_cache_.find(cursor);
                 if (it != root_state_cache_.end()) {
-                    // Reconstruct data from state
-                    const std::vector<typename CodecPolicy::StateType>& states = it->second;
-                    for(size_t i=0; i<dim; ++i) {
-                        result[i] = states[i].current_value;
+                    states = it->second;
+                    found_anchor_in_cache = true;
+                    if (cursor == internal_id) {
+                        for (size_t i = 0; i < dim; ++i) {
+                            result[i] = states[i].current_value;
+                        }
+                        return result;
                     }
-                    return result;
+                    break;
                 }
             }
-            
-            // Not in cache, decode normally (against default state)
-            utils::MemoryBlockStreamReader reader((const unsigned char*)data_level0_memory_.data());
-            
-            // Calculate start/end for this node
-            size_t start, end;
-            // ... (Same offset calculation logic as before) ...
+
+            tableint parent = getPrenodeId(cursor);
+            decode_path.push_back(cursor);
+            if (parent == (tableint)-1) {
+                break;
+            }
+            cursor = parent;
+        }
+
+        std::reverse(decode_path.begin(), decode_path.end());
+
+        auto decode_single_node = [&](tableint node_id, bool write_result) {
             size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
-            unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + linklist_size_offset));
-            size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
-            start = level0_element_start_positions_[internal_id] + data_offset;
-            
-            if (internal_id + 1 < cur_element_count && level0_element_start_positions_[internal_id+1] > 0) {
-                end = level0_element_start_positions_[internal_id+1];
+            unsigned short int size = *((unsigned short int*)(
+                    data_level0_memory_.data() + level0_element_start_positions_[node_id] +
+                    linklist_size_offset));
+            size_t data_offset =
+                    linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+            size_t start = level0_element_start_positions_[node_id] + data_offset;
+
+            size_t end;
+            if (node_id + 1 < cur_element_count &&
+                level0_element_start_positions_[node_id + 1] > 0) {
+                end = level0_element_start_positions_[node_id + 1];
             } else {
                 end = data_level0_memory_.size();
             }
-            
-            reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
-            
-            std::vector<typename CodecPolicy::StateType> states(dim, typename CodecPolicy::StateType()); // Default states
-            auto decode_start = std::chrono::high_resolution_clock::now();
-            for(size_t i=0; i<dim; ++i) {
-                result[i] = CodecPolicy::decode(states[i], reader);
-            }
-            if (collect_metrics) {
-                decoding_count ++;
-                auto decode_end = std::chrono::high_resolution_clock::now();
-                decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
-            }
-            
-            // Optional: Cache this root state if we have space? 
-            // For now, we rely on loadCache to populate cache.
-            return result;
-        }
-        
-        // Case 2: Node is a Child (prenode != -1)
-        // We need the state AFTER decoding the Root (prenode)
-        
-        std::vector<typename CodecPolicy::StateType> states(dim, typename CodecPolicy::StateType());
-        bool cache_hit = false;
-        
-        if (cache_max_size_ > 0) {
-            auto it = root_state_cache_.find(prenode);
-            if (it != root_state_cache_.end()) {
-                states = it->second; // Copy state
-                cache_hit = true;
-            }
-        }
-        
-        if (!cache_hit) {
-            // Decode Root to get state
+
             utils::MemoryBlockStreamReader reader((const unsigned char*)data_level0_memory_.data());
-            
-            // Calculate start/end for Root
-            size_t start, end;
-            size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
-            unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[prenode] + linklist_size_offset));
-            size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
-            start = level0_element_start_positions_[prenode] + data_offset;
-            
-            if (prenode + 1 < cur_element_count && level0_element_start_positions_[prenode+1] > 0) {
-                end = level0_element_start_positions_[prenode+1];
-            } else {
-                end = data_level0_memory_.size();
-            }
-            
-            reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
-            
+            reader.resetBuffer(
+                    (const unsigned char*)(data_level0_memory_.data() + start), end - start);
+
             auto decode_start = std::chrono::high_resolution_clock::now();
-            for(size_t i=0; i<dim; ++i) {
-                CodecPolicy::decode(states[i], reader);
+            for (size_t i = 0; i < dim; ++i) {
+                double v = CodecPolicy::decode(states[i], reader);
+                if (write_result) {
+                    result[i] = v;
+                }
             }
             if (collect_metrics) {
-                decoding_count ++;
+                decoding_count++;
                 auto decode_end = std::chrono::high_resolution_clock::now();
-                decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
+                decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(
+                                         decode_end - decode_start)
+                                         .count();
             }
+        };
+
+        // 若未命中缓存，decode_path 的首节点是 root，默认状态起步即可。
+        // 若命中缓存，decode_path 的首节点是锚点的后继节点，状态从缓存起步。
+        (void)found_anchor_in_cache;
+        for (size_t idx = 0; idx < decode_path.size(); ++idx) {
+            bool is_last = (idx + 1 == decode_path.size());
+            decode_single_node(decode_path[idx], is_last);
         }
-        
-        // Now decode Child using the state
-        utils::MemoryBlockStreamReader reader((const unsigned char*)data_level0_memory_.data());
-        
-        // Calculate start/end for Child
-        size_t start, end;
-        size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
-        unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + linklist_size_offset));
-        size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
-        start = level0_element_start_positions_[internal_id] + data_offset;
-        
-        if (internal_id + 1 < cur_element_count && level0_element_start_positions_[internal_id+1] > 0) {
-            end = level0_element_start_positions_[internal_id+1];
-        } else {
-            end = data_level0_memory_.size();
-        }
-        
-        reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
-        
-        auto decode_start = std::chrono::high_resolution_clock::now();
-        for(size_t i=0; i<dim; ++i) {
-            result[i] = CodecPolicy::decode(states[i], reader);
-        }
-        if (collect_metrics) {
-            decoding_count ++;
-            auto decode_end = std::chrono::high_resolution_clock::now();
-            decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(decode_end - decode_start).count();
+
+        if (decode_path.empty()) {
+            for (size_t i = 0; i < dim; ++i) {
+                result[i] = states[i].current_value;
+            }
         }
 
         return result;
