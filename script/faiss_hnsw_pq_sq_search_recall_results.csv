@@ -79,7 +79,6 @@ sift-128-euclidean,HNSWPQ_1,1,400,0.9841,2.45443
 sift-128-euclidean,HNSWPQ_1,1,600,0.9843,3.422
 sift-128-euclidean,HNSWPQ_1,1,800,0.9843,4.44408
 sift-128-euclidean,HNSWPQ_1,1,1000,0.9843,5.50817
-
 fashion-mnist-784-euclidean,HNSWPQ_4,1,10,0.8208,0.295957
 fashion-mnist-784-euclidean,HNSWPQ_4,1,20,0.8363,0.305974
 fashion-mnist-784-euclidean,HNSWPQ_4,1,40,0.8422,0.324724
