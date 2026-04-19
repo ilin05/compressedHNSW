@@ -325,7 +325,7 @@ static void write_csv(const std::string& csv_path, const std::vector<BuildRecord
 }
 
 int main(int argc, char** argv) {
-    omp_set_num_threads(32);
+    omp_set_num_threads(16);
 
     std::string mnist_file = "../datasets/hdf5files/mnist-784-euclidean_train.fvecs";
     std::string bigann_file = "../bigann/bigann_base.bvecs";
