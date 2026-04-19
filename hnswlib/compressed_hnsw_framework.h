@@ -2711,7 +2711,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         std::cout << "Compression tree structure written to " << filename << std::endl;
     }
 
-    int getCompressedDataSize() const {
+    size_t getCompressedDataSize() const {
         // 返回压缩的所有element的data部分的总大小
         size_t total_size = 0;
         for (tableint i = 0; i < cur_element_count; i++) {
@@ -2736,7 +2736,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                 total_size += (end - start);
             }
         }
-        return (int)total_size;
+        return total_size;
     }
 
     size_t getIndexSize() const {
