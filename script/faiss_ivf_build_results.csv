@@ -1,0 +1,7 @@
+Dataset,Type,Algorithm,NList,Param,Vectors,Dim,TrainSize,TrainTime(s),AddTime(s),TotalTime(s),IndexFile
+fashion-mnist-784-euclidean,normal,IVFFlat,1024,0,60000,784,60000,1.404550,0.147375,1.551925,fashion-mnist-784-euclidean_IVFFlat_nlist1024.bin
+gist-960-euclidean,normal,IVFFlat,1024,0,1000000,960,1000000,7.254153,3.231632,10.485785,gist-960-euclidean_IVFFlat_nlist1024.bin
+mnist-784-euclidean,normal,IVFFlat,1024,0,60000,784,60000,1.457559,0.154901,1.612460,mnist-784-euclidean_IVFFlat_nlist1024.bin
+sift-128-euclidean,normal,IVFFlat,1024,0,1000000,128,1000000,2.304045,0.882310,3.186355,sift-128-euclidean_IVFFlat_nlist1024.bin
+bigann_1M,bigann,IVFFlat,1024,0,1000000,128,200000,1.861201,1.958052,3.819253,bigann_1M_IVFFlat_nlist1024.bin
+bigann_10M,bigann,IVFFlat,1024,0,10000000,128,200000,1.783620,39.668483,41.452103,bigann_10M_IVFFlat_nlist1024.bin
