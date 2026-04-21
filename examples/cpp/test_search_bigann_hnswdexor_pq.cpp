@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
     L2SpaceDouble l2space(static_cast<size_t>(qdim));
     std::vector<size_t> efs = {10, 20, 30, 40, 50, 60, 80, 100, 120, 150, 200, 300, 400, 500};
 
-    std::ofstream csv("bigann_hnswdexor_pq_search_results.csv");
+    std::ofstream csv("bigann_hnswdexor_pq_search_results_recall@10.csv");
     csv << "Dataset,SubsetMillion,K,ef,Recall,TimePerQuery(ms)\n";
 
     for (size_t m : subsets) {
@@ -84,6 +84,6 @@ int main(int argc, char** argv) {
     }
 
     delete[] queries;
-    std::cout << "\nSaved CSV: bigann_hnswdexor_pq_search_results.csv" << std::endl;
+    std::cout << "\nSaved CSV: bigann_hnswdexor_pq_search_results_recall@10.csv" << std::endl;
     return 0;
 }

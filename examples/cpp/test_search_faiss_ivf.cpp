@@ -162,7 +162,7 @@ int main(int argc, char** argv) {
         cerr << "Warning: cannot preload bigann queries: " << e.what() << endl;
     }
 
-    ofstream csv("faiss_ivf_search_results.csv");
+    ofstream csv("faiss_ivf_search_results_recall@10.csv");
     csv << "Dataset,Type,Algorithm,NList,Param,K,NProbe,Recall,TimePerQuery(ms)\n";
 
     for (const auto& ds : datasets) {
@@ -292,6 +292,6 @@ int main(int argc, char** argv) {
         }
     }
 
-    cout << "\nSaved CSV: faiss_ivf_search_results.csv" << endl;
+    cout << "\nSaved CSV: faiss_ivf_search_results_recall@10.csv" << endl;
     return 0;
 }

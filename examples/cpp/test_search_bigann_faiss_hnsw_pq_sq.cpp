@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
     vector<float> queries = to_float_buffer(qraw, qsize * static_cast<size_t>(qdim));
     delete[] qraw;
 
-    ofstream csv("bigann_faiss_hnsw_pq_sq_search_results.csv");
+    ofstream csv("bigann_faiss_hnsw_pq_sq_search_results_recall@10.csv");
     csv << "Dataset,Algorithm,Param,K,ef,Recall,TimePerQuery(ms)\n";
 
     for (size_t subset_m : subsets) {
@@ -151,6 +151,6 @@ int main(int argc, char** argv) {
         }
     }
 
-    cout << "\nSaved CSV: bigann_faiss_hnsw_pq_sq_search_results.csv" << endl;
+    cout << "\nSaved CSV: bigann_faiss_hnsw_pq_sq_search_results_recall@10.csv" << endl;
     return 0;
 }

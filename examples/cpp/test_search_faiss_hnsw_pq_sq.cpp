@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    std::string csv_file_path = "faiss_hnsw_pq_sq_search_recall_results.csv";
+    std::string csv_file_path = "faiss_hnsw_pq_sq_search_recall_results_recall@10.csv";
     std::ofstream csv_file(csv_file_path);
     csv_file << "Dataset,Algorithm,K,ef,Recall,TimePerQuery(ms)\n";
 

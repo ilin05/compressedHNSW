@@ -218,7 +218,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    std::string csv_file_path = "hnsw_search_recall_results.csv";
+    std::string csv_file_path = "hnsw_search_recall_results_recall@10.csv";
     std::ofstream csv_file(csv_file_path);
     csv_file << "Dataset,K,ef,Recall,TimePerQuery(ms)\n";
 

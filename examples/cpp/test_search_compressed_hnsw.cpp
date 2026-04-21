@@ -258,7 +258,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    std::string csv_file_path = "compressed_hnsw_search_recall_results.csv";
+    std::string csv_file_path = "compressed_hnsw_search_recall_results_recall@10.csv";
     std::ofstream csv_file(csv_file_path);
     if (!csv_file.is_open()) {
         cerr << "Failed to open CSV for writing!" << endl;
