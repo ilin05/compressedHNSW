@@ -147,7 +147,7 @@ void test_search_dataset_tmpl(const std::string& dataset_name, const std::string
         return;
     }
 
-    size_t k = 1;
+    size_t k = 10;
     if (k > gt_dim) k = gt_dim;
 
     cout << "Testing Recall@" << k << " by varying ef..." << endl;

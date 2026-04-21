@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
     vector<int> sq_nbits = {8};
 
     size_t qsize = 10000;
-    size_t k = 1;
+    size_t k = 10;
     vector<size_t> efs = {10, 20, 40, 80, 120, 200, 400, 600, 800, 1000};
 
     for (int i = 1; i < argc; ++i) {

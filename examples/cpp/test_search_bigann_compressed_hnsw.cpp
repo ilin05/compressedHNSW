@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
     std::vector<std::string> algorithms = {"DeXOR", "Gorilla", "Elf", "Camel", "DeXORPlus"};
     bool use_tls = false;
     double tls_ratio = 0.2;
-    size_t k = 1;
+    size_t k = 10;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];

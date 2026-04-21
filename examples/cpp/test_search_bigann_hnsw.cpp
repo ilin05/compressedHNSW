@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
     std::string query_file = "../bigann/bigann_query.bvecs";
     std::string gt_dir = "../bigann/gnd";
     std::vector<size_t> subsets = bigann_test_utils::parse_subsets_from_cli(argc, argv, {1, 10, 100});
-    size_t k = 1;
+    size_t k = 10;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];

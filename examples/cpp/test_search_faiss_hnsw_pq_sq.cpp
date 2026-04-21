@@ -152,7 +152,7 @@ int main(int argc, char** argv) {
                 }
                 
                 vector<size_t> efs = {10, 20, 40, 80, 120, 200, 400, 600, 800, 1000};
-                int k = 1;
+                int k = 10;
                 vector<faiss::idx_t> I(qsize * k);
                 vector<float> D(qsize * k);
 
