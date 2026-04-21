@@ -1,0 +1,11 @@
+Dataset,IndexType,BuildTime(s),IndexFile,IndexSize(Bytes)
+mnist-784,Compressed-HNSW-DeXOR,43.348612,mnist-784_compressed_hnsw_dexor.bin,44751300
+mnist-784,HNSW,5.060374,mnist-784_hnsw_float.bin,197063120
+mnist-784,IVF,2.031138,mnist-784_ivf_float.bin,191859595
+mnist-784,HNSW+PQ,256.601006,mnist-784_hnsw_pq_float.bin,56500131
+mnist-784,HNSW+SQ,4.197709,mnist-784_hnsw_sq_float.bin,55703582
+bigann_100M,Compressed-HNSW-ALP,15645.050466,bigann_100M_compressed_hnsw_alp.bin,27740391645
+bigann_100M,HNSW,8531.772187,bigann_100M_hnsw_float.bin,66053248452
+bigann_100M,IVF,527.065744,bigann_100M_ivf_float.bin,52002130059
+bigann_100M,HNSW+PQ,39445.119943,bigann_100M_hnsw_pq_float.bin,27226839843
+bigann_100M,HNSW+SQ,16197.857143,bigann_100M_hnsw_sq_float.bin,27226709790
