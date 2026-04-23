@@ -189,6 +189,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_search_compressed_hnsw_ablation examples/cpp/test_search_compressed_hnsw_ablation.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_search_compressed_hnsw_ablation hnswlib)
 
+    add_executable(test_profile_compressed_hnsw_search examples/cpp/test_profile_compressed_hnsw_search.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_profile_compressed_hnsw_search hnswlib)
+
     add_executable(test_build_hnsw examples/cpp/test_build_hnsw.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_build_hnsw hnswlib)
 

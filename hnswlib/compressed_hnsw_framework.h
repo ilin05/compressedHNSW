@@ -73,6 +73,8 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
     mutable std::atomic<long> metric_distance_computations{0};
     mutable std::atomic<long> metric_hops{0};
+    mutable std::atomic<long> metric_distance_time{0};
+    mutable std::atomic<long> metric_distance_calls{0};
 
     bool allow_replace_deleted_ = false;  // flag to replace deleted elements (marked as deleted) during insertions
 
@@ -90,6 +92,10 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     // 记录decoding的次数
     mutable std::atomic<long> decoding_count{0};
 
+    // 记录getOriginalData调用次数与回溯跳数
+    mutable std::atomic<long> getOriginalData_calls{0};
+    mutable std::atomic<long> getOriginalData_backtrack_hops{0};
+
     // data cache for getOriginalDataByInternalId
     size_t cache_max_size_ = 0;
     // mutable std::list<tableint> lru_history_;
@@ -106,9 +112,25 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
     bool use_tls_ = false;
     double tls_ratio_ = 0.2;
+    bool enable_profiling_metrics_ = false;
 
     void setUseTls(bool use) { use_tls_ = use; }
     void setTlsRatio(double ratio) { tls_ratio_ = ratio; }
+    void setProfilingMetrics(bool use) { enable_profiling_metrics_ = use; }
+
+    inline dist_t timedDistance(const void* lhs, const void* rhs) const {
+        if (!enable_profiling_metrics_) {
+            return fstdistfunc_(lhs, rhs, dist_func_param_);
+        }
+        auto dist_start = std::chrono::high_resolution_clock::now();
+        dist_t dist = fstdistfunc_(lhs, rhs, dist_func_param_);
+        auto dist_end = std::chrono::high_resolution_clock::now();
+        metric_distance_calls++;
+        metric_distance_time += std::chrono::duration_cast<std::chrono::microseconds>(
+                                    dist_end - dist_start)
+                                    .count();
+        return dist;
+    }
 
     // PQ Quantization Data
     size_t pq_m_ = 0;           // Number of sub-quantizers
@@ -531,11 +553,22 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
     // 支持任意长度的差分编码链：从目标节点沿 prenode 回溯到 root 或缓存锚点，再逐段前向解码。
     std::vector<double> getOriginalDataByInternalId(tableint internal_id, bool collect_metrics = false) const {
+        auto original_data_start = std::chrono::high_resolution_clock::now();
+        if (enable_profiling_metrics_) {
+            getOriginalData_calls++;
+        }
+
         if (!use_encoding_algorithm_ || !is_compacted_) {
             size_t dim = data_size_ / sizeof(double);
             std::vector<double> result(dim);
             char* data_ptr = getDataByInternalId(internal_id);
             memcpy(result.data(), data_ptr, dim * sizeof(double));
+            if (enable_profiling_metrics_) {
+                auto original_data_end = std::chrono::high_resolution_clock::now();
+                getOriginalData_time += std::chrono::duration_cast<std::chrono::microseconds>(
+                                            original_data_end - original_data_start)
+                                            .count();
+            }
             return result;
         }
 
@@ -568,6 +601,9 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             decode_path.push_back(cursor);
             if (parent == (tableint)-1) {
                 break;
+            }
+            if (enable_profiling_metrics_) {
+                getOriginalData_backtrack_hops++;
             }
             cursor = parent;
         }
@@ -602,7 +638,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                     result[i] = v;
                 }
             }
-            if (collect_metrics) {
+            if (collect_metrics || enable_profiling_metrics_) {
                 decoding_count++;
                 auto decode_end = std::chrono::high_resolution_clock::now();
                 decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(
@@ -623,6 +659,13 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             for (size_t i = 0; i < dim; ++i) {
                 result[i] = states[i].current_value;
             }
+        }
+
+        if (enable_profiling_metrics_) {
+            auto original_data_end = std::chrono::high_resolution_clock::now();
+            getOriginalData_time += std::chrono::duration_cast<std::chrono::microseconds>(
+                                        original_data_end - original_data_start)
+                                        .count();
         }
 
         return result;
@@ -916,7 +959,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             (!isMarkedDeleted(ep_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(ep_id))))) {
             std::vector<double> ep_vec = getOriginalDataByInternalId(ep_id);
             const void* ep_data = ep_vec.data();
-            dist_t dist = fstdistfunc_(data_point, ep_data, dist_func_param_);
+            dist_t dist = timedDistance(data_point, ep_data);
             lowerBound = dist;
             top_candidates.emplace(dist, ep_id);
             if (!bare_bone_search && stop_condition) {
@@ -983,7 +1026,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                     std::vector<double> currObjVec = getOriginalDataByInternalId(candidate_id);
                     const void* currObj1 = currObjVec.data();
 
-                    dist_t dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
+                    dist_t dist = timedDistance(data_point, currObj1);
 
                     bool flag_consider_candidate;
                     if (!bare_bone_search && stop_condition) {
@@ -2425,7 +2468,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             
             // Initial Exact Distance
             std::vector<double> vec_ep = getOriginalDataByInternalId(enterpoint_node_);
-            dist_t curdist = fstdistfunc_(query_data, vec_ep.data(), dist_func_param_);
+            dist_t curdist = timedDistance(query_data, vec_ep.data());
 
             for (int level = maxlevel_; level > 0; level--) {
                 bool changed = true;
@@ -2470,7 +2513,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                         for(size_t i=0; i<candidates_to_check; ++i) {
                             tableint cand = batch_ids[i];
                             const std::vector<double>& vec_cand = batch_data[i];
-                            dist_t d = fstdistfunc_(query_data, vec_cand.data(), dist_func_param_);
+                            dist_t d = timedDistance(query_data, vec_cand.data());
                             
                             if (d < curdist) {
                                 curdist = d;
@@ -2512,7 +2555,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         // currObj和curdist分别记录距离data point最近的点和距离
         tableint currObj = enterpoint_node_;
         std::vector<double> vec_ep = getOriginalDataByInternalId(enterpoint_node_);
-        dist_t curdist = fstdistfunc_(query_data, vec_ep.data(), dist_func_param_);
+        dist_t curdist = timedDistance(query_data, vec_ep.data());
         // 在层L...1之间
         for (int level = maxlevel_; level > 0; level--) {
             bool changed = true;
@@ -2535,7 +2578,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                         throw std::runtime_error("cand error");
                     // 根据id获取邻居并计算其到query的距离
                     std::vector<double> vec_cand = getOriginalDataByInternalId(cand);
-                    dist_t d = fstdistfunc_(query_data, vec_cand.data(), dist_func_param_);
+                    dist_t d = timedDistance(query_data, vec_cand.data());
                     // 如果这个邻居与query的距离比curdist还小，更新curdist为这个邻居，changed改为true
                     if (d < curdist) {
                         curdist = d;
@@ -2784,8 +2827,30 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         return getOriginalData_time;
     }
 
+    // 获取距离计算总耗时（微秒）
+    long getTotalTimeDistanceComputation() const {
+        return metric_distance_time;
+    }
+
+    // 获取距离计算总调用次数
+    long getDistanceComputationCalls() const {
+        return metric_distance_calls;
+    }
+
     void resetTotalTimeGetOriginalData() {
         getOriginalData_time = 0;
+    }
+
+    void resetProfilingMetrics() {
+        metric_distance_time = 0;
+        metric_distance_calls = 0;
+        decoding_time = 0;
+        decoding_count = 0;
+        getOriginalData_time = 0;
+        getOriginalData_calls = 0;
+        getOriginalData_backtrack_hops = 0;
+        metric_distance_computations = 0;
+        metric_hops = 0;
     }
 
     // 根据internal id获取该节点在level0的linkLists中元素的数量
@@ -2869,6 +2934,14 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     // 获取decoding调用次数
     int getDecodingCallCount() const {
         return decoding_count;
+    }
+
+    long getOriginalDataCallCount() const {
+        return getOriginalData_calls;
+    }
+
+    long getOriginalDataBacktrackHops() const {
+        return getOriginalData_backtrack_hops;
     }
 
     // 加载cache，根据max_cache_size设置cache大小，cache中固定存储热门数据，不使用lru

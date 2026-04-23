@@ -1,0 +1,154 @@
+{
+  "gist-960-euclidean": {
+    "total_nodes": 1000000,
+    "total_access": 2103030.0,
+    "avg_degree0_all": 12.654706,
+    "level_table": [
+      {
+        "level": 0,
+        "nodes": 936999,
+        "mean_access": 1.9883831252754804,
+        "mean_degree0": 12.65502631272819,
+        "total_access": 1863113,
+        "node_ratio": 0.936999,
+        "access_ratio": 0.8859184129565436
+      },
+      {
+        "level": 1,
+        "nodes": 59128,
+        "mean_access": 2.509775402516574,
+        "mean_degree0": 12.630344337708022,
+        "total_access": 148398,
+        "node_ratio": 0.059128,
+        "access_ratio": 0.07056390065762257
+      },
+      {
+        "level": 2,
+        "nodes": 3626,
+        "mean_access": 10.451737451737452,
+        "mean_degree0": 12.924434638720353,
+        "total_access": 37898,
+        "node_ratio": 0.003626,
+        "access_ratio": 0.018020665420845162
+      },
+      {
+        "level": 3,
+        "nodes": 234,
+        "mean_access": 116.53418803418803,
+        "mean_degree0": 13.179487179487179,
+        "total_access": 27269,
+        "node_ratio": 0.000234,
+        "access_ratio": 0.012966529245897586
+      },
+      {
+        "level": 4,
+        "nodes": 12,
+        "mean_access": 2003.5,
+        "mean_degree0": 14.583333333333334,
+        "total_access": 24042,
+        "node_ratio": 1.2e-05,
+        "access_ratio": 0.011432076575227173
+      },
+      {
+        "level": 5,
+        "nodes": 1,
+        "mean_access": 2310.0,
+        "mean_degree0": 29.0,
+        "total_access": 2310,
+        "node_ratio": 1e-06,
+        "access_ratio": 0.0010984151438638535
+      }
+    ],
+    "survival": {
+      "0": 1.0,
+      "1": 0.063001,
+      "2": 0.003873,
+      "3": 0.000247,
+      "4": 1.3e-05,
+      "5": 1e-06
+    },
+    "top_levels": [
+      3,
+      4,
+      5
+    ],
+    "top_node_ratio": 0.000247,
+    "top_access_ratio": 0.025497020964988612
+  },
+  "sift-128-euclidean": {
+    "total_nodes": 1000000,
+    "total_access": 17530102.0,
+    "avg_degree0_all": 21.170105,
+    "level_table": [
+      {
+        "level": 0,
+        "nodes": 937000,
+        "mean_access": 16.398514407684097,
+        "mean_degree0": 21.17230629669157,
+        "total_access": 15365408,
+        "node_ratio": 0.937,
+        "access_ratio": 0.876515607268001
+      },
+      {
+        "level": 1,
+        "nodes": 59127,
+        "mean_access": 21.767111471916383,
+        "mean_degree0": 21.124477818932128,
+        "total_access": 1287024,
+        "node_ratio": 0.059127,
+        "access_ratio": 0.07341794132173332
+      },
+      {
+        "level": 2,
+        "nodes": 3626,
+        "mean_access": 105.77468284611142,
+        "mean_degree0": 21.34418091560949,
+        "total_access": 383539,
+        "node_ratio": 0.003626,
+        "access_ratio": 0.0218788801114791
+      },
+      {
+        "level": 3,
+        "nodes": 234,
+        "mean_access": 1048.4017094017095,
+        "mean_degree0": 21.273504273504273,
+        "total_access": 245326,
+        "node_ratio": 0.000234,
+        "access_ratio": 0.01399455633515424
+      },
+      {
+        "level": 4,
+        "nodes": 12,
+        "mean_access": 19015.75,
+        "mean_degree0": 19.666666666666668,
+        "total_access": 228189,
+        "node_ratio": 1.2e-05,
+        "access_ratio": 0.013016980734053914
+      },
+      {
+        "level": 5,
+        "nodes": 1,
+        "mean_access": 20616.0,
+        "mean_degree0": 19.0,
+        "total_access": 20616,
+        "node_ratio": 1e-06,
+        "access_ratio": 0.0011760342295783562
+      }
+    ],
+    "survival": {
+      "0": 1.0,
+      "1": 0.063,
+      "2": 0.003873,
+      "3": 0.000247,
+      "4": 1.3e-05,
+      "5": 1e-06
+    },
+    "top_levels": [
+      3,
+      4,
+      5
+    ],
+    "top_node_ratio": 0.000247,
+    "top_access_ratio": 0.02818757129878651
+  }
+}
