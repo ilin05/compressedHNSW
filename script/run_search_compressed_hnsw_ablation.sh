@@ -5,7 +5,8 @@ echo "[Ablation] Search compressed_hnsw_framework indexes"
 ../build/test_search_compressed_hnsw_ablation \
   --threads 32 \
   --k 1 \
-  --dataset fashion-mnist-784-euclidean gist-960-euclidean mnist-784-euclidean sift-128-euclidean \
+  # --dataset fashion-mnist-784-euclidean gist-960-euclidean mnist-784-euclidean sift-128-euclidean \
+  --dataset sift-128-euclidean \
   # --algorithm DeXOR Gorilla Elf Camel DeXORPlus \
   --algorithm DeXOR \
   --chain_max 2 5 -1 \
