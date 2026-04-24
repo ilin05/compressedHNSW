@@ -3,7 +3,7 @@ set -e
 
 echo "[Ablation] Search compressed_hnsw_framework indexes"
 ../build/test_search_compressed_hnsw_ablation \
-  --threads 32 \
+  --threads 1 \
   --k 1 \
   # --dataset fashion-mnist-784-euclidean gist-960-euclidean mnist-784-euclidean sift-128-euclidean \
   --dataset sift-128-euclidean \
