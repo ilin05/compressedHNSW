@@ -202,6 +202,9 @@ if(HNSWLIB_EXAMPLES)
     target_link_libraries(test_profile_hnsw_node_stats hnswlib)
     target_compile_definitions(test_profile_hnsw_node_stats PRIVATE HNSWLIB_ENABLE_ACCESS_COUNT)
 
+    add_executable(test_profile_hnsw_search examples/cpp/test_profile_hnsw_search.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_profile_hnsw_search hnswlib)
+
     add_executable(test_build_bigann_hnsw examples/cpp/test_build_bigann_hnsw.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_build_bigann_hnsw hnswlib)
 
