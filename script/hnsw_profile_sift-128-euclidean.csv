@@ -1,2 +1,2 @@
 Dataset,Algorithm,K,ef,Queries,Recall,TotalTimePerQuery(us),DistanceTimePerQuery(us),OtherTimePerQuery(us),DistanceTimeShare(%),DistanceCalls,AvgDistanceCallsPerQuery
-sift-128-euclidean,HNSW,10,100,10000,0.982690,1051.556100,160.419200,891.136900,15.255411,17530102,1753.010200
+sift-128-euclidean,HNSW,10,100,10000,0.982690,578.492200,8.269900,570.222300,1.429561,17530102,1753.010200
