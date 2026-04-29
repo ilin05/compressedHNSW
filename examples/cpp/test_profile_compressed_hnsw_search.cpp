@@ -217,6 +217,7 @@ int run_profile(const std::string& dataset,
                 }
                 result.pop();
             }
+        }
     }
 
     const double total_us = timer.elapsed_us();
