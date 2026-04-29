@@ -2816,8 +2816,6 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     }
 
     void resetProfilingMetrics() {
-        metric_distance_time = 0;
-        metric_distance_calls = 0;
         decoding_time = 0;
         decoding_count = 0;
         getOriginalData_time = 0;
