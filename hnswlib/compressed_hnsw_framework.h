@@ -73,8 +73,6 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
     mutable std::atomic<long> metric_distance_computations{0};
     mutable std::atomic<long> metric_hops{0};
-    mutable std::atomic<long> metric_distance_time{0};
-    mutable std::atomic<long> metric_distance_calls{0};
 
     bool allow_replace_deleted_ = false;  // flag to replace deleted elements (marked as deleted) during insertions
 
@@ -117,20 +115,6 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     void setUseTls(bool use) { use_tls_ = use; }
     void setTlsRatio(double ratio) { tls_ratio_ = ratio; }
     void setProfilingMetrics(bool use) { enable_profiling_metrics_ = use; }
-
-    inline dist_t timedDistance(const void* lhs, const void* rhs) const {
-        if (!enable_profiling_metrics_) {
-            return fstdistfunc_(lhs, rhs, dist_func_param_);
-        }
-        auto dist_start = std::chrono::high_resolution_clock::now();
-        dist_t dist = fstdistfunc_(lhs, rhs, dist_func_param_);
-        auto dist_end = std::chrono::high_resolution_clock::now();
-        metric_distance_calls++;
-        metric_distance_time += std::chrono::duration_cast<std::chrono::microseconds>(
-                                    dist_end - dist_start)
-                                    .count();
-        return dist;
-    }
 
     // PQ Quantization Data
     size_t pq_m_ = 0;           // Number of sub-quantizers
@@ -959,7 +943,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             (!isMarkedDeleted(ep_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(ep_id))))) {
             std::vector<double> ep_vec = getOriginalDataByInternalId(ep_id);
             const void* ep_data = ep_vec.data();
-            dist_t dist = timedDistance(data_point, ep_data);
+            dist_t dist = fstdistfunc_(data_point, ep_data, dist_func_param_);
             lowerBound = dist;
             top_candidates.emplace(dist, ep_id);
             if (!bare_bone_search && stop_condition) {
@@ -1026,7 +1010,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                     std::vector<double> currObjVec = getOriginalDataByInternalId(candidate_id);
                     const void* currObj1 = currObjVec.data();
 
-                    dist_t dist = timedDistance(data_point, currObj1);
+                    dist_t dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
 
                     bool flag_consider_candidate;
                     if (!bare_bone_search && stop_condition) {
@@ -2468,7 +2452,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             
             // Initial Exact Distance
             std::vector<double> vec_ep = getOriginalDataByInternalId(enterpoint_node_);
-            dist_t curdist = timedDistance(query_data, vec_ep.data());
+            dist_t curdist = fstdistfunc_(query_data, vec_ep.data(), dist_func_param_);
 
             for (int level = maxlevel_; level > 0; level--) {
                 bool changed = true;
@@ -2513,7 +2497,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                         for(size_t i=0; i<candidates_to_check; ++i) {
                             tableint cand = batch_ids[i];
                             const std::vector<double>& vec_cand = batch_data[i];
-                            dist_t d = timedDistance(query_data, vec_cand.data());
+                            dist_t d = fstdistfunc_(query_data, vec_cand.data(), dist_func_param_);
                             
                             if (d < curdist) {
                                 curdist = d;
@@ -2555,7 +2539,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         // currObj和curdist分别记录距离data point最近的点和距离
         tableint currObj = enterpoint_node_;
         std::vector<double> vec_ep = getOriginalDataByInternalId(enterpoint_node_);
-        dist_t curdist = timedDistance(query_data, vec_ep.data());
+        dist_t curdist = fstdistfunc_(query_data, vec_ep.data(), dist_func_param_);
         // 在层L...1之间
         for (int level = maxlevel_; level > 0; level--) {
             bool changed = true;
@@ -2578,7 +2562,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                         throw std::runtime_error("cand error");
                     // 根据id获取邻居并计算其到query的距离
                     std::vector<double> vec_cand = getOriginalDataByInternalId(cand);
-                    dist_t d = timedDistance(query_data, vec_cand.data());
+                    dist_t d = fstdistfunc_(query_data, vec_cand.data(), dist_func_param_);
                     // 如果这个邻居与query的距离比curdist还小，更新curdist为这个邻居，changed改为true
                     if (d < curdist) {
                         curdist = d;
@@ -2825,16 +2809,6 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     // 获取getOriginalData的时间
     long getTotalTimeGetOriginalData() const {
         return getOriginalData_time;
-    }
-
-    // 获取距离计算总耗时（微秒）
-    long getTotalTimeDistanceComputation() const {
-        return metric_distance_time;
-    }
-
-    // 获取距离计算总调用次数
-    long getDistanceComputationCalls() const {
-        return metric_distance_calls;
     }
 
     void resetTotalTimeGetOriginalData() {

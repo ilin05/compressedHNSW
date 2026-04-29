@@ -1,3 +1,4 @@
+#include <atomic>
 #include <chrono>
 #include <fstream>
 #include <iomanip>
@@ -20,6 +21,63 @@ public:
     double elapsed_us() const {
         return static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - begin_).count());
+    }
+};
+
+struct TimedL2Params {
+    size_t dim;
+    std::atomic<long>* distance_calls;
+    std::atomic<long>* distance_time_us;
+    bool* enable_metrics;
+};
+
+class TimedL2SpaceDouble final : public SpaceInterface<double> {
+private:
+    TimedL2Params params_;
+
+    static double timed_l2_distance(const void* pVect1v, const void* pVect2v, const void* qty_ptr) {
+        const auto* p = reinterpret_cast<const TimedL2Params*>(qty_ptr);
+        const auto* a = reinterpret_cast<const double*>(pVect1v);
+        const auto* b = reinterpret_cast<const double*>(pVect2v);
+
+        if (*(p->enable_metrics)) {
+            auto t0 = std::chrono::high_resolution_clock::now();
+            double dist = 0.0;
+            for (size_t i = 0; i < p->dim; ++i) {
+                const double d = a[i] - b[i];
+                dist += d * d;
+            }
+            auto t1 = std::chrono::high_resolution_clock::now();
+            (*(p->distance_calls))++;
+            *(p->distance_time_us) += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+            return dist;
+        }
+
+        double dist = 0.0;
+        for (size_t i = 0; i < p->dim; ++i) {
+            const double d = a[i] - b[i];
+            dist += d * d;
+        }
+        return dist;
+    }
+
+public:
+    TimedL2SpaceDouble(size_t dim,
+                       std::atomic<long>* distance_calls,
+                       std::atomic<long>* distance_time_us,
+                       bool* enable_metrics)
+        : params_{dim, distance_calls, distance_time_us, enable_metrics} {}
+
+    size_t get_data_size() override {
+        return params_.dim * sizeof(double);
+    }
+
+    DISTFUNC<double> get_dist_func() override {
+        return timed_l2_distance;
+    }
+
+    void* get_dist_func_param() override {
+        return &params_;
     }
 };
 
@@ -124,7 +182,13 @@ int run_profile(const std::string& dataset,
     }
 
     const std::string index_file = dataset + "_" + algo + "_" + chain_tag(chain_max_length) + "_pq.bin";
-    L2SpaceDouble l2space(qdim);
+    
+    // Create distance computation metrics for this test run
+    std::atomic<long> distance_calls{0};
+    std::atomic<long> distance_time_us{0};
+    bool enable_metrics = true;
+
+    TimedL2SpaceDouble l2space(qdim, &distance_calls, &distance_time_us, &enable_metrics);
     auto* index = new HierarchicalNSWCABFRAMEWORK<double, CodecPolicy>(
         &l2space, index_file, true, cache_size);
 
@@ -153,17 +217,22 @@ int run_profile(const std::string& dataset,
                 }
                 result.pop();
             }
-        }
     }
 
     const double total_us = timer.elapsed_us();
-    const double dist_us = static_cast<double>(index->getTotalTimeDistanceComputation());
+    
+    // Disable metrics collection after search
+    enable_metrics = false;
+    
+    // Get distance computation metrics from TimedL2SpaceDouble
+    const double dist_us = static_cast<double>(distance_time_us.load());
+    const long dist_calls = distance_calls.load();
+    
     const double dec_us = static_cast<double>(index->getTotalTimeDecoding());
     const double get_raw_us = static_cast<double>(index->getTotalTimeGetOriginalData());
     const double dist_share = (total_us > 0.0) ? (dist_us / total_us * 100.0) : 0.0;
     const double dec_share = (total_us > 0.0) ? (dec_us / total_us * 100.0) : 0.0;
 
-    const long dist_calls = index->getDistanceComputationCalls();
     const long dec_calls = index->getDecodingCallCount();
     const long get_raw_calls = index->getOriginalDataCallCount();
     const long backtrack_hops = index->getOriginalDataBacktrackHops();
