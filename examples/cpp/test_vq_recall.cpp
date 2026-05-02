@@ -1,0 +1,281 @@
+#include <iostream>
+#include <fstream>
+#include <chrono>
+#include <vector>
+#include <string>
+#include <unordered_set>
+#include <iomanip>
+#include <omp.h>
+
+#include "../../hnswlib/hnswlib.h"
+#include "../../hnswlib/hnswalg_simplified_alp_PQ.h"
+
+#include <faiss/index_io.h>
+#include <faiss/IndexIVF.h>
+#include <faiss/IndexNSG.h>
+
+using namespace std;
+using namespace hnswlib;
+
+class StopW {
+    std::chrono::steady_clock::time_point time_begin;
+ public:
+    StopW() { time_begin = std::chrono::steady_clock::now(); }
+    double getElapsedTimeMicro() const {
+        std::chrono::steady_clock::time_point time_end = std::chrono::steady_clock::now();
+        return static_cast<double>(
+                std::chrono::duration_cast<std::chrono::microseconds>(time_end - time_begin).count());
+    }
+    void reset() { time_begin = std::chrono::steady_clock::now(); }
+};
+
+static double* load_fvecs_as_double(const std::string& filename, size_t& num_vectors, size_t& dim) {
+    std::ifstream input(filename, std::ios::binary);
+    if (!input) return nullptr;
+    int32_t d;
+    input.read((char*)&d, 4);
+    dim = d;
+    input.seekg(0, std::ios::end);
+    size_t file_size = input.tellg();
+    num_vectors = file_size / (4 + dim * 4);
+    double* data = new double[num_vectors * dim];
+    float* tmp = new float[dim];
+    input.seekg(0, std::ios::beg);
+    for (size_t i = 0; i < num_vectors; ++i) {
+        input.read((char*)&d, 4);
+        input.read((char*)tmp, dim * 4);
+        for (size_t j = 0; j < dim; ++j) data[i * dim + j] = static_cast<double>(tmp[j]);
+    }
+    delete[] tmp;
+    return data;
+}
+
+static unsigned int* load_ivecs(const std::string& filename, size_t& num_vectors, size_t& dim) {
+    std::ifstream input(filename, std::ios::binary);
+    if (!input) return nullptr;
+    int32_t d;
+    input.read((char*)&d, 4);
+    dim = d;
+    input.seekg(0, std::ios::end);
+    size_t file_size = input.tellg();
+    num_vectors = file_size / (4 + dim * 4);
+    unsigned int* data = new unsigned int[num_vectors * dim];
+    input.seekg(0, std::ios::beg);
+    for (size_t i = 0; i < num_vectors; ++i) {
+        input.read((char*)&d, 4);
+        input.read((char*)(data + i * dim), dim * 4);
+    }
+    return data;
+}
+
+static size_t file_size_bytes(const std::string& filename) {
+    std::ifstream input(filename, std::ios::binary | std::ios::ate);
+    if (!input) {
+        throw std::runtime_error("Cannot open file " + filename);
+    }
+    return static_cast<size_t>(input.tellg());
+}
+
+// Compute recall@k given ground truth (gt rows) and predicted labels (I): gt stored as top-K per query
+static double compute_recall_from_gt(size_t qn, size_t gt_k, unsigned int* gt_rows, const vector<faiss::idx_t>& I, size_t k) {
+    size_t correct = 0;
+    for (size_t qi = 0; qi < qn; ++qi) {
+        unordered_set<faiss::idx_t> g;
+        for (size_t j = 0; j < gt_k; ++j) g.insert(static_cast<faiss::idx_t>(gt_rows[qi * gt_k + j]));
+        for (size_t j = 0; j < k; ++j) {
+            faiss::idx_t pred = I[qi * k + j];
+            if (g.find(pred) != g.end()) correct++;
+        }
+    }
+    return static_cast<double>(correct) / static_cast<double>(qn * k);
+}
+
+int main(int argc, char** argv) {
+    omp_set_num_threads(1);
+
+    string base_dir = "../datasets/hdf5files/";
+    vector<string> datasets = {"fashion-mnist-784-euclidean","gist-960-euclidean","mnist-784-euclidean","sift-128-euclidean"};
+
+    // parameter sweeps
+    vector<int> hnsw_efs = {10,20,40,80,160,320};
+    vector<int> ivf_nprobes = {1,2,4,8,16,32};
+
+    for (int i = 1; i < argc; ++i) {
+        string arg = argv[i];
+        if (arg == "--dataset" && i + 1 < argc) {
+            datasets.clear();
+            while (i + 1 < argc && argv[i + 1][0] != '-') datasets.push_back(argv[++i]);
+        } else if (arg == "--base_dir" && i + 1 < argc) {
+            base_dir = argv[++i]; if (base_dir.back() != '/' && base_dir.back() != '\\') base_dir += "/";
+        }
+    }
+
+    ofstream csv("vq_recall_results.csv");
+    csv << "Dataset,IndexType,Param,K,Recall,QPS,IndexSizeKB,VectorsPerKB,VQ\n";
+
+    for (const auto& ds : datasets) {
+        cout << "\n--- Dataset: " << ds << " ---" << endl;
+        string query_file = base_dir + ds + "_test.fvecs";
+        string gt_file = base_dir + ds + "_neighbors.ivecs";
+
+        size_t qn = 0, qdim = 0;
+        double* queries_d = load_fvecs_as_double(query_file, qn, qdim);
+        if (!queries_d) { cerr << "Cannot load queries for " << ds << endl; continue; }
+
+        size_t gt_n = 0, gt_k = 0;
+        unsigned int* gt_rows = load_ivecs(gt_file, gt_n, gt_k);
+        if (!gt_rows) { cerr << "Cannot load GT for " << ds << endl; delete[] queries_d; continue; }
+        if (qn != gt_n) { cerr << "Query/GT size mismatch for " << ds << endl; delete[] queries_d; delete[] gt_rows; continue; }
+
+        // --- Compressed HNSW ---
+        {
+            string idx_path = ds + "_hnswalp_simplified_pq.bin";
+            L2SpaceDouble l2space(static_cast<int>(qdim));
+            HierarchicalNSWALPSIMPLIFIEDPQ<double>* cidx = nullptr;
+            try {
+                cidx = new HierarchicalNSWALPSIMPLIFIEDPQ<double>(&l2space, idx_path, false);
+            } catch (exception& e) { cerr << "Load compressed HNSW failed: " << e.what() << endl; }
+            if (cidx) {
+                size_t nvecs = cidx->getCurrentElementCount();
+                size_t index_size_bytes = cidx->getCompressedIndexSize();
+                double index_kb = static_cast<double>(index_size_bytes) / 1024.0;
+                double v_per_kb = static_cast<double>(nvecs) / index_kb;
+
+                // test k=1 and k=10 using the HNSW ef sweep (use ef values for search)
+                for (int k : {1,10}) {
+                    for (int ef : hnsw_efs) {
+                        cidx->setEf(ef);
+                        StopW t0;
+                        vector<faiss::idx_t> I(qn * k);
+                        for (size_t qi = 0; qi < qn; ++qi) {
+                            auto pq = cidx->searchKnn(queries_d + qi * qdim, k);
+                            for (int j = k-1; j >= 0; --j) {
+                                if (pq.empty()) { I[qi*k + (k-1-j)] = -1; continue; }
+                                I[qi*k + (k-1-j)] = pq.top().second; pq.pop();
+                            }
+                        }
+                        double elapsed_us = t0.getElapsedTimeMicro();
+                        double qps = qn * 1e6 / elapsed_us;
+                        double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
+                        double vq = v_per_kb * qps;
+                        csv << ds << ",CompressedHNSW,ef=" << ef << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                        cout << "CompressedHNSW ef=" << ef << " k=" << k << " recall=" << recall << " QPS=" << qps << " VQ=" << vq << endl;
+                    }
+                }
+
+                delete cidx;
+            }
+        }
+
+        // --- Original HNSW ---
+        {
+            string idx_path = ds + "_hnsw.bin"; // adjust suffix if needed
+            L2SpaceDouble l2space(static_cast<int>(qdim));
+            HierarchicalNSW<double>* idx = nullptr;
+            try { idx = new HierarchicalNSW<double>(&l2space, idx_path, false); } catch (exception& e) { cerr << "Load HNSW failed: " << e.what() << endl; }
+            if (idx) {
+                size_t nvecs = idx->getCurrentElementCount();
+                size_t index_size_bytes = idx->indexFileSize();
+                double index_kb = static_cast<double>(index_size_bytes) / 1024.0;
+                double v_per_kb = static_cast<double>(nvecs) / index_kb;
+
+                for (int k : {1,10}) {
+                    for (int ef : hnsw_efs) {
+                        idx->setEf(ef);
+                        StopW t0;
+                        vector<faiss::idx_t> I(qn * k);
+                        for (size_t qi = 0; qi < qn; ++qi) {
+                            auto pq = idx->searchKnn(queries_d + qi * qdim, k);
+                            for (int j = k-1; j >= 0; --j) {
+                                if (pq.empty()) { I[qi*k + (k-1-j)] = -1; continue; }
+                                I[qi*k + (k-1-j)] = pq.top().second; pq.pop();
+                            }
+                        }
+                        double elapsed_us = t0.getElapsedTimeMicro();
+                        double qps = qn * 1e6 / elapsed_us;
+                        double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
+                        double vq = v_per_kb * qps;
+                        csv << ds << ",HNSW,ef=" << ef << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                        cout << "HNSW ef=" << ef << " k=" << k << " recall=" << recall << " QPS=" << qps << " VQ=" << vq << endl;
+                    }
+                }
+
+                delete idx;
+            }
+        }
+
+        // --- Faiss IVF ---
+        {
+            string ivf_index_path = ds + "_IVFFlat_nlist1024.bin"; // common naming from build script; user can adjust
+            try {
+                faiss::Index* ivf = faiss::read_index(ivf_index_path.c_str());
+                size_t nvecs = ivf->ntotal;
+                double index_kb = static_cast<double>(file_size_bytes(ivf_index_path)) / 1024.0;
+                double v_per_kb = static_cast<double>(nvecs) / index_kb;
+
+                for (int k : {1,10}) {
+                    for (int nprobe : ivf_nprobes) {
+                        faiss::IndexIVF* iivf = dynamic_cast<faiss::IndexIVF*>(ivf);
+                        if (iivf) iivf->nprobe = nprobe;
+                        // prepare buffers
+                        vector<faiss::idx_t> I(qn * k);
+                        vector<float> D(qn * k);
+                        StopW t0;
+                        // faiss expects float queries
+                        vector<float> qbuf(qn * qdim);
+                        for (size_t qi = 0; qi < qn * qdim; ++qi) qbuf[qi] = static_cast<float>(queries_d[qi]);
+                        ivf->search(static_cast<faiss::idx_t>(qn), qbuf.data(), k, D.data(), I.data());
+                        double elapsed_us = t0.getElapsedTimeMicro();
+                        double qps = qn * 1e6 / elapsed_us;
+                        double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
+                        double vq = v_per_kb * qps;
+                        csv << ds << ",IVF,nprobe=" << nprobe << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                        cout << "IVF nprobe=" << nprobe << " k=" << k << " recall=" << recall << " QPS=" << qps << " VQ=" << vq << endl;
+                    }
+                }
+
+                delete ivf;
+            } catch (exception& e) {
+                cerr << "Load IVF index failed: " << e.what() << endl;
+            }
+        }
+
+        // --- Faiss NSG ---
+        {
+            string nsg_index_path = ds + "_NSG_R32.bin"; // adapt name as produced by build
+            try {
+                faiss::Index* nsg = faiss::read_index(nsg_index_path.c_str());
+                size_t nvecs = nsg->ntotal;
+                double index_kb = static_cast<double>(file_size_bytes(nsg_index_path)) / 1024.0;
+                double v_per_kb = static_cast<double>(nvecs) / index_kb;
+
+                // Faiss NSG typically uses default search; sweeping nprobe not applicable. We'll run single config for k=1,10
+                for (int k : {1,10}) {
+                    vector<faiss::idx_t> I(qn * k);
+                    vector<float> D(qn * k);
+                    StopW t0;
+                    vector<float> qbuf(qn * qdim);
+                    for (size_t qi = 0; qi < qn * qdim; ++qi) qbuf[qi] = static_cast<float>(queries_d[qi]);
+                    nsg->search(static_cast<faiss::idx_t>(qn), qbuf.data(), k, D.data(), I.data());
+                    double elapsed_us = t0.getElapsedTimeMicro();
+                    double qps = qn * 1e6 / elapsed_us;
+                    double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
+                    double vq = v_per_kb * qps;
+                    csv << ds << ",NSG,default," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                    cout << "NSG k=" << k << " recall=" << recall << " QPS=" << qps << " VQ=" << vq << endl;
+                }
+
+                delete nsg;
+            } catch (exception& e) {
+                cerr << "Load NSG index failed: " << e.what() << endl;
+            }
+        }
+
+        delete[] queries_d;
+        delete[] gt_rows;
+    }
+
+    csv.close();
+    cout << "\nSaved CSV: vq_recall_results.csv" << endl;
+    return 0;
+}
