@@ -86,7 +86,8 @@ static TestResult test_build_index(const string& dataset_name, const string& bas
     StopW timer;
     index.add(static_cast<faiss::idx_t>(num_vectors), data);
     res.build_time = timer.getElapsedTimeMicro() / 1e6;
-    res.index_size_bytes = static_cast<size_t>(index.sa_code_size()) * num_vectors;
+    // res.index_size_bytes = static_cast<size_t>(index.sa_code_size()) * num_vectors;
+    res.index_size_bytes = 0; // Faiss does not provide a direct way to get the index size in bytes, so we set it to 0 for now.
 
     const string index_path = dataset_name + "_faiss_hnsw_M16_efConstruction200.bin";
     cout << "Saving index to " << index_path << "..." << endl;
