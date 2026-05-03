@@ -232,7 +232,7 @@ int main(int argc, char** argv) {
 
         // --- Faiss HNSW baseline ---
         {
-            string idx_path = "/home/zmy/HNSWCW/compressedhnsw/script" + ds + "_faiss_hnsw_M16_efConstruction200.bin";
+            string idx_path = "/home/zmy/HNSWCW/compressedhnsw/script/" + ds + "_faiss_hnsw_M16_efConstruction200.bin";
             try {
                 faiss::Index* base = faiss::read_index(idx_path.c_str());
                 auto* hnsw = dynamic_cast<faiss::IndexHNSW*>(base);
