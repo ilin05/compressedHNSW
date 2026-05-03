@@ -29,7 +29,7 @@ class StopW {
     void reset() { time_begin = std::chrono::steady_clock::now(); }
 };
 
-static double* load_fvecs_as_double(const std::string& filename, size_t& num_vectors, size_t& dim) {
+static float* load_fvecs(const std::string& filename, size_t& num_vectors, size_t& dim) {
     std::ifstream input(filename, std::ios::binary);
     if (!input) return nullptr;
     int32_t d;
@@ -38,13 +38,13 @@ static double* load_fvecs_as_double(const std::string& filename, size_t& num_vec
     input.seekg(0, std::ios::end);
     size_t file_size = input.tellg();
     num_vectors = file_size / (4 + dim * 4);
-    double* data = new double[num_vectors * dim];
+    float* data = new float[num_vectors * dim];
     float* tmp = new float[dim];
     input.seekg(0, std::ios::beg);
     for (size_t i = 0; i < num_vectors; ++i) {
         input.read((char*)&d, 4);
         input.read((char*)tmp, dim * 4);
-        for (size_t j = 0; j < dim; ++j) data[i * dim + j] = static_cast<double>(tmp[j]);
+        for (size_t j = 0; j < dim; ++j) data[i * dim + j] = tmp[j];
     }
     delete[] tmp;
     return data;
@@ -144,21 +144,21 @@ int main(int argc, char** argv) {
         string gt_file = base_dir + ds + "_neighbors.ivecs";
 
         size_t qn = 0, qdim = 0;
-        double* queries_d = load_fvecs_as_double(query_file, qn, qdim);
-        if (!queries_d) { cerr << "Cannot load queries for " << ds << endl; continue; }
+        float* queries_f = load_fvecs(query_file, qn, qdim);
+        if (!queries_f) { cerr << "Cannot load queries for " << ds << endl; continue; }
 
         size_t gt_n = 0, gt_k = 0;
         unsigned int* gt_rows = load_ivecs(gt_file, gt_n, gt_k);
-        if (!gt_rows) { cerr << "Cannot load GT for " << ds << endl; delete[] queries_d; continue; }
-        if (qn != gt_n) { cerr << "Query/GT size mismatch for " << ds << endl; delete[] queries_d; delete[] gt_rows; continue; }
+        if (!gt_rows) { cerr << "Cannot load GT for " << ds << endl; delete[] queries_f; continue; }
+        if (qn != gt_n) { cerr << "Query/GT size mismatch for " << ds << endl; delete[] queries_f; delete[] gt_rows; continue; }
 
         // --- Compressed HNSW ---
         {
             string idx_path = ds + "_train.fvecs_hnswalp_simplified_pq.bin";
-            L2SpaceDouble l2space(static_cast<int>(qdim));
-            HierarchicalNSWALPSIMPLIFIEDPQ<double>* cidx = nullptr;
+            L2Space l2space(static_cast<int>(qdim));
+            HierarchicalNSWALPSIMPLIFIEDPQ<float>* cidx = nullptr;
             try {
-                cidx = new HierarchicalNSWALPSIMPLIFIEDPQ<double>(&l2space, idx_path, false);
+                cidx = new HierarchicalNSWALPSIMPLIFIEDPQ<float>(&l2space, idx_path, false);
             } catch (exception& e) { cerr << "Load compressed HNSW failed: " << e.what() << endl; }
             if (cidx) {
                 size_t nvecs = cidx->getCurrentElementCount();
@@ -173,7 +173,7 @@ int main(int argc, char** argv) {
                         StopW t0;
                         vector<faiss::idx_t> I(qn * k);
                         for (size_t qi = 0; qi < qn; ++qi) {
-                            auto pq = cidx->searchKnn(queries_d + qi * qdim, k);
+                            auto pq = cidx->searchKnn(queries_f + qi * qdim, k);
                             for (int j = k-1; j >= 0; --j) {
                                 if (pq.empty()) { I[qi*k + (k-1-j)] = -1; continue; }
                                 I[qi*k + (k-1-j)] = pq.top().second; pq.pop();
@@ -194,10 +194,10 @@ int main(int argc, char** argv) {
 
         // --- Original HNSW ---
         {
-            string idx_path = ds + "_train.fvecs_hnsw.bin"; // adjust suffix if needed
-            L2SpaceDouble l2space(static_cast<int>(qdim));
-            HierarchicalNSW<double>* idx = nullptr;
-            try { idx = new HierarchicalNSW<double>(&l2space, idx_path, false); } catch (exception& e) { cerr << "Load HNSW failed: " << e.what() << endl; }
+            string idx_path = ds + "_train.fvecs_hnsw_float.bin";
+            L2Space l2space(static_cast<int>(qdim));
+            HierarchicalNSW<float>* idx = nullptr;
+            try { idx = new HierarchicalNSW<float>(&l2space, idx_path, false); } catch (exception& e) { cerr << "Load HNSW failed: " << e.what() << endl; }
             if (idx) {
                 size_t nvecs = idx->getCurrentElementCount();
                 size_t index_size_bytes = idx->indexFileSize();
@@ -210,7 +210,7 @@ int main(int argc, char** argv) {
                         StopW t0;
                         vector<faiss::idx_t> I(qn * k);
                         for (size_t qi = 0; qi < qn; ++qi) {
-                            auto pq = idx->searchKnn(queries_d + qi * qdim, k);
+                            auto pq = idx->searchKnn(queries_f + qi * qdim, k);
                             for (int j = k-1; j >= 0; --j) {
                                 if (pq.empty()) { I[qi*k + (k-1-j)] = -1; continue; }
                                 I[qi*k + (k-1-j)] = pq.top().second; pq.pop();
@@ -246,10 +246,7 @@ int main(int argc, char** argv) {
                         vector<faiss::idx_t> I(qn * k);
                         vector<float> D(qn * k);
                         StopW t0;
-                        // faiss expects float queries
-                        vector<float> qbuf(qn * qdim);
-                        for (size_t qi = 0; qi < qn * qdim; ++qi) qbuf[qi] = static_cast<float>(queries_d[qi]);
-                        ivf->search(static_cast<faiss::idx_t>(qn), qbuf.data(), k, D.data(), I.data());
+                        ivf->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
                         double elapsed_us = t0.getElapsedTimeMicro();
                         double qps = qn * 1e6 / elapsed_us;
                         double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
@@ -283,9 +280,7 @@ int main(int argc, char** argv) {
                         vector<faiss::idx_t> I(qn * k);
                         vector<float> D(qn * k);
                         StopW t0;
-                        vector<float> qbuf(qn * qdim);
-                        for (size_t qi = 0; qi < qn * qdim; ++qi) qbuf[qi] = static_cast<float>(queries_d[qi]);
-                        nsg->search(static_cast<faiss::idx_t>(qn), qbuf.data(), k, D.data(), I.data());
+                        nsg->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
                         double elapsed_us = t0.getElapsedTimeMicro();
                         double qps = qn * 1e6 / elapsed_us;
                         double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
@@ -301,7 +296,7 @@ int main(int argc, char** argv) {
             }
         }
 
-        delete[] queries_d;
+        delete[] queries_f;
         delete[] gt_rows;
     }
 
