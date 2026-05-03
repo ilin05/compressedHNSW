@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
 
         // --- Compressed HNSW ---
         {
-            string idx_path = ds + "_hnswalp_simplified_pq.bin";
+            string idx_path = ds + "_train.fvecs_hnswalp_simplified_pq";
             L2SpaceDouble l2space(static_cast<int>(qdim));
             HierarchicalNSWALPSIMPLIFIEDPQ<double>* cidx = nullptr;
             try {
@@ -169,7 +169,7 @@ int main(int argc, char** argv) {
 
         // --- Original HNSW ---
         {
-            string idx_path = ds + "_hnsw.bin"; // adjust suffix if needed
+            string idx_path = ds + "_train.fvecs_hnsw"; // adjust suffix if needed
             L2SpaceDouble l2space(static_cast<int>(qdim));
             HierarchicalNSW<double>* idx = nullptr;
             try { idx = new HierarchicalNSW<double>(&l2space, idx_path, false); } catch (exception& e) { cerr << "Load HNSW failed: " << e.what() << endl; }
@@ -251,18 +251,23 @@ int main(int argc, char** argv) {
 
                 // Faiss NSG typically uses default search; sweeping nprobe not applicable. We'll run single config for k=1,10
                 for (int k : {1,10}) {
-                    vector<faiss::idx_t> I(qn * k);
-                    vector<float> D(qn * k);
-                    StopW t0;
-                    vector<float> qbuf(qn * qdim);
-                    for (size_t qi = 0; qi < qn * qdim; ++qi) qbuf[qi] = static_cast<float>(queries_d[qi]);
-                    nsg->search(static_cast<faiss::idx_t>(qn), qbuf.data(), k, D.data(), I.data());
-                    double elapsed_us = t0.getElapsedTimeMicro();
-                    double qps = qn * 1e6 / elapsed_us;
-                    double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
-                    double vq = v_per_kb * qps;
-                    csv << ds << ",NSG,default," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
-                    cout << "NSG k=" << k << " recall=" << recall << " QPS=" << qps << " VQ=" << vq << endl;
+                    for(int search_L = k; search_L <= 20; search_L += 1){
+                        faiss::IndexNSG* nsg_ptr = dynamic_cast<faiss::IndexNSG*>(nsg);
+                        if (nsg_ptr) nsg_ptr->setSearchL(search_L);
+                        // prepare buffers
+                        vector<faiss::idx_t> I(qn * k);
+                        vector<float> D(qn * k);
+                        StopW t0;
+                        vector<float> qbuf(qn * qdim);
+                        for (size_t qi = 0; qi < qn * qdim; ++qi) qbuf[qi] = static_cast<float>(queries_d[qi]);
+                        nsg->search(static_cast<faiss::idx_t>(qn), qbuf.data(), k, D.data(), I.data());
+                        double elapsed_us = t0.getElapsedTimeMicro();
+                        double qps = qn * 1e6 / elapsed_us;
+                        double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
+                        double vq = v_per_kb * qps;
+                        csv << ds << ",NSG," << search_L << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                        cout << "NSG search_L=" << search_L << " k=" << k << " recall=" << recall << " QPS=" << qps << " VQ=" << vq << endl;
+                    }
                 }
 
                 delete nsg;

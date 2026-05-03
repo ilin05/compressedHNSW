@@ -285,7 +285,8 @@ if(HNSWLIB_EXAMPLES)
       test_build_bigann_compressed_hnsw
       test_search_bigann_compressed_hnsw
       test_refresh_compressed_hnsw_ratios
-      test_build_index_size_comparison)
+      test_build_index_size_comparison
+      test_vq_recall)
 
     foreach(target_name IN LISTS COMPRESSED_HNSW_TARGETS)
       target_compile_definitions(${target_name} PRIVATE TWO_LEVEL_SEARCH SELECT_HUBS_FOR_CACHE)

@@ -67,6 +67,14 @@ struct IndexNSG : Index {
             idx_t* labels,
             const SearchParameters* params = nullptr) const override;
 
+    /// Set the NSG search parameter `search_L` used at query time.
+    /// This controls the length of the search path (candidate pool size).
+    /// Callers can adjust it at runtime, e.g. `idx.setSearchL(64);`.
+    void setSearchL(int L) { nsg.search_L = L; }
+
+    /// Get current search_L value
+    int getSearchL() const { return nsg.search_L; }
+
     void reconstruct(idx_t key, float* recons) const override;
 
     void reset() override;
