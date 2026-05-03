@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+bash run_build_faiss_HNSW.sh
+
 echo "Testing VQ-Recall on HNSW / Compressed-HNSW / IVF / NSG"
 # Measure recall and QPS with the unified VQ driver
 ../build/test_vq_recall \

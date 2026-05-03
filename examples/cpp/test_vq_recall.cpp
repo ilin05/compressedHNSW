@@ -11,6 +11,7 @@
 #include "../../hnswlib/hnswalg_simplified_alp_PQ.h"
 
 #include <faiss/index_io.h>
+#include <faiss/IndexHNSW.h>
 #include <faiss/IndexIVF.h>
 #include <faiss/IndexNSG.h>
 
@@ -226,6 +227,46 @@ int main(int argc, char** argv) {
                 }
 
                 delete idx;
+            }
+        }
+
+        // --- Faiss HNSW baseline ---
+        {
+            string idx_path = ds + "_faiss_hnsw_M16_efConstruction200.bin";
+            try {
+                faiss::Index* base = faiss::read_index(idx_path.c_str());
+                auto* hnsw = dynamic_cast<faiss::IndexHNSW*>(base);
+                if (!hnsw) {
+                    cerr << "Loaded index is not Faiss HNSW: " << idx_path << endl;
+                    delete base;
+                } else {
+                    size_t nvecs = base->ntotal;
+                    double index_kb = static_cast<double>(file_size_bytes(idx_path)) / 1024.0;
+                    double v_per_kb = static_cast<double>(nvecs) / index_kb;
+
+                    for (int k : {1,10}) {
+                        for (int ef : hnsw_efs) {
+                            hnsw->hnsw.efSearch = ef;
+                            vector<faiss::idx_t> I(qn * k);
+                            vector<float> D(qn * k);
+                            StopW t0;
+                            base->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
+                            double elapsed_us = t0.getElapsedTimeMicro();
+                            double qps = qn * 1e6 / elapsed_us;
+                            double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
+                            double vq = v_per_kb * qps;
+                            csv << ds << ",FaissHNSW,ef=" << ef << "," << k << "," << fixed << setprecision(6)
+                                << recall << "," << qps << "," << index_kb << "," << v_per_kb << ","
+                                << vq << "\n";
+                            cout << "FaissHNSW ef=" << ef << " k=" << k << " recall=" << recall
+                                 << " QPS=" << qps << " VQ=" << vq << endl;
+                        }
+                    }
+
+                    delete base;
+                }
+            } catch (const exception& e) {
+                cerr << "Load Faiss HNSW failed: " << e.what() << endl;
             }
         }
 
