@@ -76,17 +76,42 @@ static size_t file_size_bytes(const std::string& filename) {
     return static_cast<size_t>(input.tellg());
 }
 
-// Compute recall@k given ground truth (gt rows) and predicted labels (I): gt stored as top-K per query
+/**
+ * 修改后的标准 Recall@K 计算函数
+ * @param qn 查询数量
+ * @param gt_k Ground Truth 文件中每一行包含的邻居总数 (通常为 100)
+ * @param gt_rows Ground Truth 数据指针
+ * @param I 检索出的结果 ID 向量
+ * @param k 当前测试的 Recall@K 中的 K 值 (如 1 或 10)
+ */
 static double compute_recall_from_gt(size_t qn, size_t gt_k, unsigned int* gt_rows, const vector<faiss::idx_t>& I, size_t k) {
+    // 基础安全检查：检索数不能超过 GT 文件提供的总数
+    if (k > gt_k) {
+        static bool warned = false;
+        if (!warned) {
+            cerr << "Warning: Requesting Recall@" << k << " but Ground Truth only has " << gt_k << " neighbors." << endl;
+            warned = true;
+        }
+        k = gt_k;
+    }
+
     size_t correct = 0;
     for (size_t qi = 0; qi < qn; ++qi) {
+        // --- 关键修改：只将 GT 中的前 K 个邻居放入判定集 ---
         unordered_set<faiss::idx_t> g;
-        for (size_t j = 0; j < gt_k; ++j) g.insert(static_cast<faiss::idx_t>(gt_rows[qi * gt_k + j]));
+        for (size_t j = 0; j < k; ++j) {
+            g.insert(static_cast<faiss::idx_t>(gt_rows[qi * gt_k + j]));
+        }
+
+        // 检查检索出的前 K 个结果
         for (size_t j = 0; j < k; ++j) {
             faiss::idx_t pred = I[qi * k + j];
-            if (g.find(pred) != g.end()) correct++;
+            if (g.find(pred) != g.end()) {
+                correct++;
+            }
         }
     }
+    // 返回平均召回率：总命中数 / (查询数 * k)
     return static_cast<double>(correct) / static_cast<double>(qn * k);
 }
 
