@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
 
         // --- Compressed HNSW ---
         {
-            string idx_path = ds + "_train.fvecs_hnswalp_simplified_pq";
+            string idx_path = ds + "_train.fvecs_hnswalp_simplified_pq.bin";
             L2SpaceDouble l2space(static_cast<int>(qdim));
             HierarchicalNSWALPSIMPLIFIEDPQ<double>* cidx = nullptr;
             try {
@@ -169,7 +169,7 @@ int main(int argc, char** argv) {
 
         // --- Original HNSW ---
         {
-            string idx_path = ds + "_train.fvecs_hnsw"; // adjust suffix if needed
+            string idx_path = ds + "_train.fvecs_hnsw.bin"; // adjust suffix if needed
             L2SpaceDouble l2space(static_cast<int>(qdim));
             HierarchicalNSW<double>* idx = nullptr;
             try { idx = new HierarchicalNSW<double>(&l2space, idx_path, false); } catch (exception& e) { cerr << "Load HNSW failed: " << e.what() << endl; }
