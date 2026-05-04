@@ -125,6 +125,18 @@ int main(int argc, char** argv) {
     // parameter sweeps
     vector<int> hnsw_efs = {10,20,40,80,160,320};
     vector<int> ivf_nprobes = {1,2,4,8,16,32};
+    vector<int> pq_ms = {1,2};
+    vector<int> sq_nbits = {4,8};
+
+    // Algorithm flags
+    bool test_hnswalp = false;
+    bool test_hnsw_hnswlib = false;
+    bool test_hnsw_faiss = false;
+    bool test_ivf = false;
+    bool test_nsg = false;
+    bool test_hnswpq = false;
+    bool test_hnswsq = false;
+    vector<string> algorithms;
 
     for (int i = 1; i < argc; ++i) {
         string arg = argv[i];
@@ -133,11 +145,32 @@ int main(int argc, char** argv) {
             while (i + 1 < argc && argv[i + 1][0] != '-') datasets.push_back(argv[++i]);
         } else if (arg == "--base_dir" && i + 1 < argc) {
             base_dir = argv[++i]; if (base_dir.back() != '/' && base_dir.back() != '\\') base_dir += "/";
+        } else if (arg == "--algorithm" && i + 1 < argc) {
+            algorithms.clear();
+            while (i + 1 < argc && argv[i + 1][0] != '-') algorithms.push_back(argv[++i]);
+        }
+    }
+
+    // Parse algorithm flags
+    if (algorithms.empty()) {
+        // Default: test all algorithms
+        test_hnswalp = test_hnsw_hnswlib = test_hnsw_faiss = test_ivf = test_nsg = test_hnswpq = test_hnswsq = true;
+    } else {
+        for (const auto& algo : algorithms) {
+            if (algo == "HNSWALP") test_hnswalp = true;
+            else if (algo == "HNSW(hnswlib)") test_hnsw_hnswlib = true;
+            else if (algo == "HNSW(faiss)") test_hnsw_faiss = true;
+            else if (algo == "IVF(faiss)") test_ivf = true;
+            else if (algo == "NSG(faiss)") test_nsg = true;
+            else if (algo == "HNSWPQ1") { test_hnswpq = true; pq_ms.clear(); pq_ms.push_back(1); }
+            else if (algo == "HNSWPQ2") { test_hnswpq = true; pq_ms.clear(); pq_ms.push_back(2); }
+            else if (algo == "HNSWSQ4") { test_hnswsq = true; sq_nbits.clear(); sq_nbits.push_back(4); }
+            else if (algo == "HNSWSQ8") { test_hnswsq = true; sq_nbits.clear(); sq_nbits.push_back(8); }
         }
     }
 
     ofstream csv("vq_recall_results.csv");
-    csv << "Dataset,IndexType,Param,K,Recall,QPS,IndexSizeKB,VectorsPerKB,VQ\n";
+    csv << "Dataset,IndexType,Param,K,Recall,QPS,Latency(us),IndexSizeKB,VectorsPerKB,VQ\n";
 
     for (const auto& ds : datasets) {
         cout << "\n--- Dataset: " << ds << " ---" << endl;
@@ -153,8 +186,8 @@ int main(int argc, char** argv) {
         if (!gt_rows) { cerr << "Cannot load GT for " << ds << endl; delete[] queries_f; continue; }
         if (qn != gt_n) { cerr << "Query/GT size mismatch for " << ds << endl; delete[] queries_f; delete[] gt_rows; continue; }
 
-        // --- Compressed HNSW ---
-        {
+        // --- Compressed HNSW (HNSWALP) ---
+        if (test_hnswalp) {
             string idx_path = ds + "_train.fvecs_hnswalp_simplified_pq.bin";
             L2Space l2space(static_cast<int>(qdim));
             HierarchicalNSWALPSIMPLIFIEDPQ<float>* cidx = nullptr;
@@ -182,10 +215,11 @@ int main(int argc, char** argv) {
                         }
                         double elapsed_us = t0.getElapsedTimeMicro();
                         double qps = qn * 1e6 / elapsed_us;
+                        double latency = elapsed_us / qn;
                         double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
                         double vq = v_per_kb * qps;
-                        csv << ds << ",CompressedHNSW,ef=" << ef << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
-                        cout << "CompressedHNSW ef=" << ef << " k=" << k << " recall=" << recall << " QPS=" << qps << " VQ=" << vq << endl;
+                        csv << ds << ",CompressedHNSW,ef=" << ef << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                        cout << "CompressedHNSW ef=" << ef << " k=" << k << " recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
                     }
                 }
 
@@ -193,8 +227,8 @@ int main(int argc, char** argv) {
             }
         }
 
-        // --- Original HNSW ---
-        {
+        // --- Original HNSW (hnswlib) ---
+        if (test_hnsw_hnswlib) {
             string idx_path = ds + "_train.fvecs_hnsw_float.bin";
             L2Space l2space(static_cast<int>(qdim));
             HierarchicalNSW<float>* idx = nullptr;
@@ -219,10 +253,11 @@ int main(int argc, char** argv) {
                         }
                         double elapsed_us = t0.getElapsedTimeMicro();
                         double qps = qn * 1e6 / elapsed_us;
+                        double latency = elapsed_us / qn;
                         double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
                         double vq = v_per_kb * qps;
-                        csv << ds << ",HNSW,ef=" << ef << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
-                        cout << "HNSW ef=" << ef << " k=" << k << " recall=" << recall << " QPS=" << qps << " VQ=" << vq << endl;
+                        csv << ds << ",HNSW,ef=" << ef << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                        cout << "HNSW ef=" << ef << " k=" << k << " recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
                     }
                 }
 
@@ -231,7 +266,7 @@ int main(int argc, char** argv) {
         }
 
         // --- Faiss HNSW baseline ---
-        {
+        if (test_hnsw_faiss) {
             string idx_path = ds + "_train.fvecs_faiss_hnsw_M16_efConstruction200.bin";
             try {
                 faiss::Index* base = faiss::read_index(idx_path.c_str());
@@ -253,13 +288,14 @@ int main(int argc, char** argv) {
                             base->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
                             double elapsed_us = t0.getElapsedTimeMicro();
                             double qps = qn * 1e6 / elapsed_us;
+                            double latency = elapsed_us / qn;
                             double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
                             double vq = v_per_kb * qps;
                             csv << ds << ",FaissHNSW,ef=" << ef << "," << k << "," << fixed << setprecision(6)
-                                << recall << "," << qps << "," << index_kb << "," << v_per_kb << ","
+                                << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << ","
                                 << vq << "\n";
                             cout << "FaissHNSW ef=" << ef << " k=" << k << " recall=" << recall
-                                 << " QPS=" << qps << " VQ=" << vq << endl;
+                                 << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
                         }
                     }
 
@@ -271,7 +307,7 @@ int main(int argc, char** argv) {
         }
 
         // --- Faiss IVF ---
-        {
+        if (test_ivf) {
             string ivf_index_path = ds + "_IVFFlat_nlist1024.bin"; // common naming from build script; user can adjust
             try {
                 faiss::Index* ivf = faiss::read_index(ivf_index_path.c_str());
@@ -290,10 +326,11 @@ int main(int argc, char** argv) {
                         ivf->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
                         double elapsed_us = t0.getElapsedTimeMicro();
                         double qps = qn * 1e6 / elapsed_us;
+                        double latency = elapsed_us / qn;
                         double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
                         double vq = v_per_kb * qps;
-                        csv << ds << ",IVF,nprobe=" << nprobe << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
-                        cout << "IVF nprobe=" << nprobe << " k=" << k << " recall=" << recall << " QPS=" << qps << " VQ=" << vq << endl;
+                        csv << ds << ",IVF,nprobe=" << nprobe << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                        cout << "IVF nprobe=" << nprobe << " k=" << k << " recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
                     }
                 }
 
@@ -304,7 +341,7 @@ int main(int argc, char** argv) {
         }
 
         // --- Faiss NSG ---
-        {
+        if (test_nsg) {
             string nsg_index_path = ds + "_NSG_R32.bin"; // adapt name as produced by build
             try {
                 faiss::Index* nsg = faiss::read_index(nsg_index_path.c_str());
@@ -324,16 +361,109 @@ int main(int argc, char** argv) {
                         nsg->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
                         double elapsed_us = t0.getElapsedTimeMicro();
                         double qps = qn * 1e6 / elapsed_us;
+                        double latency = elapsed_us / qn;
                         double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
                         double vq = v_per_kb * qps;
-                        csv << ds << ",NSG," << search_L << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
-                        cout << "NSG search_L=" << search_L << " k=" << k << " recall=" << recall << " QPS=" << qps << " VQ=" << vq << endl;
+                        csv << ds << ",NSG," << search_L << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                        cout << "NSG search_L=" << search_L << " k=" << k << " recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
                     }
                 }
 
                 delete nsg;
             } catch (exception& e) {
                 cerr << "Load NSG index failed: " << e.what() << endl;
+            }
+        }
+
+        // --- Faiss HNSWPQ ---
+        if (test_hnswpq) {
+            for (int pq_m : pq_ms) {
+                string current_algo_name = "HNSWPQ_" + std::to_string(pq_m);
+                string idx_path = ds + "_train.fvecs_" + current_algo_name + ".bin";
+                try {
+                    faiss::Index* index = faiss::read_index(idx_path.c_str());
+                    auto* real_index = dynamic_cast<faiss::IndexHNSW*>(index);
+                    if (!index) {
+                        cerr << "Cannot load HNSWPQ index " << idx_path << endl;
+                        continue;
+                    }
+
+                    size_t nvecs = index->ntotal;
+                    double index_kb = static_cast<double>(file_size_bytes(idx_path)) / 1024.0;
+                    double v_per_kb = static_cast<double>(nvecs) / index_kb;
+
+                    for (int k : {1, 10}) {
+                        for (int ef : hnsw_efs) {
+                            if (real_index) {
+                                real_index->hnsw.efSearch = ef;
+                            }
+                            vector<faiss::idx_t> I(qn * k);
+                            vector<float> D(qn * k);
+                            StopW t0;
+                            index->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
+                            double elapsed_us = t0.getElapsedTimeMicro();
+                            double qps = qn * 1e6 / elapsed_us;
+                            double latency = elapsed_us / qn;
+                            double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
+                            double vq = v_per_kb * qps;
+                            csv << ds << "," << current_algo_name << ",ef=" << ef << "," << k << "," << fixed << setprecision(6)
+                                << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << ","
+                                << vq << "\n";
+                            cout << current_algo_name << " ef=" << ef << " k=" << k << " recall=" << recall
+                                 << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
+                        }
+                    }
+
+                    delete index;
+                } catch (const exception& e) {
+                    cerr << "Load HNSWPQ index failed: " << e.what() << endl;
+                }
+            }
+        }
+
+        // --- Faiss HNSWSQ ---
+        if (test_hnswsq) {
+            for (int nbits : sq_nbits) {
+                string current_algo_name = "HNSWSQ_" + std::to_string(nbits);
+                string idx_path = ds + "_train.fvecs_" + current_algo_name + ".bin";
+                try {
+                    faiss::Index* index = faiss::read_index(idx_path.c_str());
+                    auto* real_index = dynamic_cast<faiss::IndexHNSW*>(index);
+                    if (!index) {
+                        cerr << "Cannot load HNSWSQ index " << idx_path << endl;
+                        continue;
+                    }
+
+                    size_t nvecs = index->ntotal;
+                    double index_kb = static_cast<double>(file_size_bytes(idx_path)) / 1024.0;
+                    double v_per_kb = static_cast<double>(nvecs) / index_kb;
+
+                    for (int k : {1, 10}) {
+                        for (int ef : hnsw_efs) {
+                            if (real_index) {
+                                real_index->hnsw.efSearch = ef;
+                            }
+                            vector<faiss::idx_t> I(qn * k);
+                            vector<float> D(qn * k);
+                            StopW t0;
+                            index->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
+                            double elapsed_us = t0.getElapsedTimeMicro();
+                            double qps = qn * 1e6 / elapsed_us;
+                            double latency = elapsed_us / qn;
+                            double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
+                            double vq = v_per_kb * qps;
+                            csv << ds << "," << current_algo_name << ",ef=" << ef << "," << k << "," << fixed << setprecision(6)
+                                << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << ","
+                                << vq << "\n";
+                            cout << current_algo_name << " ef=" << ef << " k=" << k << " recall=" << recall
+                                 << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
+                        }
+                    }
+
+                    delete index;
+                } catch (const exception& e) {
+                    cerr << "Load HNSWSQ index failed: " << e.what() << endl;
+                }
             }
         }
 

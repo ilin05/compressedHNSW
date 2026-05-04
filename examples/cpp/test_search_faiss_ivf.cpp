@@ -98,7 +98,7 @@ int main(int argc, char** argv) {
     vector<int> nprobes = {1, 2, 4, 8, 16, 32, 64};
 
     size_t qsize = 10000;
-    size_t k = 10;
+    size_t k = 1;
 
     for (int i = 1; i < argc; ++i) {
         string arg = argv[i];

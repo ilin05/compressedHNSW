@@ -86,6 +86,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_build_faiss_nsg examples/cpp/test_build_faiss_nsg.cpp)
     target_link_libraries(test_build_faiss_nsg faiss OpenMP::OpenMP_CXX)
 
+    add_executable(test_search_faiss_nsg examples/cpp/test_search_faiss_nsg.cpp)
+    target_link_libraries(test_search_faiss_nsg faiss OpenMP::OpenMP_CXX)
+
     add_executable(test_vq_recall examples/cpp/test_vq_recall.cpp)
     target_link_libraries(test_vq_recall faiss hnswlib OpenMP::OpenMP_CXX)
 

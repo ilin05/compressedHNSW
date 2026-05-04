@@ -139,7 +139,7 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
         return;
     }
 
-    size_t k = 10; // 默认测 recall@10
+    size_t k = 1; // 默认测 recall@1
     if (k > gt_dim) k = gt_dim;
 
     cout << "Testing Recall@" << k << " by varying ef..." << endl;
