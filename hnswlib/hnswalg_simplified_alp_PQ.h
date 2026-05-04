@@ -101,6 +101,9 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
     // Compressed codes: One contiguous block. N * m_ bytes.
     std::vector<uint8_t> pq_data_; 
 
+    bool use_tls_ = false;
+    double tls_ratio_ = 0.2;
+
     // Helper to get squared L2 distance between two sub-vectors
     inline float dist_l2_sq(const float* a, const float* b, size_t d) const {
         float res = 0.0f;
@@ -778,7 +781,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
 
             // 2. Filter Top Alpha% (e.g., 20%)
             if (!approx_candidates.empty()) {
-                size_t candidates_to_check = (size_t)(approx_candidates.size() * 0.2); 
+                size_t candidates_to_check = (size_t)(approx_candidates.size() * tls_ratio_); 
                 if (candidates_to_check < 2) candidates_to_check = std::min(approx_candidates.size(), (size_t)2);
                 
                 std::partial_sort(approx_candidates.begin(), 
@@ -1989,8 +1992,8 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         if (cur_element_count == 0) return result;
 
         // Check if we can use the 1-bit quantization path
-#ifdef TWO_LEVEL_SEARCH
-        if (is_compacted_ && !pq_data_.empty()) {
+
+        if (use_tls_ && is_compacted_ && !pq_data_.empty()) {
              // --- Two-Pass Search with PQ Quantization (Algorithm 2) ---
 
             // 1. Compute ADC Table
@@ -2028,7 +2031,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
 
                     // Filter Top Alpha% (e.g., 20%)
                     if (!approx_candidates.empty()) {
-                        size_t candidates_to_check = (size_t)(approx_candidates.size() * 0.2);
+                        size_t candidates_to_check = (size_t)(approx_candidates.size() * tls_ratio_);
                         if (candidates_to_check < 2) candidates_to_check = std::min(approx_candidates.size(), (size_t)2);
                         
                         std::partial_sort(approx_candidates.begin(), 
@@ -2083,7 +2086,6 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             }
             return result;
         }
-#endif
 
         // --- Original Search (Fallback) ---
 
@@ -2310,6 +2312,17 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
     // 获取decoding调用次数
     int getDecodingCallCount() const {
         return decoding_call_count;
+    }
+
+    void setUseTLS(bool use_tls) {
+        use_tls_ = use_tls;
+    }
+
+    void setTLSRatio(float ratio) {
+        if (ratio <= 0.0f || ratio > 1.0f) {
+            throw std::invalid_argument("TLS ratio must be in the range (0, 1]");
+        }
+        tls_ratio_ = ratio;
     }
 };
 }  // namespace hnswlib

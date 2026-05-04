@@ -127,6 +127,7 @@ int main(int argc, char** argv) {
     vector<int> ivf_nprobes = {1,2,4,8,16,32};
     vector<int> pq_ms = {1,2};
     vector<int> sq_nbits = {4,8};
+    vector<float> tls_ratios = {0.1f, 0.2f, 0.3f};
 
     // Algorithm flags
     bool test_hnswalp = false;
@@ -157,7 +158,11 @@ int main(int argc, char** argv) {
         test_hnswalp = test_hnsw_hnswlib = test_hnsw_faiss = test_ivf = test_nsg = test_hnswpq = test_hnswsq = true;
     } else {
         for (const auto& algo : algorithms) {
-            if (algo == "HNSWALP") test_hnswalp = true;
+            if (algo == "HNSWALP") {test_hnswalp = true; tls_ratios.clear(); tls_ratios.push_back(0.0f);} // default to no TLS for "HNSWALP"
+            else if (algo == "HNSWALP_0.1") { test_hnswalp = true; tls_ratios.push_back(0.1f); }
+            else if (algo == "HNSWALP_0.2") { test_hnswalp = true; tls_ratios.push_back(0.2f); }
+            else if (algo == "HNSWALP_0.3") { test_hnswalp = true; tls_ratios.push_back(0.3f); }
+            else if (algo == "HNSWALP_0.5") { test_hnswalp = true; tls_ratios.push_back(0.5f); }
             else if (algo == "HNSW(hnswlib)") test_hnsw_hnswlib = true;
             else if (algo == "HNSW(faiss)") test_hnsw_faiss = true;
             else if (algo == "IVF(faiss)") test_ivf = true;
@@ -195,34 +200,38 @@ int main(int argc, char** argv) {
                 cidx = new HierarchicalNSWALPSIMPLIFIEDPQ<float>(&l2space, idx_path, false);
             } catch (exception& e) { cerr << "Load compressed HNSW failed: " << e.what() << endl; }
             if (cidx) {
-                size_t nvecs = cidx->getCurrentElementCount();
-                size_t index_size_bytes = cidx->getCompressedIndexSize();
-                double index_kb = static_cast<double>(index_size_bytes) / 1024.0;
-                double v_per_kb = static_cast<double>(nvecs) / index_kb;
+                for(float tls_ratio : tls_ratios) {
+                    cidx->use_tls_ = (tls_ratio > 0.0f);
+                    cidx->tls_ratio_ = tls_ratio;
 
-                // test k=1 and k=10 using the HNSW ef sweep (use ef values for search)
-                for (int k : {1,10}) {
-                    for (int ef : hnsw_efs) {
-                        cidx->setEf(ef);
-                        StopW t0;
-                        vector<faiss::idx_t> I(qn * k);
-                        for (size_t qi = 0; qi < qn; ++qi) {
-                            auto pq = cidx->searchKnn(queries_f + qi * qdim, k);
-                            for (int j = k-1; j >= 0; --j) {
-                                if (pq.empty()) { I[qi*k + (k-1-j)] = -1; continue; }
-                                I[qi*k + (k-1-j)] = pq.top().second; pq.pop();
+                    size_t nvecs = cidx->getCurrentElementCount();
+                    size_t index_size_bytes = cidx->getCompressedIndexSize();
+                    double index_kb = static_cast<double>(index_size_bytes) / 1024.0;
+                    double v_per_kb = static_cast<double>(nvecs) / index_kb;
+
+                    // test k=1 and k=10 using the HNSW ef sweep (use ef values for search)
+                    for (int k : {1,10}) {
+                        for (int ef : hnsw_efs) {
+                            cidx->setEf(ef);
+                            StopW t0;
+                            vector<faiss::idx_t> I(qn * k);
+                            for (size_t qi = 0; qi < qn; ++qi) {
+                                auto pq = cidx->searchKnn(queries_f + qi * qdim, k);
+                                for (int j = k-1; j >= 0; --j) {
+                                    if (pq.empty()) { I[qi*k + (k-1-j)] = -1; continue; }
+                                    I[qi*k + (k-1-j)] = pq.top().second; pq.pop();
+                                }
                             }
+                            double elapsed_us = t0.getElapsedTimeMicro();
+                            double qps = qn * 1e6 / elapsed_us;
+                            double latency = elapsed_us / qn;
+                            double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
+                            double vq = v_per_kb * qps;
+                            csv << ds << ",HNSWALP" << tls_ratio <<",ef=" << ef << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                            cout << "HNSWALP" << tls_ratio << " ef=" << ef << " k=" << k << " recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
                         }
-                        double elapsed_us = t0.getElapsedTimeMicro();
-                        double qps = qn * 1e6 / elapsed_us;
-                        double latency = elapsed_us / qn;
-                        double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
-                        double vq = v_per_kb * qps;
-                        csv << ds << ",CompressedHNSW,ef=" << ef << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
-                        cout << "CompressedHNSW ef=" << ef << " k=" << k << " recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
                     }
                 }
-
                 delete cidx;
             }
         }
