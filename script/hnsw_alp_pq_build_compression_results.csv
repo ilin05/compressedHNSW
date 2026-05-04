@@ -1,0 +1,5 @@
+Dataset,Build time (s),Compress time (s),Data compression ratio,Index compression ratio
+fashion-mnist-784-euclidean_train.fvecs,1.58153,8.40045,3.83646,3.68
+gist-960-euclidean_train.fvecs,151.095,39.7457,2.64994,2.62359
+mnist-784-euclidean_train.fvecs,2.06502,7.18941,3.83646,3.61445
+sift-128-euclidean_train.fvecs,33.2334,5.39686,3.91254,2.79778
