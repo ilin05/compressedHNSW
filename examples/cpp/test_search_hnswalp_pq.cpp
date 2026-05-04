@@ -30,8 +30,8 @@ class StopW {
     }
 };
 
-// 读取 fvecs 文件 (原数据为float)，将其存储为 double 数组以匹配查询
-double* load_fvecs_as_double(const std::string& filename, size_t& num_vectors, size_t& dim) {
+// 读取 fvecs 文件 (原数据为 float)，直接存储为 float 数组
+float* load_fvecs_as_float(const std::string& filename, size_t& num_vectors, size_t& dim) {
     std::ifstream input(filename, std::ios::binary);
     if (!input) {
         std::cerr << "Cannot open " << filename << std::endl;
@@ -46,19 +46,14 @@ double* load_fvecs_as_double(const std::string& filename, size_t& num_vectors, s
     size_t file_size = input.tellg();
     num_vectors = file_size / (4 + dim * 4);
     
-    double* data = new double[num_vectors * dim];
-    float* tmp = new float[dim];
+    float* data = new float[num_vectors * dim];
     input.seekg(0, std::ios::beg);
     
     for (size_t i = 0; i < num_vectors; ++i) {
         input.read((char*)&d, 4);
-        input.read((char*)tmp, dim * 4);
-        for(size_t j = 0; j < dim; ++j) {
-            data[i * dim + j] = static_cast<double>(tmp[j]);
-        }
+        input.read((char*)(data + i * dim), dim * 4);
     }
     
-    delete[] tmp;
     return data;
 }
 
@@ -109,7 +104,7 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
     
     // Load Queries
     size_t qsize = 0, qdim = 0;
-    double* massQ = load_fvecs_as_double(query_file, qsize, qdim);
+    float* massQ = load_fvecs_as_float(query_file, qsize, qdim);
     if (!massQ) return;
     cout << "Loaded " << qsize << " queries of dimension " << qdim << endl;
 
@@ -128,12 +123,12 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
     }
 
     // Load Index
-    L2SpaceDouble l2space(qdim);
-    HierarchicalNSWALPSIMPLIFIEDPQ<double>* appr_alg = nullptr;
+    L2Space l2space(qdim);
+    HierarchicalNSWALPSIMPLIFIEDPQ<float>* appr_alg = nullptr;
     
     try {
         cout << "Loading index from " << index_path << "..." << endl;
-        appr_alg = new HierarchicalNSWALPSIMPLIFIEDPQ<double>(&l2space, index_path, false);
+        appr_alg = new HierarchicalNSWALPSIMPLIFIEDPQ<float>(&l2space, index_path, false);
         cout << "Index successfully loaded." << endl;
     } catch (std::exception& e) {
         cerr << "Failed to load index: " << e.what() << endl;
@@ -159,7 +154,7 @@ void test_search_dataset(const std::string& dataset_name, const std::string& bas
         // 可选开启多线程测QPS，如果是测单线程Latency这里请去掉 #pragma omp parallel for
         // #pragma omp parallel for reduction(+:correct)
         for (long i = 0; i < (long)qsize; i++) {
-            std::priority_queue<std::pair<double, labeltype>> result = appr_alg->searchKnn(massQ + qdim * i, k);
+            std::priority_queue<std::pair<float, labeltype>> result = appr_alg->searchKnn(massQ + qdim * i, k);
             
             unordered_set<labeltype> g;
             for (size_t j = 0; j < k; j++) {

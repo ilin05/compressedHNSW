@@ -29,8 +29,8 @@ class StopW {
     }
 };
 
-// 辅助函数：读取 fvecs 文件 (原数据为float)，但将其存储为 double 数组方便我们构建 double 类型索引
-double* load_fvecs_as_double(const std::string& filename, size_t& num_vectors, size_t& dim) {
+// 辅助函数：读取 fvecs 文件 (原数据为 float)，直接存储为 float 数组
+float* load_fvecs_as_float(const std::string& filename, size_t& num_vectors, size_t& dim) {
     std::ifstream input(filename, std::ios::binary);
     if (!input) {
         std::cerr << "Cannot open " << filename << std::endl;
@@ -47,20 +47,15 @@ double* load_fvecs_as_double(const std::string& filename, size_t& num_vectors, s
     size_t file_size = input.tellg();
     num_vectors = file_size / (4 + dim * 4);
     
-    // 重新回到开头，加载数据并转换为 double
-    double* data = new double[num_vectors * dim];
-    float* tmp = new float[dim];
+    // 重新回到开头，加载数据
+    float* data = new float[num_vectors * dim];
     input.seekg(0, std::ios::beg);
     
     for (size_t i = 0; i < num_vectors; ++i) {
         input.read((char*)&d, 4); // 跳过维度d
-        input.read((char*)tmp, dim * 4);
-        for(size_t j = 0; j < dim; ++j) {
-            data[i * dim + j] = static_cast<double>(tmp[j]);
-        }
+        input.read((char*)(data + i * dim), dim * 4);
     }
     
-    delete[] tmp;
     return data;
 }
 
@@ -104,22 +99,22 @@ TestResult test_build_index(const std::string& dataset_name, const std::string& 
     cout << "Testing dataset construction: " << dataset_name << endl;
     
     size_t num_vectors = 0, dim = 0;
-    // 强制读取为 double 数组
-    double* data = load_fvecs_as_double(filepath, num_vectors, dim);
+    // 直接读取为 float 数组
+    float* data = load_fvecs_as_float(filepath, num_vectors, dim);
     if (!data) return res;
     
-    cout << "Loaded " << num_vectors << " vectors of dimension " << dim << " (converted to double)" << endl;
+    cout << "Loaded " << num_vectors << " vectors of dimension " << dim << " (float)" << endl;
     
-    // 初始化 L2 空间 (数据现为 double)
-    L2SpaceDouble l2space(dim);
+    // 初始化 L2 空间 (float)
+    L2Space l2space(dim);
     
     // HNSW 基本参数
     int M = 16;
     int efConstruction = 200;
     
     cout << "Allocating memory for index..." << endl;
-    HierarchicalNSWALPSIMPLIFIEDPQ<double>* appr_alg = 
-        new HierarchicalNSWALPSIMPLIFIEDPQ<double>(&l2space, num_vectors, M, efConstruction);
+    HierarchicalNSWALPSIMPLIFIEDPQ<float>* appr_alg = 
+        new HierarchicalNSWALPSIMPLIFIEDPQ<float>(&l2space, num_vectors, M, efConstruction);
         
     StopW stopw;
     
@@ -143,8 +138,8 @@ TestResult test_build_index(const std::string& dataset_name, const std::string& 
     cout << "Compression Time: " << res.compress_time << " seconds" << endl;
     
     // 1. Data 压缩率计算
-    // 原始大小: num_vectors * dim * sizeof(double)
-    size_t original_data_size = num_vectors * dim * sizeof(double);
+    // 原始大小: num_vectors * dim * sizeof(float)
+    size_t original_data_size = num_vectors * dim * sizeof(float);
     // 压缩的data部分总大小
     size_t compressed_data_size = appr_alg->getCompressedDataSize();
     cout << "Original data size: " << original_data_size << " bytes." << endl;

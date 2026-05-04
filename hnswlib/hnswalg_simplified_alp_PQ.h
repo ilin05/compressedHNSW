@@ -37,7 +37,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
     size_t ef_construction_{0};
     size_t ef_{ 0 };
 
-    double mult_{0.0}, revSize_{0.0};
+    float mult_{0.0f}, revSize_{0.0f};
     int maxlevel_{0};
 
     std::unique_ptr<VisitedListPool> visited_list_pool_{nullptr};
@@ -95,17 +95,17 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
     static const size_t pq_nbits_ = 8;
     static const size_t pq_k_ = 1 << pq_nbits_; // 256
     
-    // Centroids: m_ vectors. Each vector contains k_ * d_sub_ doubles.
-    std::vector<std::vector<double>> pq_centroids_; 
+    // Centroids: m_ vectors. Each vector contains k_ * d_sub_ floats.
+    std::vector<std::vector<float>> pq_centroids_; 
     
     // Compressed codes: One contiguous block. N * m_ bytes.
     std::vector<uint8_t> pq_data_; 
 
     // Helper to get squared L2 distance between two sub-vectors
-    inline double dist_l2_sq(const double* a, const double* b, size_t d) const {
-        double res = 0;
+    inline float dist_l2_sq(const float* a, const float* b, size_t d) const {
+        float res = 0.0f;
         for(size_t i=0; i<d; ++i) {
-            double diff = a[i] - b[i];
+            float diff = a[i] - b[i];
             res += diff * diff;
         }
         return res;
@@ -143,21 +143,17 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             size_t d_start = m * pq_d_sub_;
             size_t current_d_sub = (m == pq_m_ - 1) ? (dim - d_start) : pq_d_sub_;
             
-            std::vector<std::vector<double>> sub_data(sample_size, std::vector<double>(current_d_sub));
+            std::vector<std::vector<dist_t>> sub_data(sample_size, std::vector<dist_t>(current_d_sub));
             
             // Collect training data for subspace
             for (size_t i = 0; i < sample_size; ++i) {
                 char* data_ptr = getDataByInternalId(sample_indices[i]);
                 for(size_t d=0; d<current_d_sub; ++d) {
-                    if (data_size_ / dim == sizeof(float)) {
-                         sub_data[i][d] = ((float*)data_ptr)[d_start + d];
-                    } else {
-                         sub_data[i][d] = ((double*)data_ptr)[d_start + d];
-                    }
+                    sub_data[i][d] = static_cast<dist_t>(((float*)data_ptr)[d_start + d]);
                 }
             }
 
-            std::vector<double>& centroids = pq_centroids_[m];
+              std::vector<float>& centroids = pq_centroids_[m];
             centroids.resize(pq_k_ * current_d_sub);
             
             std::vector<int> init_perm(sample_size);
@@ -172,17 +168,17 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
 
             int max_iter = 50;
             std::vector<int> assign(sample_size);
-            std::vector<double> new_centroids(pq_k_ * current_d_sub);
+            std::vector<float> new_centroids(pq_k_ * current_d_sub);
             std::vector<int> cluster_counts(pq_k_);
 
             for(int iter=0; iter<max_iter; ++iter) {
                 // E-step
                 #pragma omp parallel for
                 for(int i=0; i<(int)sample_size; ++i) {
-                    double best_dist = std::numeric_limits<double>::max();
+                    float best_dist = std::numeric_limits<float>::max();
                     int best_k = -1;
                     for(int k=0; k<(int)pq_k_; ++k) {
-                        double dist = dist_l2_sq(sub_data[i].data(), centroids.data() + k * current_d_sub, current_d_sub);
+                        float dist = dist_l2_sq(sub_data[i].data(), centroids.data() + k * current_d_sub, current_d_sub);
                         if(dist < best_dist) {
                             best_dist = dist;
                             best_k = k;
@@ -236,21 +232,17 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                 size_t d_start = m * pq_d_sub_;
                 size_t current_d_sub = (m == pq_m_ - 1) ? (dim - d_start) : pq_d_sub_;
                 
-                std::vector<double> vec_chunk(current_d_sub);
+                std::vector<dist_t> vec_chunk(current_d_sub);
                 for(size_t d=0; d<current_d_sub; ++d) {
-                    if (data_size_ / dim == sizeof(float)) {
-                         vec_chunk[d] = ((float*)data_ptr)[d_start + d];
-                    } else {
-                         vec_chunk[d] = ((double*)data_ptr)[d_start + d];
-                    }
+                    vec_chunk[d] = static_cast<dist_t>(((float*)data_ptr)[d_start + d]);
                 }
 
-                double best_dist = std::numeric_limits<double>::max();
+                float best_dist = std::numeric_limits<float>::max();
                 int best_k = -1;
-                const double* centroids = pq_centroids_[m].data();
+                const float* centroids = pq_centroids_[m].data();
                 
                 for(int k=0; k<(int)pq_k_; ++k) {
-                    double dist = dist_l2_sq(vec_chunk.data(), centroids + k * current_d_sub, current_d_sub);
+                    float dist = dist_l2_sq(reinterpret_cast<const float*>(vec_chunk.data()), centroids + k * current_d_sub, current_d_sub);
                     if(dist < best_dist) {
                         best_dist = dist;
                         best_k = k;
@@ -262,33 +254,28 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         }
     }
 
-    void compute_adc_table(const void* query_data, std::vector<double>& adc_table) const {
+    void compute_adc_table(const void* query_data, std::vector<dist_t>& adc_table) const {
          size_t dim = *((size_t *) dist_func_param_);
-         std::vector<double> q_vec(dim);
-         if (data_size_ / dim == sizeof(float)) {
-             const float* q = (const float*)query_data;
-             for(size_t i=0; i<dim; ++i) q_vec[i] = q[i];
-         } else {
-             const double* q = (const double*)query_data;
-             for(size_t i=0; i<dim; ++i) q_vec[i] = q[i];
-         }
+         std::vector<dist_t> q_vec(dim);
+         const float* q = (const float*)query_data;
+         for(size_t i=0; i<dim; ++i) q_vec[i] = static_cast<dist_t>(q[i]);
 
          adc_table.resize(pq_m_ * pq_k_);
          
          for (size_t m = 0; m < pq_m_; ++m) {
             size_t d_start = m * pq_d_sub_;
             size_t current_d_sub = (m == pq_m_ - 1) ? (dim - d_start) : pq_d_sub_;
-            const double* q_sub = q_vec.data() + d_start;
-            const double* centroids = pq_centroids_[m].data();
+            const dist_t* q_sub = q_vec.data() + d_start;
+            const float* centroids = pq_centroids_[m].data();
             
              for(int k=0; k<(int)pq_k_; ++k) {
-                adc_table[m * pq_k_ + k] = dist_l2_sq(q_sub, centroids + k * current_d_sub, current_d_sub);
+                adc_table[m * pq_k_ + k] = static_cast<dist_t>(dist_l2_sq(reinterpret_cast<const float*>(q_sub), centroids + k * current_d_sub, current_d_sub));
              }
          }
     }
 
-    inline double get_pq_dist(tableint internal_id, const std::vector<double>& adc_table) const {
-        double dist = 0;
+    inline dist_t get_pq_dist(tableint internal_id, const std::vector<dist_t>& adc_table) const {
+        dist_t dist = 0;
         const uint8_t* codes = pq_data_.data() + internal_id * pq_m_;
         for(size_t m=0; m<pq_m_; ++m) {
             dist += adc_table[m * pq_k_ + codes[m]];
@@ -311,18 +298,18 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         return bits;
     }
 
-    void alp_encode_vector(const double* data, size_t dim, utils::MemoryStreamWriter& writer) const {
+    void alp_encode_vector(const float* data, size_t dim, utils::MemoryStreamWriter& writer) const {
         // 1. Find best exponent
         int selected_exp = 16; // Default to max precision
         
         // Iterate to find smallest exponent satisfying tolerance
         for (int exp = 0; exp <= 16; ++exp) {
-            double factor = std::pow(10.0, exp);
-            double inv_factor = 1.0 / factor;
+            float factor = std::pow(10.0f, static_cast<float>(exp));
+            float inv_factor = 1.0f / factor;
             bool ok = true;
             for (size_t i = 0; i < dim; ++i) {
-                double origin = data[i];
-                double reconstructed = std::round(origin * factor) * inv_factor;
+                float origin = data[i];
+                float reconstructed = std::round(origin * factor) * inv_factor;
                 if (std::abs(origin - reconstructed) > 1e-4) {
                     ok = false;
                     break;
@@ -336,7 +323,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         
         writer.write(selected_exp, 8); 
         
-        double factor = std::pow(10.0, selected_exp);
+        float factor = std::pow(10.0f, static_cast<float>(selected_exp));
         
         // 2. Find Min/Max and Calculate Bit Width
         int64_t min_val = INT64_MAX;
@@ -364,19 +351,20 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         }
     }
 
-    void alp_decode_vector(utils::MemoryStreamReader& reader, std::vector<double>& result) const {
+    template<typename out_t>
+    void alp_decode_vector(utils::MemoryStreamReader& reader, std::vector<out_t>& result) const {
         size_t dim = result.size();
         
         int exp = reader.readInt(8);
         int bit_width = reader.readInt(8);
         int64_t min_val = reader.readLong(64);
         
-        double factor = std::pow(10.0, -exp); // Inverse factor
+        float factor = std::pow(10.0f, static_cast<float>(-exp)); // Inverse factor
         
         for (size_t i = 0; i < dim; ++i) {
             int64_t delta = reader.readLong(bit_width);
             int64_t val = min_val + delta;
-            result[i] = val * factor;
+            result[i] = static_cast<out_t>(static_cast<float>(val) * factor);
         }
     }
 
@@ -527,18 +515,13 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         return (char*)(data_level0_memory_.data() + internal_id * size_data_per_element_ + offsetData_);
     }
 
-    std::vector<double> getOriginalDataByInternalId(tableint internal_id, bool collect_metrics = false) const {
+    std::vector<dist_t> getOriginalDataByInternalId(tableint internal_id, bool collect_metrics = false) const {
         size_t dim = *((size_t *) dist_func_param_);
-        std::vector<double> result(dim);
+        std::vector<dist_t> result(dim);
 
         if (!is_compacted_) {
-            if (data_size_ / dim == sizeof(float)) {
-                const float* ptr = (const float*)getDataByInternalId(internal_id);
-                for(size_t i=0; i<dim; ++i) result[i] = (double)ptr[i];
-            } else {
-                const double* ptr = (const double*)getDataByInternalId(internal_id);
-                for(size_t i=0; i<dim; ++i) result[i] = ptr[i];
-            }
+            const float* ptr = reinterpret_cast<const float*>(getDataByInternalId(internal_id));
+            for(size_t i=0; i<dim; ++i) result[i] = static_cast<dist_t>(ptr[i]);
             return result;
         }
         
@@ -549,13 +532,8 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         offset += size * sizeof(tableint);
         
         if (uncompressed_mask_[internal_id]) {
-             if (data_size_ / dim == sizeof(float)) {
-                 float* data_ptr = (float*)(data_level0_memory_.data() + start + offset);
-                 for(size_t i=0; i<dim; ++i) result[i] = (double)data_ptr[i];
-             } else {
-                 double* data_ptr = (double*)(data_level0_memory_.data() + start + offset);
-                 memcpy(result.data(), data_ptr, dim * sizeof(double));
-             }
+             const float* data_ptr = reinterpret_cast<const float*>(data_level0_memory_.data() + start + offset);
+             for(size_t i=0; i<dim; ++i) result[i] = static_cast<dist_t>(data_ptr[i]);
         } else {
             utils::MemoryStreamReader reader((const unsigned char*)(data_level0_memory_.data() + start + offset));
             
@@ -573,8 +551,8 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         return result;
     }
 
-    std::vector<std::vector<double>> getBatchOriginalDataByInternalId(const std::vector<tableint>& internal_ids) const {
-        std::vector<std::vector<double>> results(internal_ids.size());
+    std::vector<std::vector<dist_t>> getBatchOriginalDataByInternalId(const std::vector<tableint>& internal_ids) const {
+        std::vector<std::vector<dist_t>> results(internal_ids.size());
 
         
         // #pragma omp parallel for schedule(dynamic)
@@ -584,9 +562,9 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         return results;
     }
 
-    int getRandomLevel(double reverse_size) {
-        std::uniform_real_distribution<double> distribution(0.0, 1.0);
-        double r = -log(distribution(level_generator_)) * reverse_size;
+    int getRandomLevel(float reverse_size) {
+        std::uniform_real_distribution<float> distribution(0.0f, 1.0f);
+        float r = -log(distribution(level_generator_)) * reverse_size;
         return (int) r;
     }
 
@@ -621,7 +599,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             // 计算data_point(query) 到enterpoint的距离，结果保存在dist中。
             dist_t dist;
             if (is_compacted_) {
-                std::vector<double> vec = getOriginalDataByInternalId(ep_id);
+                std::vector<dist_t> vec = getOriginalDataByInternalId(ep_id);
                 dist = fstdistfunc_(data_point, vec.data(), dist_func_param_);
             } else {
                 dist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
@@ -696,7 +674,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                 
                 dist_t dist1;
                 if (is_compacted_) {
-                    std::vector<double> vec = getOriginalDataByInternalId(candidate_id);
+                    std::vector<dist_t> vec = getOriginalDataByInternalId(candidate_id);
                     dist1 = fstdistfunc_(data_point, vec.data(), dist_func_param_);
                 } else {
                     char *currObj1 = (getDataByInternalId(candidate_id));
@@ -744,7 +722,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
     searchBaseLayerTwoLevel(
         tableint ep_id,
         const void *query_data,
-        const std::vector<double>& adc_table,
+        const std::vector<dist_t>& adc_table,
         size_t ef,
         BaseFilterFunctor* isIdAllowed = nullptr) const {
         
@@ -785,7 +763,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             size_t size = getListCount((linklistsizeint*)data);
 
             // 1. Collect Unvisited Neighbors & Compute PQ Distance
-            std::vector<std::pair<double, tableint>> approx_candidates;
+            std::vector<std::pair<dist_t, tableint>> approx_candidates;
             approx_candidates.reserve(size);
 
             for (size_t j = 1; j <= size; j++) {
@@ -793,7 +771,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                 if (visited_array[candidate_id] != visited_array_tag) {
                     visited_array[candidate_id] = visited_array_tag;
                     
-                    double pq_d = get_pq_dist(candidate_id, adc_table);
+                    dist_t pq_d = get_pq_dist(candidate_id, adc_table);
                     approx_candidates.push_back({pq_d, candidate_id});
                 }
             }
@@ -810,7 +788,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                 // 3. Compute Exact Distance for Survivors
                 
                 std::vector<tableint> batch_ids;
-                std::vector<std::vector<double>> batch_data;
+                std::vector<std::vector<dist_t>> batch_data;
 
                 // Only perform batch fetching if compacted, otherwise direct access is faster or equivalent
                 if (is_compacted_) {
@@ -826,7 +804,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                     dist_t exact_dist;
                     
                     if (is_compacted_) {
-                        const std::vector<double>& vec_cand = batch_data[i];
+                        const std::vector<dist_t>& vec_cand = batch_data[i];
                         exact_dist = fstdistfunc_(query_data, vec_cand.data(), dist_func_param_);
                     } else {
                         exact_dist = fstdistfunc_(query_data, getDataByInternalId(cand_id), dist_func_param_);
@@ -879,7 +857,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             
             dist_t dist;
             if (is_compacted_) {
-                std::vector<double> vec = getOriginalDataByInternalId(ep_id);
+                std::vector<dist_t> vec = getOriginalDataByInternalId(ep_id);
                 dist = fstdistfunc_(data_point, vec.data(), dist_func_param_);
             } else {
                 char* ep_data = getDataByInternalId(ep_id);
@@ -889,8 +867,8 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             lowerBound = dist;
             top_candidates.emplace(dist, ep_id);
             if (!bare_bone_search && stop_condition) {
-                if (is_compacted_) {
-                     std::vector<double> vec = getOriginalDataByInternalId(ep_id);
+                 if (is_compacted_) {
+                     std::vector<dist_t> vec = getOriginalDataByInternalId(ep_id);
                      stop_condition->add_point_to_result(getExternalLabel(ep_id), vec.data(), dist);
                 } else {
                      stop_condition->add_point_to_result(getExternalLabel(ep_id), getDataByInternalId(ep_id), dist);
@@ -956,7 +934,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
 
                     dist_t dist;
                     if (is_compacted_) {
-                        std::vector<double> vec = getOriginalDataByInternalId(candidate_id);
+                        std::vector<dist_t> vec = getOriginalDataByInternalId(candidate_id);
                         dist = fstdistfunc_(data_point, vec.data(), dist_func_param_);
                     } else {
                         char *currObj1 = (getDataByInternalId(candidate_id));
@@ -985,7 +963,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                             top_candidates.emplace(dist, candidate_id);
                             if (!bare_bone_search && stop_condition) {
                                  if (is_compacted_) {
-                                      std::vector<double> vec = getOriginalDataByInternalId(candidate_id);
+                                      std::vector<dist_t> vec = getOriginalDataByInternalId(candidate_id);
                                      stop_condition->add_point_to_result(getExternalLabel(candidate_id), vec.data(), dist);
                                  } else {
                                      stop_condition->add_point_to_result(getExternalLabel(candidate_id), getDataByInternalId(candidate_id), dist);
@@ -1344,14 +1322,9 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                 char* src_data = raw_ptr + offsetData_;
                 new_data_memory.insert(new_data_memory.end(), src_data, src_data + data_size_);
             } else {
-                std::vector<double> vec(dim);
-                if (data_size_ / dim == sizeof(float)) {
-                    float* d = (float*)(raw_ptr + offsetData_);
-                    for(size_t k=0; k<dim; ++k) vec[k] = (double)d[k];
-                } else {
-                    double* d = (double*)(raw_ptr + offsetData_);
-                    for(size_t k=0; k<dim; ++k) vec[k] = d[k];
-                }
+                std::vector<dist_t> vec(dim);
+                float* d = (float*)(raw_ptr + offsetData_);
+                for(size_t k=0; k<dim; ++k) vec[k] = static_cast<dist_t>(d[k]);
 
                 utils::MemoryStreamWriter writer(&new_data_memory);
                 alp_encode_vector(vec.data(), dim, writer);
@@ -1394,7 +1367,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             for(size_t i=0; i<pq_m_; ++i) {
                  size_t c_size = pq_centroids_[i].size();
                  writeBinaryPOD(output, c_size);
-                 output.write((char*)pq_centroids_[i].data(), c_size * sizeof(double));
+                 output.write((char*)pq_centroids_[i].data(), c_size * sizeof(float));
             }
             
             size_t pq_data_size = pq_data_.size();
@@ -1479,7 +1452,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                 size_t c_size;
                 readBinaryPOD(input, c_size);
                 pq_centroids_[i].resize(c_size);
-                input.read((char*)pq_centroids_[i].data(), c_size * sizeof(double));
+                input.read((char*)pq_centroids_[i].data(), c_size * sizeof(float));
             }
 
             size_t pq_data_size;
@@ -2021,14 +1994,14 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
              // --- Two-Pass Search with PQ Quantization (Algorithm 2) ---
 
             // 1. Compute ADC Table
-            std::vector<double> adc_table;
+            std::vector<dist_t> adc_table;
             compute_adc_table(query_data, adc_table);
 
             // 2. HNSW Routing (Upper Layers)
             tableint currObj = enterpoint_node_;
             
             // Initial Exact Distance
-            std::vector<double> vec_ep = getOriginalDataByInternalId(enterpoint_node_);
+            std::vector<dist_t> vec_ep = getOriginalDataByInternalId(enterpoint_node_);
             dist_t curdist = fstdistfunc_(query_data, vec_ep.data(), dist_func_param_);
 
             for (int level = maxlevel_; level > 0; level--) {
@@ -2040,7 +2013,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                     metric_hops++;
                     
                     // Collect neighbors and compute PQ distance
-                    std::vector<std::pair<double, tableint>> approx_candidates;
+                    std::vector<std::pair<dist_t, tableint>> approx_candidates;
                     approx_candidates.reserve(size);
                     
                     tableint *datal = (tableint *) (data + 1);
@@ -2049,7 +2022,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                         if (cand < 0 || cand > max_elements_)
                             throw std::runtime_error("cand error");
                         
-                        double pq_d = get_pq_dist(cand, adc_table);
+                        dist_t pq_d = get_pq_dist(cand, adc_table);
                         approx_candidates.push_back({pq_d, cand});
                     }
 
@@ -2070,11 +2043,11 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                             batch_ids.push_back(approx_candidates[i].second);
                         }
 
-                        std::vector<std::vector<double>> batch_data = getBatchOriginalDataByInternalId(batch_ids);
+                        std::vector<std::vector<dist_t>> batch_data = getBatchOriginalDataByInternalId(batch_ids);
 
                         for(size_t i=0; i<candidates_to_check; ++i) {
                             tableint cand = batch_ids[i];
-                            const std::vector<double>& vec_cand = batch_data[i];
+                            const std::vector<dist_t>& vec_cand = batch_data[i];
                             dist_t d = fstdistfunc_(query_data, vec_cand.data(), dist_func_param_);
                             
                             if (d < curdist) {
@@ -2116,7 +2089,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
 
         // currObj和curdist分别记录距离data point最近的点和距离
         tableint currObj = enterpoint_node_;
-        std::vector<double> vec_ep = getOriginalDataByInternalId(enterpoint_node_);
+        std::vector<dist_t> vec_ep = getOriginalDataByInternalId(enterpoint_node_);
         dist_t curdist = fstdistfunc_(query_data, vec_ep.data(), dist_func_param_);
         // 在层L...1之间
         for (int level = maxlevel_; level > 0; level--) {
@@ -2139,7 +2112,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                     if (cand < 0 || cand > max_elements_)
                         throw std::runtime_error("cand error");
                     // 根据id获取邻居并计算其到query的距离
-                    std::vector<double> vec_cand = getOriginalDataByInternalId(cand);
+                    std::vector<dist_t> vec_cand = getOriginalDataByInternalId(cand);
                     dist_t d = fstdistfunc_(query_data, vec_cand.data(), dist_func_param_);
                     // 如果这个邻居与query的距离比curdist还小，更新curdist为这个邻居，changed改为true
                     if (d < curdist) {
