@@ -123,11 +123,12 @@ int main(int argc, char** argv) {
     vector<string> datasets = {"fashion-mnist-784-euclidean","gist-960-euclidean","mnist-784-euclidean","sift-128-euclidean"};
 
     // parameter sweeps
-    vector<int> hnsw_efs = {10,20,40,80,160,320};
-    vector<int> ivf_nprobes = {1,2,4,8,16,32};
+    vector<int> hnsw_efs = {10,20,30,40,60,80,100,150,200,250,300,350,400,500};
+    vector<int> ivf_nprobes = {1,2,4,6,8,10,15,20,25,30,40,50,60,80,100};
     vector<int> pq_ms = {1,2};
     vector<int> sq_nbits = {4,8};
-    vector<float> tls_ratios = {0.1f, 0.2f, 0.3f};
+    vector<float> tls_ratios = {0.1f, 0.2f, 0.3f, 0.5f};
+    vector<int> nsg_search_Ls = {1,2,4,6,8,10,15,20,25,30,40,50,60,80,100};
 
     // Algorithm flags
     bool test_hnswalp = false;
@@ -229,6 +230,10 @@ int main(int argc, char** argv) {
                             double vq = v_per_kb * qps;
                             csv << ds << ",HNSWALP" << tls_ratio <<",ef=" << ef << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
                             cout << "HNSWALP" << tls_ratio << " ef=" << ef << " k=" << k << " recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
+                            if(recall > 0.999) {
+                                cout << "Recall is very high, skipping higher ef values for this TLS ratio." << endl;
+                                break;
+                            }
                         }
                     }
                 }
@@ -267,6 +272,10 @@ int main(int argc, char** argv) {
                         double vq = v_per_kb * qps;
                         csv << ds << ",HNSW,ef=" << ef << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
                         cout << "HNSW ef=" << ef << " k=" << k << " recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
+                        if(recall > 0.999) {
+                            cout << "Recall is very high, skipping higher ef values for this TLS ratio." << endl;
+                            break;
+                        }
                     }
                 }
 
@@ -305,6 +314,10 @@ int main(int argc, char** argv) {
                                 << vq << "\n";
                             cout << "FaissHNSW ef=" << ef << " k=" << k << " recall=" << recall
                                  << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
+                            if(recall > 0.999) {
+                                cout << "Recall is very high, skipping higher ef values for this TLS ratio." << endl;
+                                break;
+                            }
                         }
                     }
 
@@ -340,6 +353,10 @@ int main(int argc, char** argv) {
                         double vq = v_per_kb * qps;
                         csv << ds << ",IVF,nprobe=" << nprobe << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
                         cout << "IVF nprobe=" << nprobe << " k=" << k << " recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
+                        if(recall > 0.999){
+                            cout << "Recall is very high, skipping higher nprobe values for this dataset." << endl;
+                            break;
+                        }
                     }
                 }
 
@@ -360,7 +377,8 @@ int main(int argc, char** argv) {
 
                 // Faiss NSG typically uses default search; sweeping nprobe not applicable. We'll run single config for k=1,10
                 for (int k : {1,10}) {
-                    for(int search_L = k; search_L <= 20; search_L += 1){
+                    for(int search_L : nsg_search_Ls) {
+                        if(search_L < k) continue; // search_L must be >= k
                         faiss::IndexNSG* nsg_ptr = dynamic_cast<faiss::IndexNSG*>(nsg);
                         if (nsg_ptr) nsg_ptr->setSearchL(search_L);
                         // prepare buffers
@@ -375,6 +393,10 @@ int main(int argc, char** argv) {
                         double vq = v_per_kb * qps;
                         csv << ds << ",NSG," << search_L << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
                         cout << "NSG search_L=" << search_L << " k=" << k << " recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
+                        if(recall > 0.999){
+                            cout << "Recall is very high, skipping higher search_L values for this dataset." << endl;
+                            break;
+                        }
                     }
                 }
 
@@ -420,6 +442,10 @@ int main(int argc, char** argv) {
                                 << vq << "\n";
                             cout << current_algo_name << " ef=" << ef << " k=" << k << " recall=" << recall
                                  << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
+                            if(recall > 0.999) {
+                                cout << "Recall is very high, skipping higher ef values for this dataset." << endl;
+                                break;
+                            }
                         }
                     }
 
@@ -466,6 +492,10 @@ int main(int argc, char** argv) {
                                 << vq << "\n";
                             cout << current_algo_name << " ef=" << ef << " k=" << k << " recall=" << recall
                                  << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
+                            if(recall > 0.999) {
+                                cout << "Recall is very high, skipping higher ef values for this dataset." << endl;
+                                break;
+                            }
                         }
                     }
 
