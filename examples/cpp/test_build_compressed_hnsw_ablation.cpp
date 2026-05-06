@@ -161,7 +161,8 @@ int main(int argc, char** argv) {
         "fashion-mnist-784-euclidean",
         "gist-960-euclidean",
         "mnist-784-euclidean",
-        "sift-128-euclidean"
+        "sift-128-euclidean",
+        "deep-image-96-angular"
     };
 
     std::vector<std::string> algorithms = {

@@ -120,7 +120,7 @@ int main(int argc, char** argv) {
     omp_set_num_threads(1);
 
     string base_dir = "../datasets/hdf5files/";
-    vector<string> datasets = {"fashion-mnist-784-euclidean","gist-960-euclidean","mnist-784-euclidean","sift-128-euclidean"};
+    vector<string> datasets = {"fashion-mnist-784-euclidean","gist-960-euclidean","mnist-784-euclidean","sift-128-euclidean","deep-image-96-angular"};
 
     // parameter sweeps
     vector<int> hnsw_efs = {10,20,30,40,60,80,100,150,200,250,300,350,400,500};

@@ -59,3 +59,16 @@ sift-128-euclidean,Camel,-1,1000000,128,75.246332,93.953871,3.819896,3.118624,si
 sift-128-euclidean,DeXORPlus,2,1000000,128,66.599423,60.834669,5.918773,4.169580,sift-128-euclidean_DeXORPlus_ch2_pq.bin
 sift-128-euclidean,DeXORPlus,5,1000000,128,65.063855,140.952775,5.942540,4.178664,sift-128-euclidean_DeXORPlus_ch5_pq.bin
 sift-128-euclidean,DeXORPlus,-1,1000000,128,77.273744,105.214747,6.066435,4.232999,sift-128-euclidean_DeXORPlus_chunlim_pq.bin
+
+gist-960-euclidean,DeXOR,2,1000000,960,321.851760,726.846453,1.201172,1.210794,gist-960-euclidean_DeXOR_ch2_pq.bin
+gist-960-euclidean,DeXOR,5,1000000,960,312.270954,21841.015105,1.186768,1.196445,gist-960-euclidean_DeXOR_ch5_pq.bin
+gist-960-euclidean,DeXOR,-1,1000000,960,307.525238,2497.728640,1.184272,1.193954,gist-960-euclidean_DeXOR_chunlim_pq.bin
+gist-960-euclidean,Gorilla,2,1000000,960,308.671746,169.854843,0.971899,0.981865,gist-960-euclidean_Gorilla_ch2_pq.bin
+gist-960-euclidean,Gorilla,5,1000000,960,264.412537,20554.283290,1.945251,1.946828,gist-960-euclidean_Gorilla_ch5_pq.bin
+gist-960-euclidean,Gorilla,-1,1000000,960,289.661666,243.021401,1.988746,1.989528,gist-960-euclidean_Gorilla_chunlim_pq.bin
+gist-960-euclidean,Elf,2,1000000,960,274.677550,216.072942,1.634037,1.640264,gist-960-euclidean_Elf_ch2_pq.bin
+gist-960-euclidean,Elf,5,1000000,960,277.535635,23154.575621,1.890983,1.893491,gist-960-euclidean_Elf_ch5_pq.bin
+gist-960-euclidean,Elf,-1,1000000,960,258.977608,432.221431,1.907022,1.909275,gist-960-euclidean_Elf_chunlim_pq.bin
+gist-960-euclidean,Camel,2,1000000,960,289.788908,197.108104,3.579107,3.526689,gist-960-euclidean_Camel_ch2_pq.bin
+gist-960-euclidean,Camel,5,1000000,960,299.833379,20753.101282,3.579112,3.526685,gist-960-euclidean_Camel_ch5_pq.bin
+gist-960-euclidean,Camel,-1,1000000,960,307.958278,293.983188,3.579072,3.526637,gist-960-euclidean_Camel_chunlim_pq.bin

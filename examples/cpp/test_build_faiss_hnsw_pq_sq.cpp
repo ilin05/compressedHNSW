@@ -54,7 +54,8 @@ int main(int argc, char** argv) {
         "fashion-mnist-784-euclidean_train.fvecs",
         "gist-960-euclidean_train.fvecs",
         "mnist-784-euclidean_train.fvecs",
-        "sift-128-euclidean_train.fvecs"
+        "sift-128-euclidean_train.fvecs",
+        "deep-image-96-angular_train.fvecs"
     };
 
     vector<string> algos;
