@@ -5,3 +5,4 @@ mnist-784-euclidean,normal,IVFFlat,1024,0,60000,784,60000,1.457559,0.154901,1.61
 sift-128-euclidean,normal,IVFFlat,1024,0,1000000,128,1000000,2.304045,0.882310,3.186355,sift-128-euclidean_IVFFlat_nlist1024.bin
 bigann_1M,bigann,IVFFlat,1024,0,1000000,128,200000,1.861201,1.958052,3.819253,bigann_1M_IVFFlat_nlist1024.bin
 bigann_10M,bigann,IVFFlat,1024,0,10000000,128,200000,1.783620,39.668483,41.452103,bigann_10M_IVFFlat_nlist1024.bin
+deep-image-96-angular,normal,IVFFlat,1024,0,9990000,96,9990000,2.069472,7.970095,10.039567,deep-image-96-angular_IVFFlat_nlist1024.bin

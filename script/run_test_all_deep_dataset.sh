@@ -13,7 +13,7 @@ echo "Testing HNSW_ALP_PQ Build"
 ../build/test_build_hnswalp_pq --dataset deep-image-96-angular_train.fvecs
 bash run_build_compressed_hnsw_ablation.sh
 echo "Testing Faiss HNSW Build"
-../build/test_build_faiss_hnsw --dataset deep-image-96-angular --base_dir ../datasets/hdf5files/
+../build/test_build_faiss_hnsw --dataset deep-image-96-angular_train.fvecs --base_dir ../datasets/hdf5files/
 echo "Testing Faiss HNSWPQ Build"
 ../build/test_build_faiss_hnsw_pq_sq --algorithm HNSWPQ --pq_m 1 --dataset deep-image-96-angular_train.fvecs
 echo "Testing Faiss HNSWSQ Build"
