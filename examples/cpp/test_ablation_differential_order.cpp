@@ -116,6 +116,11 @@ double encode_cross_vector_id_order(double* data, size_t N, size_t d) {
     return static_cast<double>(original_bytes) / static_cast<double>(compressed_bytes);
 }
 
+static std::string chain_tag(int chain_max_length) {
+    if (chain_max_length < 0) return "chunlim";
+    return "ch" + std::to_string(chain_max_length);
+}
+
 // ---------------------------------------------------------------------------
 // Strategy 3: Graph-Guided  (cross-vector same-dimension, BFS order)
 //   Use HierarchicalNSWCABFRAMEWORK to build HNSW + compress.
@@ -124,21 +129,26 @@ double encode_cross_vector_id_order(double* data, size_t N, size_t d) {
 template<typename CodecPolicy>
 pair<double, vector<tableint>> encode_graph_guided(
     double* data, size_t N, size_t d,
-    int M, int ef_construction, int chain_max_length)
+    int M, int ef_construction, int chain_max_length, const std::string& dataset, const std::string& algo)
 {
+    const std::string index_file = dataset + "_" + algo + "_" + chain_tag(chain_max_length) + "_pq.bin";
     L2SpaceDouble l2space(d);
     size_t cache_size = N / 100;
+    
     auto* index = new HierarchicalNSWCABFRAMEWORK<double, CodecPolicy>(
-        &l2space, N, M, ef_construction, true, cache_size, 100, false);
+        &l2space, index_file, true);
+    
+    // auto* index = new HierarchicalNSWCABFRAMEWORK<double, CodecPolicy>(
+    //     &l2space, N, M, ef_construction, true, cache_size, 100, false);
 
-    // Build HNSW
-    #pragma omp parallel for
-    for (long long i = 0; i < static_cast<long long>(N); ++i) {
-        index->addPoint(data + i * d, static_cast<labeltype>(i));
-    }
+    // // Build HNSW
+    // #pragma omp parallel for
+    // for (long long i = 0; i < static_cast<long long>(N); ++i) {
+    //     index->addPoint(data + i * d, static_cast<labeltype>(i));
+    // }
 
     // Compress
-    index->compress_dataset(chain_max_length);
+    // index->compress_dataset(chain_max_length);
 
     // Compression ratio
     size_t original_data_size = N * d * sizeof(double);
@@ -257,7 +267,8 @@ int main(int argc, char** argv) {
         "fashion-mnist-784-euclidean",
         "mnist-784-euclidean",
         "sift-128-euclidean",
-        "gist-960-euclidean"
+        "gist-960-euclidean",
+        "deep-image-96-angular"
     };
 
     vector<string> algorithms = {"DeXOR", "Gorilla", "Elf", "Camel"};
@@ -404,16 +415,16 @@ int main(int argc, char** argv) {
 
             if (algo == "DeXOR") {
                 tie(ratio, pn) = encode_graph_guided<codecs::DeXORCodecPolicy>(
-                    data, N, d, M, ef_construction, chain_max);
+                    data, N, d, M, ef_construction, chain_max, ds, algo);
             } else if (algo == "Gorilla") {
                 tie(ratio, pn) = encode_graph_guided<codecs::GorillaCodecPolicy>(
-                    data, N, d, M, ef_construction, chain_max);
+                    data, N, d, M, ef_construction, chain_max, ds, algo);
             } else if (algo == "Elf") {
                 tie(ratio, pn) = encode_graph_guided<codecs::ElfCodecPolicy>(
-                    data, N, d, M, ef_construction, chain_max);
+                    data, N, d, M, ef_construction, chain_max, ds, algo);
             } else if (algo == "Camel") {
                 tie(ratio, pn) = encode_graph_guided<codecs::CamelCodecPolicy>(
-                    data, N, d, M, ef_construction, chain_max);
+                    data, N, d, M, ef_construction, chain_max, ds, algo);
             }
 
             csv_ratio << ds << "," << algo << ",GraphGuided," << ratio << "\n";
