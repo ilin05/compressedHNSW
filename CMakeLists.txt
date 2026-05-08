@@ -253,6 +253,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_search_hnsw_float examples/cpp/test_search_hnsw_float.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_search_hnsw_float hnswlib)
 
+    add_executable(test_ablation_differential_order examples/cpp/test_ablation_differential_order.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_ablation_differential_order hnswlib)
+
     # tests
     add_executable(multivector_search_test tests/cpp/multivector_search_test.cpp)
     target_link_libraries(multivector_search_test hnswlib)
@@ -298,7 +301,9 @@ if(HNSWLIB_EXAMPLES)
       test_search_bigann_compressed_hnsw
       test_refresh_compressed_hnsw_ratios
       test_build_index_size_comparison
-      test_vq_recall)
+      test_vq_recall
+      test_ablation_differential_order
+      )
 
     foreach(target_name IN LISTS COMPRESSED_HNSW_TARGETS)
       target_compile_definitions(${target_name} PRIVATE TWO_LEVEL_SEARCH SELECT_HUBS_FOR_CACHE)
