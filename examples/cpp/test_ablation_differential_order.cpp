@@ -237,7 +237,7 @@ int main(int argc, char** argv) {
     int threads = 32;
     int M = 16;
     int ef_construction = 200;
-    int chain_max = 2;
+    int chain_max = -1;
     size_t hist_bins = 100;
 
     vector<string> datasets = {
@@ -357,21 +357,27 @@ int main(int argc, char** argv) {
             } else if (algo == "Gorilla") {
                 double r = encode_intra_vector<codecs::GorillaCodecPolicy>(data, N, d);
                 csv_ratio << ds << ",Gorilla,IntraVector," << r << "\n";
+                cout << "  Gorilla IntraVector ratio=" << r << endl;
 
                 r = encode_cross_vector_id_order<codecs::GorillaCodecPolicy>(data, N, d);
                 csv_ratio << ds << ",Gorilla,IDOrder," << r << "\n";
+                cout << "  Gorilla IDOrder ratio=" << r << endl;
             } else if (algo == "Elf") {
                 double r = encode_intra_vector<codecs::ElfCodecPolicy>(data, N, d);
                 csv_ratio << ds << ",Elf,IntraVector," << r << "\n";
+                cout << "  Elf IntraVector ratio=" << r << endl;
 
                 r = encode_cross_vector_id_order<codecs::ElfCodecPolicy>(data, N, d);
                 csv_ratio << ds << ",Elf,IDOrder," << r << "\n";
+                cout << "  Elf IDOrder ratio=" << r << endl;
             } else if (algo == "Camel") {
                 double r = encode_intra_vector<codecs::CamelCodecPolicy>(data, N, d);
                 csv_ratio << ds << ",Camel,IntraVector," << r << "\n";
+                cout << "  Camel IntraVector ratio=" << r << endl;
 
                 r = encode_cross_vector_id_order<codecs::CamelCodecPolicy>(data, N, d);
                 csv_ratio << ds << ",Camel,IDOrder," << r << "\n";
+                cout << "  Camel IDOrder ratio=" << r << endl;
             }
         }
 
