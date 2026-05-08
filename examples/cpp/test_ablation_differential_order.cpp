@@ -89,15 +89,24 @@ double encode_cross_vector_id_order(double* data, size_t N, size_t d) {
     utils::MemoryStreamWriter writer(&buffer);
     long long total_bits = 0;
 
-    for (size_t k = 0; k < d; ++k) {
-        typename CodecPolicy::StateType state;
-        for (size_t u = 0; u < N; ++u) {
-            CodecPolicy::encode(data[u * d + k], state, writer);
+    std::vector<typename CodecPolicy::StateType> states(d); // one state per dimension
+    for (size_t u = 0; u < N; ++u) {
+        for (size_t k = 0; k < d; ++k) {
+            CodecPolicy::encode(data[u * d + k], states[k], writer);
             total_bits += writer.track_bits();
         }
         writer.align();
         total_bits += writer.track_bits();
     }
+    // for (size_t k = 0; k < d; ++k) {
+    //     typename CodecPolicy::StateType state;
+    //     for (size_t u = 0; u < N; ++u) {
+    //         CodecPolicy::encode(data[u * d + k], state, writer);
+    //         total_bits += writer.track_bits();
+    //     }
+    //     writer.align();
+    //     total_bits += writer.track_bits();
+    // }
     // writer.align();
     // total_bits += writer.track_bits();
 
