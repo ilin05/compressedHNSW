@@ -64,11 +64,13 @@ double encode_intra_vector(double* data, size_t N, size_t d) {
         typename CodecPolicy::StateType state;
         for (size_t k = 0; k < d; ++k) {
             CodecPolicy::encode(data[u * d + k], state, writer);
+            total_bits += writer.track_bits();
         }
+        writer.align();
         total_bits += writer.track_bits();
     }
-    writer.align();
-    total_bits += writer.track_bits();
+    // writer.align();
+    // total_bits += writer.track_bits();
 
     size_t compressed_bytes = buffer.size();
     size_t original_bytes = N * d * sizeof(double);
@@ -91,11 +93,13 @@ double encode_cross_vector_id_order(double* data, size_t N, size_t d) {
         typename CodecPolicy::StateType state;
         for (size_t u = 0; u < N; ++u) {
             CodecPolicy::encode(data[u * d + k], state, writer);
+            total_bits += writer.track_bits();
         }
+        writer.align();
         total_bits += writer.track_bits();
     }
-    writer.align();
-    total_bits += writer.track_bits();
+    // writer.align();
+    // total_bits += writer.track_bits();
 
     size_t compressed_bytes = buffer.size();
     size_t original_bytes = N * d * sizeof(double);
