@@ -256,6 +256,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_ablation_differential_order examples/cpp/test_ablation_differential_order.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_ablation_differential_order hnswlib)
 
+    add_executable(test_ablation_chain_length examples/cpp/test_ablation_chain_length.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_ablation_chain_length hnswlib)
+
     # tests
     add_executable(multivector_search_test tests/cpp/multivector_search_test.cpp)
     target_link_libraries(multivector_search_test hnswlib)
