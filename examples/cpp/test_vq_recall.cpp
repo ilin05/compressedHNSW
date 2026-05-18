@@ -208,6 +208,7 @@ int main(int argc, char** argv) {
                 cidx = new HierarchicalNSWALPSIMPLIFIEDPQ<float>(&l2space, idx_path, false);
             } catch (exception& e) { cerr << "Load compressed HNSW failed: " << e.what() << endl; }
             if (cidx) {
+                std::cout << "loaded compressed HNSW index. Max elements: " << cidx->max_elements_ << " Current elements: " << cidx->cur_element_count.load() << std::endl;
                 for(float tls_ratio : tls_ratios) {
                     cidx->use_tls_ = (tls_ratio > 0.0f);
                     cidx->tls_ratio_ = tls_ratio;
@@ -221,7 +222,7 @@ int main(int argc, char** argv) {
                     for (int k : {1,10}) {
                         for (int ef : hnsw_efs) {
                             cidx->setEf(ef);
-
+                            std::cout << "Testing HNSWALP with TLS ratio " << tls_ratio << ", ef=" << ef << ", k=" << k << std::endl;
                             // 新逻辑：测试多轮次，qps, recall, latency 取平均
                             std::vector<double> recalls, qpss, latencies;
                             for (int round = 0; round < num_rounds; ++round) {
