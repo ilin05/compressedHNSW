@@ -129,6 +129,7 @@ int main(int argc, char** argv) {
     vector<int> sq_nbits = {4,8};
     vector<float> tls_ratios = {0.1f, 0.2f, 0.3f, 0.5f};
     vector<int> nsg_search_Ls = {1,2,4,6,8,10,15,20,25,30,40,50,60,80,100};
+    int num_rounds = 1; // for stability, we can run multiple rounds and average results, but for now we'll just do 1 round per config
 
     // Algorithm flags
     bool test_hnswalp = false;
@@ -150,6 +151,8 @@ int main(int argc, char** argv) {
         } else if (arg == "--algorithm" && i + 1 < argc) {
             algorithms.clear();
             while (i + 1 < argc && argv[i + 1][0] != '-') algorithms.push_back(argv[++i]);
+        } else if (arg == "--num_rounds" && i + 1 < argc) {
+            num_rounds = stoi(argv[++i]);
         }
     }
 
@@ -214,26 +217,59 @@ int main(int argc, char** argv) {
                     for (int k : {1,10}) {
                         for (int ef : hnsw_efs) {
                             cidx->setEf(ef);
-                            StopW t0;
-                            vector<faiss::idx_t> I(qn * k);
-                            for (size_t qi = 0; qi < qn; ++qi) {
-                                auto pq = cidx->searchKnn(queries_f + qi * qdim, k);
-                                for (int j = k-1; j >= 0; --j) {
-                                    if (pq.empty()) { I[qi*k + (k-1-j)] = -1; continue; }
-                                    I[qi*k + (k-1-j)] = pq.top().second; pq.pop();
+
+                            // 新逻辑：测试多轮次，qps, recall, latency 取平均
+                            std::vector<double> recalls, qpss, latencies;
+                            for (int round = 0; round < num_rounds; ++round) {
+                                StopW t0;
+                                vector<faiss::idx_t> I(qn * k);
+                                for (size_t qi = 0; qi < qn; ++qi) {
+                                    auto pq = cidx->searchKnn(queries_f + qi * qdim, k);
+                                    for (int j = k-1; j >= 0; --j) {
+                                        if (pq.empty()) { I[qi*k + (k-1-j)] = -1; continue; }
+                                        I[qi*k + (k-1-j)] = pq.top().second; pq.pop();
+                                    }
                                 }
+                                double elapsed_us = t0.getElapsedTimeMicro();
+                                double qps = qn * 1e6 / elapsed_us;
+                                qpss.push_back(qps);
+                                double latency = elapsed_us / qn;
+                                latencies.push_back(latency);
+                                double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
+                                recalls.push_back(recall);
+                                // double vq = v_per_kb * qps;
                             }
-                            double elapsed_us = t0.getElapsedTimeMicro();
-                            double qps = qn * 1e6 / elapsed_us;
-                            double latency = elapsed_us / qn;
-                            double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
-                            double vq = v_per_kb * qps;
-                            csv << ds << ",HNSWALP" << tls_ratio <<",ef=" << ef << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
-                            cout << "HNSWALP" << tls_ratio << " ef=" << ef << " k=" << k << " recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
-                            if(recall > 0.999) {
+                            double avg_recall = std::accumulate(recalls.begin(), recalls.end(), 0.0) / recalls.size();
+                            double avg_qps = std::accumulate(qpss.begin(), qpss.end(), 0.0) / qpss.size();
+                            double avg_latency = std::accumulate(latencies.begin(), latencies.end(), 0.0) / latencies.size();
+                            double vq = v_per_kb * avg_qps;
+                            csv << ds << ",HNSWALP" << tls_ratio <<",ef=" << ef << "," << k << "," << fixed << setprecision(6) << avg_recall << "," << avg_qps << "," << avg_latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                            cout << "HNSWALP" << tls_ratio << " ef=" << ef << " k=" << k << " recall=" << avg_recall << " QPS=" << avg_qps << " Latency=" << avg_latency << "us VQ=" << vq << endl;
+                            if(avg_recall > 0.999) {
                                 cout << "Recall is very high, skipping higher ef values for this TLS ratio." << endl;
                                 break;
                             }
+
+                            // StopW t0;
+                            // vector<faiss::idx_t> I(qn * k);
+                            // for (size_t qi = 0; qi < qn; ++qi) {
+                            //     auto pq = cidx->searchKnn(queries_f + qi * qdim, k);
+                            //     for (int j = k-1; j >= 0; --j) {
+                            //         if (pq.empty()) { I[qi*k + (k-1-j)] = -1; continue; }
+                            //         I[qi*k + (k-1-j)] = pq.top().second; pq.pop();
+                            //     }
+                            // }
+                            // double elapsed_us = t0.getElapsedTimeMicro();
+                            // double qps = qn * 1e6 / elapsed_us;
+                            // double latency = elapsed_us / qn;
+                            // double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
+                            // double vq = v_per_kb * qps;
+                            // csv << ds << ",HNSWALP" << tls_ratio <<",ef=" << ef << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                            // cout << "HNSWALP" << tls_ratio << " ef=" << ef << " k=" << k << " recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
+                            // if(recall > 0.999) {
+                            //     cout << "Recall is very high, skipping higher ef values for this TLS ratio." << endl;
+                            //     break;
+                            // }
                         }
                     }
                 }
@@ -256,23 +292,35 @@ int main(int argc, char** argv) {
                 for (int k : {1,10}) {
                     for (int ef : hnsw_efs) {
                         idx->setEf(ef);
-                        StopW t0;
-                        vector<faiss::idx_t> I(qn * k);
-                        for (size_t qi = 0; qi < qn; ++qi) {
-                            auto pq = idx->searchKnn(queries_f + qi * qdim, k);
-                            for (int j = k-1; j >= 0; --j) {
-                                if (pq.empty()) { I[qi*k + (k-1-j)] = -1; continue; }
-                                I[qi*k + (k-1-j)] = pq.top().second; pq.pop();
+
+                        std::vector<double> recalls, qpss, latencies;
+                        for (int round = 0; round < num_rounds; ++round) {
+
+                            StopW t0;
+                            vector<faiss::idx_t> I(qn * k);
+                            for (size_t qi = 0; qi < qn; ++qi) {
+                                auto pq = idx->searchKnn(queries_f + qi * qdim, k);
+                                for (int j = k-1; j >= 0; --j) {
+                                    if (pq.empty()) { I[qi*k + (k-1-j)] = -1; continue; }
+                                    I[qi*k + (k-1-j)] = pq.top().second; pq.pop();
+                                }
                             }
+                            double elapsed_us = t0.getElapsedTimeMicro();
+                            double qps = qn * 1e6 / elapsed_us;
+                            double latency = elapsed_us / qn;
+                            double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
+                            recalls.push_back(recall);
+                            qpss.push_back(qps);
+                            latencies.push_back(latency);
                         }
-                        double elapsed_us = t0.getElapsedTimeMicro();
-                        double qps = qn * 1e6 / elapsed_us;
-                        double latency = elapsed_us / qn;
-                        double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
-                        double vq = v_per_kb * qps;
-                        csv << ds << ",HNSW,ef=" << ef << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
-                        cout << "HNSW ef=" << ef << " k=" << k << " recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
-                        if(recall > 0.999) {
+
+                        double avg_recall = std::accumulate(recalls.begin(), recalls.end(), 0.0) / recalls.size();
+                        double avg_qps = std::accumulate(qpss.begin(), qpss.end(), 0.0) / qpss.size();
+                        double avg_latency = std::accumulate(latencies.begin(), latencies.end(), 0.0) / latencies.size();
+                        double vq = v_per_kb * avg_qps;
+                        csv << ds << ",HNSW,ef=" << ef << "," << k << "," << fixed << setprecision(6) << avg_recall << "," << avg_qps << "," << avg_latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                        cout << "HNSW ef=" << ef << " k=" << k << " recall=" << avg_recall << " QPS=" << avg_qps << " Latency=" << avg_latency << "us VQ=" << vq << endl;
+                        if(avg_recall > 0.999) {
                             cout << "Recall is very high, skipping higher ef values for this TLS ratio." << endl;
                             break;
                         }
@@ -300,21 +348,32 @@ int main(int argc, char** argv) {
                     for (int k : {1,10}) {
                         for (int ef : hnsw_efs) {
                             hnsw->hnsw.efSearch = ef;
-                            vector<faiss::idx_t> I(qn * k);
-                            vector<float> D(qn * k);
-                            StopW t0;
-                            base->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
-                            double elapsed_us = t0.getElapsedTimeMicro();
-                            double qps = qn * 1e6 / elapsed_us;
-                            double latency = elapsed_us / qn;
-                            double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
-                            double vq = v_per_kb * qps;
+
+                            std::vector<double> recalls, qpss, latencies;
+                            for (int round = 0; round < num_rounds; ++round) {
+                                vector<faiss::idx_t> I(qn * k);
+                                vector<float> D(qn * k);
+                                StopW t0;
+                                base->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
+                                double elapsed_us = t0.getElapsedTimeMicro();
+                                double qps = qn * 1e6 / elapsed_us;
+                                double latency = elapsed_us / qn;
+                                double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
+                                recalls.push_back(recall);
+                                qpss.push_back(qps);
+                                latencies.push_back(latency);
+                            }
+
+                            double avg_recall = std::accumulate(recalls.begin(), recalls.end(), 0.0) / recalls.size();
+                            double avg_qps = std::accumulate(qpss.begin(), qpss.end(), 0.0) / qpss.size();
+                            double avg_latency = std::accumulate(latencies.begin(), latencies.end(), 0.0) / latencies.size();
+                            double vq = v_per_kb * avg_qps;
                             csv << ds << ",FaissHNSW,ef=" << ef << "," << k << "," << fixed << setprecision(6)
-                                << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << ","
+                                << avg_recall << "," << avg_qps << "," << avg_latency << "," << index_kb << "," << v_per_kb << ","
                                 << vq << "\n";
-                            cout << "FaissHNSW ef=" << ef << " k=" << k << " recall=" << recall
-                                 << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
-                            if(recall > 0.999) {
+                            cout << "FaissHNSW ef=" << ef << " k=" << k << " recall=" << avg_recall
+                                 << " QPS=" << avg_qps << " Latency=" << avg_latency << "us VQ=" << vq << endl;
+                            if(avg_recall > 0.999) {
                                 cout << "Recall is very high, skipping higher ef values for this TLS ratio." << endl;
                                 break;
                             }
@@ -341,19 +400,30 @@ int main(int argc, char** argv) {
                     for (int nprobe : ivf_nprobes) {
                         faiss::IndexIVF* iivf = dynamic_cast<faiss::IndexIVF*>(ivf);
                         if (iivf) iivf->nprobe = nprobe;
-                        // prepare buffers
-                        vector<faiss::idx_t> I(qn * k);
-                        vector<float> D(qn * k);
-                        StopW t0;
-                        ivf->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
-                        double elapsed_us = t0.getElapsedTimeMicro();
-                        double qps = qn * 1e6 / elapsed_us;
-                        double latency = elapsed_us / qn;
-                        double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
-                        double vq = v_per_kb * qps;
-                        csv << ds << ",IVF,nprobe=" << nprobe << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
-                        cout << "IVF nprobe=" << nprobe << " k=" << k << " recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
-                        if(recall > 0.999){
+
+                        std::vector<double> recalls, qpss, latencies;
+                        for (int round = 0; round < num_rounds; ++round) {
+
+                            // prepare buffers
+                            vector<faiss::idx_t> I(qn * k);
+                            vector<float> D(qn * k);
+                            StopW t0;
+                            ivf->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
+                            double elapsed_us = t0.getElapsedTimeMicro();
+                            double qps = qn * 1e6 / elapsed_us;
+                            double latency = elapsed_us / qn;
+                            double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
+                            recalls.push_back(recall);
+                            qpss.push_back(qps);
+                            latencies.push_back(latency);
+                        }
+                        double avg_recall = accumulate(recalls.begin(), recalls.end(), 0.0) / recalls.size();
+                        double avg_qps = accumulate(qpss.begin(), qpss.end(), 0.0) / qpss.size();
+                        double avg_latency = accumulate(latencies.begin(), latencies.end(), 0.0) / latencies.size();
+                        double vq = v_per_kb * avg_qps;
+                        csv << ds << ",IVF,nprobe=" << nprobe << "," << k << "," << fixed << setprecision(6) << avg_recall << "," << avg_qps << "," << avg_latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                        cout << "IVF nprobe=" << nprobe << " k=" << k << " recall=" << avg_recall << " QPS=" << avg_qps << " Latency=" << avg_latency << "us VQ=" << vq << endl;
+                        if(avg_recall > 0.999){
                             cout << "Recall is very high, skipping higher nprobe values for this dataset." << endl;
                             break;
                         }
@@ -381,19 +451,30 @@ int main(int argc, char** argv) {
                         if(search_L < k) continue; // search_L must be >= k
                         faiss::IndexNSG* nsg_ptr = dynamic_cast<faiss::IndexNSG*>(nsg);
                         if (nsg_ptr) nsg_ptr->setSearchL(search_L);
-                        // prepare buffers
-                        vector<faiss::idx_t> I(qn * k);
-                        vector<float> D(qn * k);
-                        StopW t0;
-                        nsg->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
-                        double elapsed_us = t0.getElapsedTimeMicro();
-                        double qps = qn * 1e6 / elapsed_us;
-                        double latency = elapsed_us / qn;
-                        double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
-                        double vq = v_per_kb * qps;
-                        csv << ds << ",NSG," << search_L << "," << k << "," << fixed << setprecision(6) << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
-                        cout << "NSG search_L=" << search_L << " k=" << k << " recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
-                        if(recall > 0.999){
+                        
+                        std::vector<double> recalls, qpss, latencies;
+                        for (int round = 0; round < num_rounds; ++round) {
+                            // prepare buffers
+                            vector<faiss::idx_t> I(qn * k);
+                            vector<float> D(qn * k);
+                            StopW t0;
+                            nsg->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
+                            double elapsed_us = t0.getElapsedTimeMicro();
+                            double qps = qn * 1e6 / elapsed_us;
+                            double latency = elapsed_us / qn;
+                            double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
+                            recalls.push_back(recall);
+                            qpss.push_back(qps);
+                            latencies.push_back(latency);
+                        }
+                        double avg_recall = accumulate(recalls.begin(), recalls.end(), 0.0) / recalls.size();
+                        double avg_qps = accumulate(qpss.begin(), qpss.end(), 0.0) / qpss.size();
+                        double avg_latency = accumulate(latencies.begin(), latencies.end(), 0.0) / latencies.size();
+                        
+                        double vq = v_per_kb * avg_qps;
+                        csv << ds << ",NSG," << search_L << "," << k << "," << fixed << setprecision(6) << avg_latency << "," << avg_qps << "," << avg_latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                        cout << "NSG search_L=" << search_L << " k=" << k << " recall=" << avg_recall << " QPS=" << avg_qps << " Latency=" << avg_latency << "us VQ=" << vq << endl;
+                        if(avg_recall > 0.999){
                             cout << "Recall is very high, skipping higher search_L values for this dataset." << endl;
                             break;
                         }
@@ -428,21 +509,32 @@ int main(int argc, char** argv) {
                             if (real_index) {
                                 real_index->hnsw.efSearch = ef;
                             }
-                            vector<faiss::idx_t> I(qn * k);
-                            vector<float> D(qn * k);
-                            StopW t0;
-                            index->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
-                            double elapsed_us = t0.getElapsedTimeMicro();
-                            double qps = qn * 1e6 / elapsed_us;
-                            double latency = elapsed_us / qn;
-                            double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
-                            double vq = v_per_kb * qps;
+
+                            std::vector<double> recalls, qpss, latencies;
+                            for (int round = 0; round < num_rounds; ++round) {
+
+                                vector<faiss::idx_t> I(qn * k);
+                                vector<float> D(qn * k);
+                                StopW t0;
+                                index->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
+                                double elapsed_us = t0.getElapsedTimeMicro();
+                                double qps = qn * 1e6 / elapsed_us;
+                                double latency = elapsed_us / qn;
+                                double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
+                                recalls.push_back(recall);
+                                qpss.push_back(qps);
+                                latencies.push_back(latency);
+                            }
+                            double avg_recall = accumulate(recalls.begin(), recalls.end(), 0.0) / recalls.size();
+                            double avg_qps = accumulate(qpss.begin(), qpss.end(), 0.0) / qpss.size();
+                            double avg_latency = accumulate(latencies.begin(), latencies.end(), 0.0) / latencies.size();
+                            double vq = v_per_kb * avg_qps;
                             csv << ds << "," << current_algo_name << ",ef=" << ef << "," << k << "," << fixed << setprecision(6)
-                                << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << ","
+                                << avg_recall << "," << avg_qps << "," << avg_latency << "," << index_kb << "," << v_per_kb << ","
                                 << vq << "\n";
-                            cout << current_algo_name << " ef=" << ef << " k=" << k << " recall=" << recall
-                                 << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
-                            if(recall > 0.999) {
+                            cout << current_algo_name << " ef=" << ef << " k=" << k << " recall=" << avg_recall
+                                 << " QPS=" << avg_qps << " Latency=" << avg_latency << "us VQ=" << vq << endl;
+                            if(avg_recall > 0.999) {
                                 cout << "Recall is very high, skipping higher ef values for this dataset." << endl;
                                 break;
                             }
@@ -478,21 +570,32 @@ int main(int argc, char** argv) {
                             if (real_index) {
                                 real_index->hnsw.efSearch = ef;
                             }
-                            vector<faiss::idx_t> I(qn * k);
-                            vector<float> D(qn * k);
-                            StopW t0;
-                            index->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
-                            double elapsed_us = t0.getElapsedTimeMicro();
-                            double qps = qn * 1e6 / elapsed_us;
-                            double latency = elapsed_us / qn;
-                            double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
-                            double vq = v_per_kb * qps;
+
+                            std::vector<double> recalls, qpss, latencies;
+                            for (int round = 0; round < num_rounds; ++round) {
+
+                                vector<faiss::idx_t> I(qn * k);
+                                vector<float> D(qn * k);
+                                StopW t0;
+                                index->search(static_cast<faiss::idx_t>(qn), queries_f, k, D.data(), I.data());
+                                double elapsed_us = t0.getElapsedTimeMicro();
+                                double qps = qn * 1e6 / elapsed_us;
+                                double latency = elapsed_us / qn;
+                                double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
+                                recalls.push_back(recall);
+                                qpss.push_back(qps);
+                                latencies.push_back(latency);
+                            }
+                            double avg_recall = accumulate(recalls.begin(), recalls.end(), 0.0) / recalls.size();
+                            double avg_qps = accumulate(qpss.begin(), qpss.end(), 0.0) / qpss.size();
+                            double avg_latency = accumulate(latencies.begin(), latencies.end(), 0.0) / latencies.size();
+                            double vq = v_per_kb * avg_qps;
                             csv << ds << "," << current_algo_name << ",ef=" << ef << "," << k << "," << fixed << setprecision(6)
-                                << recall << "," << qps << "," << latency << "," << index_kb << "," << v_per_kb << ","
+                                << avg_recall << "," << avg_qps << "," << avg_latency << "," << index_kb << "," << v_per_kb << ","
                                 << vq << "\n";
-                            cout << current_algo_name << " ef=" << ef << " k=" << k << " recall=" << recall
-                                 << " QPS=" << qps << " Latency=" << latency << "us VQ=" << vq << endl;
-                            if(recall > 0.999) {
+                            cout << current_algo_name << " ef=" << ef << " k=" << k << " recall=" << avg_recall
+                                 << " QPS=" << avg_qps << " Latency=" << avg_latency << "us VQ=" << vq << endl;
+                            if(avg_recall > 0.999) {
                                 cout << "Recall is very high, skipping higher ef values for this dataset." << endl;
                                 break;
                             }

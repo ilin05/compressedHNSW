@@ -1,0 +1,18 @@
+\begin{table*}[t]
+\centering
+\caption{Compression metrics for HNSW+LVC. Double-baseline ratios are measured directly; float-baseline ratios are derived using the same conversion as Figure~\ref{fig:compression_ratio_float}. MNIST uses DeXOR with ChainMaxLength=$-1$; all other datasets use ALP.}
+\label{tab:compression_metrics}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{l l r r r r r r r}
+\toprule
+\textbf{Dataset} & \textbf{Codec} & \textbf{Data Ratio (double)} & \textbf{Index Ratio (double)} & \textbf{Data Ratio (float)} & \textbf{Index Ratio (float)} & \textbf{Build (s)} & \textbf{Compress (s)} & \textbf{Overhead (\%)} \\
+\midrule
+MNIST & DeXOR & 12.49$\times$ & 10.76$\times$ & 6.25$\times$ & 5.45$\times$ & 9.24 & 34.86 & 377.45\
+Fashion-MNIST & ALP & 7.90$\times$ & 7.39$\times$ & 3.95$\times$ & 3.73$\times$ & 6.08 & 20.58 & 338.40\
+GIST & ALP & 5.39$\times$ & 5.23$\times$ & 2.69$\times$ & 2.63$\times$ & 353.40 & 101.38 & 28.69\
+SIFT & ALP & 8.06$\times$ & 5.05$\times$ & 4.03$\times$ & 2.74$\times$ & 74.98 & 13.46 & 17.96\
+DEEP & ALP & 4.47$\times$ & 3.27$\times$ & 2.23$\times$ & 1.81$\times$ & 505.37 & 17.68 & 3.50\
+\bottomrule
+\end{tabular}
+\end{table*}
