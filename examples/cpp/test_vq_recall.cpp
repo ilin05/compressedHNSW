@@ -235,6 +235,8 @@ int main(int argc, char** argv) {
                                         I[qi*k + (k-1-j)] = pq.top().second; pq.pop();
                                     }
                                 }
+                                std::cout << "Round " << round+1 << ": Finished search, now computing recall and QPS..." << std::endl;
+
                                 double elapsed_us = t0.getElapsedTimeMicro();
                                 double qps = qn * 1e6 / elapsed_us;
                                 qpss.push_back(qps);
@@ -242,6 +244,8 @@ int main(int argc, char** argv) {
                                 latencies.push_back(latency);
                                 double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
                                 recalls.push_back(recall);
+
+                                std::cout << "Round " << round+1 << ": recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us" << endl;
                                 // double vq = v_per_kb * qps;
                             }
                             double avg_recall = std::accumulate(recalls.begin(), recalls.end(), 0.0) / recalls.size();
