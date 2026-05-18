@@ -222,7 +222,7 @@ int main(int argc, char** argv) {
                     for (int k : {1,10}) {
                         for (int ef : hnsw_efs) {
                             cidx->setEf(ef);
-                            std::cout << "Testing HNSWALP with TLS ratio " << tls_ratio << ", ef=" << ef << ", k=" << k << std::endl;
+                            // std::cout << "Testing HNSWALP with TLS ratio " << tls_ratio << ", ef=" << ef << ", k=" << k << std::endl;
                             // 新逻辑：测试多轮次，qps, recall, latency 取平均
                             std::vector<double> recalls, qpss, latencies;
                             for (int round = 0; round < num_rounds; ++round) {
@@ -235,7 +235,7 @@ int main(int argc, char** argv) {
                                         I[qi*k + (k-1-j)] = pq.top().second; pq.pop();
                                     }
                                 }
-                                std::cout << "Round " << round+1 << ": Finished search, now computing recall and QPS..." << std::endl;
+                                // std::cout << "Round " << round+1 << ": Finished search, now computing recall and QPS..." << std::endl;
 
                                 double elapsed_us = t0.getElapsedTimeMicro();
                                 double qps = qn * 1e6 / elapsed_us;
@@ -245,7 +245,7 @@ int main(int argc, char** argv) {
                                 double recall = compute_recall_from_gt(qn, gt_k, gt_rows, I, k);
                                 recalls.push_back(recall);
 
-                                std::cout << "Round " << round+1 << ": recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us" << endl;
+                                // std::cout << "Round " << round+1 << ": recall=" << recall << " QPS=" << qps << " Latency=" << latency << "us" << endl;
                                 // double vq = v_per_kb * qps;
                             }
                             double avg_recall = std::accumulate(recalls.begin(), recalls.end(), 0.0) / recalls.size();
