@@ -156,6 +156,10 @@ int main(int argc, char** argv) {
         }
     }
 
+    if(num_rounds > 1){
+        std::cout << "Running " << num_rounds << " rounds for each config to get average results." << std::endl;
+    }
+
     // Parse algorithm flags
     if (algorithms.empty()) {
         // Default: test all algorithms

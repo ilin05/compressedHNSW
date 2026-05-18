@@ -6,4 +6,5 @@ echo "Testing VQ-Recall on HNSW / Compressed-HNSW / IVF / NSG"
 ../build/test_vq_recall \
 	--base_dir ../datasets/hdf5files/ \
 	--dataset fashion-mnist-784-euclidean gist-960-euclidean mnist-784-euclidean sift-128-euclidean \
-	--algorithm HNSWALP HNSWALP_0.1 HNSWALP_0.2 HNSWALP_0.3 HNSWALP_0.5 "HNSW(hnswlib)" "HNSW(faiss)" "IVF(faiss)" "NSG(faiss)" HNSWPQ1 HNSWPQ2 HNSWSQ4 HNSWSQ8
+	--algorithm HNSWALP HNSWALP_0.1 HNSWALP_0.2 HNSWALP_0.3 HNSWALP_0.5 "HNSW(hnswlib)" "HNSW(faiss)" "IVF(faiss)" "NSG(faiss)" HNSWPQ1 HNSWSQ4 \
+	--num_rounds 10
