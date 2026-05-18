@@ -178,7 +178,7 @@ int main(int argc, char** argv) {
             else if (algo == "HNSWPQ1") { test_hnswpq = true; pq_ms.clear(); pq_ms.push_back(1); }
             else if (algo == "HNSWPQ2") { test_hnswpq = true; pq_ms.push_back(2); }
             else if (algo == "HNSWSQ4") { test_hnswsq = true; sq_nbits.clear(); sq_nbits.push_back(4); }
-            else if (algo == "HNSWSQ8") { test_hnswsq = true; sq_nbits.push_back(8); }
+            else if (algo == "HNSWSQ8") { test_hnswsq = true; sq_nbits.clear(); sq_nbits.push_back(8); }
         }
     }
 
