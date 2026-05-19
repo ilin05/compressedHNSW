@@ -209,6 +209,7 @@ CacheAnalysisResult test_with_cache_ratio(const std::string& dataset_name,
     
     // Set search parameters
     appr_alg->setEf(200);
+    appr_alg->setProfilingMetrics(true);
     
     size_t k = 1;  // Recall@1
     if (k > gt_dim) k = gt_dim;

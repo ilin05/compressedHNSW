@@ -103,6 +103,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
 
     bool use_tls_ = false;
     double tls_ratio_ = 0.2;
+    bool enable_profiling_metrics_ = false;
 
     // Helper to get squared L2 distance between two sub-vectors
     inline float dist_l2_sq(const float* a, const float* b, size_t d) const {
@@ -540,7 +541,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         } else {
             utils::MemoryStreamReader reader((const unsigned char*)(data_level0_memory_.data() + start + offset));
             
-            if (collect_metrics) {
+            if (collect_metrics || enable_profiling_metrics_) {
                 auto start_time = std::chrono::high_resolution_clock::now();
                 alp_decode_vector(reader, result);
                 auto end_time = std::chrono::high_resolution_clock::now();
@@ -2326,6 +2327,10 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             throw std::invalid_argument("TLS ratio must be in the range (0, 1]");
         }
         tls_ratio_ = ratio;
+    }
+
+    void setProfilingMetrics(bool use) {
+        enable_profiling_metrics_ = use;
     }
 };
 }  // namespace hnswlib
