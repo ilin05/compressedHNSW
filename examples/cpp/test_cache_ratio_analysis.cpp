@@ -94,8 +94,10 @@ struct CacheAnalysisResult {
     double recall;                        // Recall@1
     long decoding_calls;                  // Number of decoding calls during search
     long total_distance_computations;     // Total distance computations
+    long get_original_data_calls;         // Number of getOriginalData calls
     double avg_decode_per_query;          // Average decoding per query
     double cache_efficiency_ratio;        // QPS improvement vs cache investment
+    double cache_hit_rate;               // Cache hit rate
 };
 
 void build_base_index(const std::string& dataset_name, const std::string& base_dir, 
@@ -245,19 +247,23 @@ CacheAnalysisResult test_with_cache_ratio(const std::string& dataset_name,
     // Collect statistics
     result.decoding_calls = appr_alg->getDecodingCallCount();
     result.total_distance_computations = appr_alg->metric_distance_computations;
-    
+    result.get_original_data_calls = appr_alg->getGetOriginalDataCallCount();
     cout << "Search Results:" << endl;
     cout << "  Recall@" << k << ": " << fixed << setprecision(4) << result.recall << endl;
     cout << "  QPS: " << fixed << setprecision(2) << result.qps << endl;
     cout << "  Decoding calls: " << result.decoding_calls << endl;
     cout << "  Total distance computations: " << result.total_distance_computations << endl;
-    
+    cout << "  Get original data calls: " << result.get_original_data_calls << endl;
+
     // Calculate additional metrics
     result.avg_decode_per_query = (double)result.decoding_calls / qsize;
     result.cache_efficiency_ratio = result.qps / (result.cache_ratio + 0.01);  // Avoid division by zero
+    // 缓存命中率
+    result.cache_hit_rate = (double)(result.get_original_data_calls - result.decoding_calls) / result.get_original_data_calls;
     
     cout << "  Avg decode per query: " << fixed << setprecision(4) << result.avg_decode_per_query << endl;
     cout << "  Cache efficiency ratio: " << fixed << setprecision(4) << result.cache_efficiency_ratio << endl;
+    cout << "  Cache hit rate: " << fixed << setprecision(4) << result.cache_hit_rate << endl;
     
     delete[] massQ;
     delete[] massQA;
@@ -272,7 +278,7 @@ void write_results_to_csv(const std::string& csv_path,
     if (file.is_open()) {
         file << "Dataset,Cache_Ratio(%),Cache_Size,Compress_Time(s),"
              << "QPS,Recall@1,Decoding_Calls,Distance_Computations,"
-             << "Avg_Decode_Per_Query,Cache_Efficiency_Ratio\n";
+             << "Avg_Decode_Per_Query,Cache_Efficiency_Ratio,Cache_Hit_Rate\n";
         
         for (const auto& res : results) {
             file << res.dataset_name << ","
@@ -284,7 +290,8 @@ void write_results_to_csv(const std::string& csv_path,
                  << res.decoding_calls << ","
                  << res.total_distance_computations << ","
                  << fixed << setprecision(6) << res.avg_decode_per_query << ","
-                 << fixed << setprecision(6) << res.cache_efficiency_ratio << "\n";
+                 << fixed << setprecision(6) << res.cache_efficiency_ratio << ","
+                 << fixed << setprecision(6) << res.cache_hit_rate << "\n";
         }
         file.close();
         cout << "\nResults written to " << csv_path << endl;

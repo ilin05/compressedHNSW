@@ -89,6 +89,9 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
     // 记录decoding的次数
     mutable std::atomic<long> decoding_call_count{0};
 
+    // 记录 getOriginalData 的次数
+    mutable std::atomic<long> get_original_data_call_count{0};
+
     // PQ Quantization Data
     size_t pq_m_ = 0;           // Number of sub-quantizers
     size_t pq_d_sub_ = 0;       // Dimension of sub-vectors
@@ -538,6 +541,9 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         if (uncompressed_mask_[internal_id]) {
              const float* data_ptr = reinterpret_cast<const float*>(data_level0_memory_.data() + start + offset);
              for(size_t i=0; i<dim; ++i) result[i] = static_cast<dist_t>(data_ptr[i]);
+             if(collect_metrics || enable_profiling_metrics_) {
+                get_original_data_call_count++;
+             }
         } else {
             utils::MemoryStreamReader reader((const unsigned char*)(data_level0_memory_.data() + start + offset));
             
@@ -547,6 +553,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                 auto end_time = std::chrono::high_resolution_clock::now();
                 decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
                 decoding_call_count++;
+                get_original_data_call_count++;
             } else {
                 alp_decode_vector(reader, result);
             }
@@ -2316,6 +2323,11 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
     // 获取decoding调用次数
     int getDecodingCallCount() const {
         return decoding_call_count;
+    }
+
+    // 获取getOriginalData调用的次数
+    int getGetOriginalDataCallCount() const {
+        return get_original_data_call_count;
     }
 
     void setUseTLS(bool use_tls) {
