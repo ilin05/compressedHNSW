@@ -238,6 +238,8 @@ TLSResult test_tls_configuration(
 }
 
 int main(int argc, char** argv) {
+    omp_set_num_threads(1);
+
     std::string base_dir = "../datasets/hdf5files/";
     std::vector<std::string> datasets = {"fashion-mnist-784-euclidean", "gist-960-euclidean", "mnist-784-euclidean", "sift-128-euclidean"};
     std::vector<double> tls_ratios = {0.1, 0.2, 0.3};
