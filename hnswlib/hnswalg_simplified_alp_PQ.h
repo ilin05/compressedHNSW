@@ -1265,7 +1265,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         return size;
     }
 
-    void compress_dataset() {
+    void compress_dataset(size_t cache_size = 0) {
         if (is_compacted_) return;
 
         size_t dim = *((size_t *) dist_func_param_);
@@ -1280,6 +1280,9 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
 #ifdef SELECT_HUBS_FOR_CACHE
         target_hub_count = std::max((size_t)1, cur_element_count / 100);
 #endif
+        if(cache_size > 0){
+            target_hub_count = cache_size;
+        }
         std::vector<tableint> indices(cur_element_count);
         std::iota(indices.begin(), indices.end(), 0);
         std::sort(indices.begin(), indices.end(), [&](tableint a, tableint b) {
