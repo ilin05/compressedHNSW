@@ -192,6 +192,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_cache_ratio_analysis examples/cpp/test_cache_ratio_analysis.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_cache_ratio_analysis hnswlib)
 
+    add_executable(test_tls_component_analysis examples/cpp/test_tls_component_analysis.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_tls_component_analysis hnswlib)
+
     add_executable(test_search_compressed_hnsw examples/cpp/test_search_compressed_hnsw.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_search_compressed_hnsw hnswlib)
 
@@ -310,6 +313,7 @@ if(HNSWLIB_EXAMPLES)
       test_vq_recall
       test_ablation_differential_order
       test_cache_ratio_analysis
+      test_tls_component_analysis
       )
 
     foreach(target_name IN LISTS COMPRESSED_HNSW_TARGETS)
