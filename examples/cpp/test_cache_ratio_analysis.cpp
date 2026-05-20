@@ -198,11 +198,11 @@ CacheAnalysisResult test_with_cache_ratio(const std::string& dataset_name,
     }
     
     // Enable TLS (Two-Level Search) if cache is being used
-    if (result.cache_size > 0) {
-        appr_alg->setUseTLS(true);
+    // if (result.cache_size > 0) {
+    appr_alg->setUseTLS(true);
         // TLS ratio: only check top 20% of candidates in exact evaluation
-        appr_alg->setTLSRatio(0.2);
-    }
+    appr_alg->setTLSRatio(0.2);
+    // }
     
     // Compress dataset with specified cache size
     StopW stopw;
@@ -481,10 +481,10 @@ int main(int argc, char** argv) {
             }
             
             // Enable TLS (Two-Level Search) if cache is being used
-            if (cache_size > 0) {
-                appr_alg->setUseTLS(true);
-                appr_alg->setTLSRatio(0.2);
-            }
+            // if (cache_size > 0) {
+            appr_alg->setUseTLS(true);
+            appr_alg->setTLSRatio(0.2);
+            // }
             
             // Compress dataset ONCE per cache_ratio
             StopW stopw;
