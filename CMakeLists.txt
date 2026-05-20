@@ -192,6 +192,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_cache_ratio_analysis examples/cpp/test_cache_ratio_analysis.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_cache_ratio_analysis hnswlib)
 
+    add_executable(test_cache_ratio_analysis_dexor examples/cpp/test_cache_ratio_analysis_dexor.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_cache_ratio_analysis_dexor hnswlib)
+
     add_executable(test_tls_component_analysis examples/cpp/test_tls_component_analysis.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_tls_component_analysis hnswlib)
 
@@ -313,6 +316,7 @@ if(HNSWLIB_EXAMPLES)
       test_vq_recall
       test_ablation_differential_order
       test_cache_ratio_analysis
+      test_cache_ratio_analysis_dexor
       test_tls_component_analysis
       )
 
