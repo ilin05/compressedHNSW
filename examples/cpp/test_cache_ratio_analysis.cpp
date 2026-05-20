@@ -90,14 +90,16 @@ struct CacheAnalysisResult {
     float cache_ratio;                    // Cache ratio (0.5%, 1%, 5%, 10%)
     size_t cache_size;                    // Number of nodes to cache
     double compress_time;                 // Compression time (seconds)
-    double qps;                           // Queries per second
-    double recall;                        // Recall@1
-    long decoding_calls;                  // Number of decoding calls during search
-    long total_distance_computations;     // Total distance computations
-    long get_original_data_calls;         // Number of getOriginalData calls
+    double qps;                           // Queries per second (averaged across rounds)
+    double qps_std_dev;                   // Standard deviation of QPS
+    double recall;                        // Recall@1 (averaged across rounds)
+    long decoding_calls;                  // Number of decoding calls during search (averaged)
+    long total_distance_computations;     // Total distance computations (averaged)
+    long get_original_data_calls;         // Number of getOriginalData calls (averaged)
     double avg_decode_per_query;          // Average decoding per query
     double cache_efficiency_ratio;        // QPS improvement vs cache investment
     double cache_hit_rate;               // Cache hit rate
+    int num_rounds;                       // Number of rounds tested
 };
 
 void build_base_index(const std::string& dataset_name, const std::string& base_dir, 
@@ -277,8 +279,8 @@ void write_results_to_csv(const std::string& csv_path,
     std::ofstream file(csv_path);
     if (file.is_open()) {
         file << "Dataset,Cache_Ratio(%),Cache_Size,Compress_Time(s),"
-             << "QPS,Recall@1,Decoding_Calls,Distance_Computations,"
-             << "Avg_Decode_Per_Query,Cache_Efficiency_Ratio,Cache_Hit_Rate\n";
+             << "QPS(avg),QPS_StdDev,Recall@1,Decoding_Calls,Distance_Computations,"
+             << "Avg_Decode_Per_Query,Cache_Efficiency_Ratio,Cache_Hit_Rate,Num_Rounds\n";
         
         for (const auto& res : results) {
             file << res.dataset_name << ","
@@ -286,12 +288,14 @@ void write_results_to_csv(const std::string& csv_path,
                  << res.cache_size << ","
                  << fixed << setprecision(4) << res.compress_time << ","
                  << fixed << setprecision(2) << res.qps << ","
+                 << fixed << setprecision(2) << res.qps_std_dev << ","
                  << fixed << setprecision(4) << res.recall << ","
                  << res.decoding_calls << ","
                  << res.total_distance_computations << ","
                  << fixed << setprecision(6) << res.avg_decode_per_query << ","
                  << fixed << setprecision(6) << res.cache_efficiency_ratio << ","
-                 << fixed << setprecision(6) << res.cache_hit_rate << "\n";
+                 << fixed << setprecision(6) << res.cache_hit_rate << ","
+                 << res.num_rounds << "\n";
         }
         file.close();
         cout << "\nResults written to " << csv_path << endl;
@@ -313,8 +317,11 @@ int main(int argc, char** argv) {
         "deep-image-96-angular_train.fvecs"
     };
     
-    // Cache ratios to test: 0.5%, 1%, 5%, 10%
-    vector<float> cache_ratios = {0.5, 1.0, 5.0, 10.0};
+    // Cache ratios to test: 0.0 (baseline), 0.5%, 1%, 5%, 10%
+    vector<float> cache_ratios = {0.0, 0.5, 1.0, 5.0, 10.0};
+    
+    // Number of rounds to run for stability
+    int num_rounds = 1;
     
     // Parse command line
     for(int i = 1; i < argc; ++i) {
@@ -329,6 +336,8 @@ int main(int argc, char** argv) {
             while(i + 1 < argc && argv[i + 1][0] != '-') {
                 cache_ratios.push_back(std::stof(argv[++i]));
             }
+        } else if (arg == "--num-rounds" && i + 1 < argc) {
+            num_rounds = std::stoi(argv[++i]);
         }
     }
     
@@ -355,15 +364,66 @@ int main(int argc, char** argv) {
         
         cout << "\n" << string(60, '*') << endl;
         cout << "Cache Ratio Analysis for: " << prefix << endl;
+        cout << "Number of rounds per configuration: " << num_rounds << endl;
         cout << string(60, '*') << endl;
         
         for (float ratio : cache_ratios) {
-            CacheAnalysisResult res = test_with_cache_ratio(
-                prefix, base_index_path, query_file, gt_file,
-                ratio, num_vectors, dim
-            );
-            if (res.qps > 0) {
-                all_results.push_back(res);
+            cout << "\n--- Testing cache_ratio=" << fixed << setprecision(2) << ratio << "% (" 
+                 << num_rounds << " rounds) ---" << endl;
+            
+            // Run multiple rounds and collect results
+            vector<CacheAnalysisResult> round_results;
+            vector<double> qps_values;
+            
+            for (int round = 0; round < num_rounds; ++round) {
+                CacheAnalysisResult res = test_with_cache_ratio(
+                    prefix, base_index_path, query_file, gt_file,
+                    ratio, num_vectors, dim
+                );
+                if (res.qps > 0) {
+                    round_results.push_back(res);
+                    qps_values.push_back(res.qps);
+                    cout << "  Round " << (round + 1) << ": QPS=" << fixed << setprecision(2) 
+                         << res.qps << ", Recall=" << setprecision(4) << res.recall << endl;
+                }
+            }
+            
+            // Aggregate results from multiple rounds
+            if (!round_results.empty()) {
+                CacheAnalysisResult aggregated = round_results[0];
+                aggregated.num_rounds = num_rounds;
+                
+                // Calculate average and std dev for QPS
+                double sum_qps = 0.0, sum_qps_sq = 0.0;
+                double sum_recall = 0.0;
+                long sum_decoding = 0;
+                long sum_distance = 0;
+                
+                for (const auto& res : round_results) {
+                    sum_qps += res.qps;
+                    sum_qps_sq += res.qps * res.qps;
+                    sum_recall += res.recall;
+                    sum_decoding += res.decoding_calls;
+                    sum_distance += res.total_distance_computations;
+                }
+                
+                aggregated.qps = sum_qps / num_rounds;
+                aggregated.recall = sum_recall / num_rounds;
+                aggregated.decoding_calls = sum_decoding / num_rounds;
+                aggregated.total_distance_computations = sum_distance / num_rounds;
+                
+                // Calculate standard deviation
+                double variance = (sum_qps_sq / num_rounds) - (aggregated.qps * aggregated.qps);
+                aggregated.qps_std_dev = std::sqrt(variance);
+                
+                // Recalculate derived metrics
+                aggregated.avg_decode_per_query = (double)aggregated.decoding_calls / num_vectors;
+                aggregated.cache_efficiency_ratio = aggregated.qps / (ratio + 0.01);
+                
+                cout << "  Average QPS: " << fixed << setprecision(2) << aggregated.qps 
+                     << " ± " << setprecision(2) << aggregated.qps_std_dev << endl;
+                
+                all_results.push_back(aggregated);
             }
         }
     }
@@ -374,6 +434,7 @@ int main(int argc, char** argv) {
     cout << "\n" << string(60, '=') << endl;
     cout << "Cache ratio analysis completed!" << endl;
     cout << "Results saved to cache_ratio_analysis_results.csv" << endl;
+    cout << "Ran " << num_rounds << " round(s) per configuration for stability" << endl;
     cout << string(60, '=') << endl;
     
     return 0;
