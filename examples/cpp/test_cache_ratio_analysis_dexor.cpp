@@ -272,7 +272,7 @@ int main(int argc, char** argv) {
         string prefix = ds.substr(0, pos);
         
         // Index file path (for DeXOR algorithm)
-        string index_path = prefix + "_train.fvecs_DeXOR_pq.bin";
+        string index_path = prefix + "_DeXOR_ch2_pq.bin";
         
         // Load dataset info for cache ratio calculation
         size_t num_vectors = 0, dim = 0;
