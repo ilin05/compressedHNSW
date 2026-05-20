@@ -274,6 +274,100 @@ CacheAnalysisResult test_with_cache_ratio(const std::string& dataset_name,
     return result;
 }
 
+// Perform search on an already-compressed index (for multi-round testing)
+CacheAnalysisResult perform_search_on_compressed_index(
+    const std::string& dataset_name,
+    const std::string& query_file,
+    const std::string& gt_file,
+    HierarchicalNSWALPSIMPLIFIEDPQ<float>* appr_alg,
+    float cache_ratio,
+    size_t num_vectors,
+    size_t query_dim,
+    bool reset_metrics = true) {
+    
+    CacheAnalysisResult result;
+    result.dataset_name = dataset_name;
+    result.cache_ratio = cache_ratio;
+    result.cache_size = (size_t)(num_vectors * cache_ratio / 100.0);
+    result.compress_time = 0.0;  // Not re-compressing
+    result.qps = 0.0;
+    result.recall = 0.0;
+    result.decoding_calls = 0;
+    result.total_distance_computations = 0;
+    result.avg_decode_per_query = 0.0;
+    result.cache_efficiency_ratio = 0.0;
+    
+    // Load queries
+    size_t qsize = 0, qdim = 0;
+    float* massQ = load_fvecs_as_float(query_file, qsize, qdim);
+    if (!massQ) return result;
+    
+    // Load ground truth
+    size_t gt_num = 0, gt_dim = 0;
+    unsigned int* massQA = load_ivecs(gt_file, gt_num, gt_dim);
+    if (!massQA) {
+        delete[] massQ;
+        return result;
+    }
+    
+    if (qsize != gt_num) {
+        cerr << "Query size and Ground Truth size mismatch!" << endl;
+        delete[] massQ;
+        delete[] massQA;
+        return result;
+    }
+    
+    // Set search parameters
+    appr_alg->setEf(200);
+    appr_alg->setProfilingMetrics(true);
+    
+    size_t k = 1;  // Recall@1
+    if (k > gt_dim) k = gt_dim;
+    
+    // Test search and collect metrics
+    size_t correct = 0;
+    size_t total = qsize * k;
+    
+    StopW stopw;
+    
+    for (long i = 0; i < (long)qsize; i++) {
+        std::priority_queue<std::pair<float, labeltype>> search_result = 
+            appr_alg->searchKnn(massQ + qdim * i, k);
+        
+        unordered_set<labeltype> g;
+        for (size_t j = 0; j < k; j++) {
+            g.insert(massQA[i * gt_dim + j]);
+        }
+        
+        while (search_result.size()) {
+            if (g.find(search_result.top().second) != g.end()) {
+                correct++;
+            }
+            search_result.pop();
+        }
+    }
+    
+    double search_time_us = stopw.getElapsedTimeMicro();
+    double qps = (double)qsize / (search_time_us / 1e6);
+    result.qps = qps;
+    result.recall = 1.0 * correct / total;
+    
+    // Collect statistics
+    result.decoding_calls = appr_alg->getDecodingCallCount();
+    result.total_distance_computations = appr_alg->metric_distance_computations;
+    result.get_original_data_calls = appr_alg->getGetOriginalDataCallCount();
+    
+    // Calculate additional metrics
+    result.avg_decode_per_query = (double)result.decoding_calls / qsize;
+    result.cache_efficiency_ratio = result.qps / (result.cache_ratio + 0.01);
+    result.cache_hit_rate = (double)(result.get_original_data_calls - result.decoding_calls) / result.get_original_data_calls;
+    
+    delete[] massQ;
+    delete[] massQA;
+    
+    return result;
+}
+
 void write_results_to_csv(const std::string& csv_path, 
                           const std::vector<CacheAnalysisResult>& results) {
     std::ofstream file(csv_path);
@@ -371,16 +465,45 @@ int main(int argc, char** argv) {
             cout << "\n--- Testing cache_ratio=" << fixed << setprecision(2) << ratio << "% (" 
                  << num_rounds << " rounds) ---" << endl;
             
-            // Run multiple rounds and collect results
+            size_t cache_size = (size_t)(num_vectors * ratio / 100.0);
+            
+            // Load base index ONCE per cache_ratio
+            L2Space l2space(dim);
+            HierarchicalNSWALPSIMPLIFIEDPQ<float>* appr_alg = nullptr;
+            
+            try {
+                cout << "Loading base index from " << base_index_path << "..." << endl;
+                appr_alg = new HierarchicalNSWALPSIMPLIFIEDPQ<float>(&l2space, base_index_path, false);
+                cout << "Index loaded successfully." << endl;
+            } catch (std::exception& e) {
+                cerr << "Failed to load index: " << e.what() << endl;
+                continue;
+            }
+            
+            // Enable TLS (Two-Level Search) if cache is being used
+            if (cache_size > 0) {
+                appr_alg->setUseTLS(true);
+                appr_alg->setTLSRatio(0.2);
+            }
+            
+            // Compress dataset ONCE per cache_ratio
+            StopW stopw;
+            cout << "Compressing dataset with cache_size=" << cache_size << "..." << endl;
+            appr_alg->compress_dataset(cache_size);
+            double compress_time = 1e-6 * stopw.getElapsedTimeMicro();
+            cout << "Compression completed in " << compress_time << " seconds" << endl;
+            
+            // Run multiple rounds of SEARCH ONLY (no re-compression)
             vector<CacheAnalysisResult> round_results;
             vector<double> qps_values;
             
             for (int round = 0; round < num_rounds; ++round) {
-                CacheAnalysisResult res = test_with_cache_ratio(
-                    prefix, base_index_path, query_file, gt_file,
-                    ratio, num_vectors, dim
+                CacheAnalysisResult res = perform_search_on_compressed_index(
+                    prefix, query_file, gt_file,
+                    appr_alg, ratio, num_vectors, dim
                 );
                 if (res.qps > 0) {
+                    res.compress_time = (round == 0) ? compress_time : 0.0;  // Only record compress time once
                     round_results.push_back(res);
                     qps_values.push_back(res.qps);
                     cout << "  Round " << (round + 1) << ": QPS=" << fixed << setprecision(2) 
@@ -425,6 +548,9 @@ int main(int argc, char** argv) {
                 
                 all_results.push_back(aggregated);
             }
+            
+            // Clean up index for this cache_ratio
+            delete appr_alg;
         }
     }
     
