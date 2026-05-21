@@ -595,7 +595,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
         if (enable_profiling_metrics_) {
             getOriginalData_calls++;
-            if(found_anchor_in_cache_) {
+            if(found_anchor_in_cache) {
                 cache_hit_times++;
             }
         }
