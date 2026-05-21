@@ -1962,7 +1962,8 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         // 加载cache
         if( cache_max_size_ > 0){
             root_state_cache_.reserve(cache_max_size_);
-            loadCache();
+            // loadCache();
+            loadCacheByLevel();
         }
 
         return;
@@ -2983,5 +2984,98 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             std::cout << "Cache loaded with " << to_load << " root states." << std::endl;
         }
     }
+
+    void loadCacheByLevel() {
+        if (cache_max_size_ > 0) {
+            // 这里实现加载热门数据到cache的逻辑
+            // 加载 level 最高的 cache_max_size_ 个点到cache中
+
+            std::vector<tableint> indices(cur_element_count);
+            std::iota(indices.begin(), indices.end(), 0);
+            std::sort(indices.begin(), indices.end(), [&](tableint a, tableint b) {
+                return element_levels_[a] > element_levels_[b];
+            });
+
+            std::vector<tableint> cache_nodes;
+            for(size_t i=0; i<indices.size() && cache_nodes.size() < cache_max_size_; ++i) {
+                if (element_levels_[indices[i]] > 0) {
+                    cache_nodes.push_back(indices[i]);
+                }
+            }
+
+            // std::vector<tableint> root_nodes;
+            // for (tableint i = 0; i < cur_element_count; i++) {
+            //     tableint prenode = getPrenodeId(i);
+            //     if (prenode == (tableint)-1) {
+            //         root_nodes.push_back(i);
+            //     }
+            // }
+            // size_t to_load = std::min((size_t)cache_max_size_, root_nodes.size());
+            
+            size_t dim = *((size_t *) dist_func_param_);
+            utils::MemoryBlockStreamReader reader((const unsigned char*)data_level0_memory_.data());
+
+            for (size_t i = 0; i < cache_nodes.size(); i++) {
+                tableint id = cache_nodes[i];
+                
+                // Decode cache node to get state
+                std::vector<typename CodecPolicy::StateType> states(dim, typename CodecPolicy::StateType());
+                std::vector<tableint> decode_path;
+
+                tableint cursor = id;
+                while(true){
+                    decode_path.push_back(cursor);
+                    tableint prenode = getPrenodeId(cursor);
+                    if (prenode == (tableint)-1) break;
+                    cursor = prenode;
+                }
+
+                size_t start, end;
+                size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
+                unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[id] + linklist_size_offset));
+                size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+                
+                for(size_t idx = 0; idx < decode_path.size(); ++idx) {
+                    tableint curr_id = decode_path[decode_path.size() - 1 - idx];
+                    size_t curr_start = level0_element_start_positions_[curr_id] + data_offset;
+                    size_t curr_end;
+                    if (curr_id + 1 < cur_element_count && level0_element_start_positions_[curr_id+1] > 0) {
+                        curr_end = level0_element_start_positions_[curr_id+1];
+                    } else {
+                        curr_end = data_level0_memory_.size();
+                    }
+                    
+                    reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + curr_start), curr_end - curr_start);
+                    
+                    for(size_t k=0; k<dim; ++k) {
+                        CodecPolicy::decode(states[k], reader);
+                    }
+                }
+                
+                // start = level0_element_start_positions_[id] + data_offset;
+                
+                // if (id + 1 < cur_element_count && level0_element_start_positions_[id+1] > 0) {
+                //     end = level0_element_start_positions_[id+1];
+                // } else {
+                //     end = data_level0_memory_.size();
+                // }
+                
+                // reader.resetBuffer((const unsigned char*)(data_level0_memory_.data() + start), end - start);
+                
+                // for(size_t k=0; k<dim; ++k) {
+                //     CodecPolicy::decode(states[k], reader);
+                // }
+                
+                {
+                    // std::lock_guard<std::mutex> lock(cache_lock_);
+                    root_state_cache_[id] = states;
+                }
+            }
+
+            std::cout << "Cache loaded with " << cache_nodes.size() << " root states." << std::endl;
+        }
+    }
+
+
 };
 }  // namespace hnswlib
