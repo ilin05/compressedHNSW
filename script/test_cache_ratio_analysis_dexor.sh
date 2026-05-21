@@ -12,7 +12,7 @@ echo ""
 ../build/test_cache_ratio_analysis_dexor \
   --dataset sift-128-euclidean_train.fvecs \
   --cache-ratios 0.0 0.5 1.0 2.0 3.0 5.0 10.0 \
-  --num-rounds 1
+  --num-rounds 10
 
 echo ""
 echo "✓ DeXOR cache ratio analysis completed!"

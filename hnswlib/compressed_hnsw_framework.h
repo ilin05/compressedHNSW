@@ -3030,12 +3030,15 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                     cursor = prenode;
                 }
 
-                size_t start, end;
+                // size_t start, end;
                 size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
-                unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[id] + linklist_size_offset));
-                size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+                // unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[id] + linklist_size_offset));
+                // size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
                 
                 for(size_t idx = 0; idx < decode_path.size(); ++idx) {
+                    unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[decode_path[decode_path.size() - 1 - idx]] + linklist_size_offset));
+                    size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+
                     tableint curr_id = decode_path[decode_path.size() - 1 - idx];
                     size_t curr_start = level0_element_start_positions_[curr_id] + data_offset;
                     size_t curr_end;
