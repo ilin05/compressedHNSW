@@ -103,6 +103,7 @@ struct CacheAnalysisResult {
     long backtrack_hops;
     double avg_decode_per_query;
     double cache_efficiency_ratio;
+    double cache_hit_rate;
     int num_rounds;
 };
 
@@ -128,7 +129,7 @@ CacheAnalysisResult perform_search_on_compressed_index(
     result.backtrack_hops = 0;
     result.avg_decode_per_query = 0.0;
     result.cache_efficiency_ratio = 0.0;
-    
+    result.cache_hit_rate = 0.0;
     // Load queries
     size_t qsize = 0, qdim = 0;
     double* massQ = load_fvecs_as_double(query_file, qsize, qdim);
@@ -188,6 +189,8 @@ CacheAnalysisResult perform_search_on_compressed_index(
     result.distance_computations = appr_alg->metric_distance_computations;
     result.getOriginalData_calls = appr_alg->getOriginalData_calls;
     result.backtrack_hops = appr_alg->getOriginalData_backtrack_hops;
+    long cache_hits = appr_alg->getCacheHitTimes();
+    result.cache_hit_rate = (result.getOriginalData_calls > 0) ? (double)cache_hits / result.getOriginalData_calls : 0.0;
     
     // Calculate additional metrics
     result.avg_decode_per_query = (double)result.decoding_calls / qsize;
@@ -206,7 +209,7 @@ void write_results_to_csv(const std::string& csv_path,
         file << "Dataset,Cache_Ratio(%),Cache_Size,"
              << "QPS(avg),QPS_StdDev,Recall@1,Decoding_Calls,Distance_Computations,"
              << "GetOriginalData_Calls,Backtrack_Hops,Avg_Decode_Per_Query,"
-             << "Cache_Efficiency_Ratio,Num_Rounds\n";
+             << "Cache_Efficiency_Ratio,Cache_Hit_Rate,Num_Rounds\n";
         
         for (const auto& res : results) {
             file << res.dataset_name << ","
@@ -221,6 +224,7 @@ void write_results_to_csv(const std::string& csv_path,
                  << res.backtrack_hops << ","
                  << fixed << setprecision(6) << res.avg_decode_per_query << ","
                  << fixed << setprecision(6) << res.cache_efficiency_ratio << ","
+                 << fixed << setprecision(6) << res.cache_hit_rate << ","
                  << res.num_rounds << "\n";
         }
         file.close();
@@ -272,7 +276,7 @@ int main(int argc, char** argv) {
         string prefix = ds.substr(0, pos);
         
         // Index file path (for DeXOR algorithm)
-        string index_path = prefix + "_DeXOR_ch2_pq.bin";
+        string index_path = prefix + "_DeXOR_chunlim_pq.bin";
         
         // Load dataset info for cache ratio calculation
         size_t num_vectors = 0, dim = 0;

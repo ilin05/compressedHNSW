@@ -93,6 +93,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     // 记录getOriginalData调用次数与回溯跳数
     mutable std::atomic<long> getOriginalData_calls{0};
     mutable std::atomic<long> getOriginalData_backtrack_hops{0};
+    mutable std::atomic<long> cache_hit_times{0};
 
     // data cache for getOriginalDataByInternalId
     size_t cache_max_size_ = 0;
@@ -538,9 +539,9 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     // 支持任意长度的差分编码链：从目标节点沿 prenode 回溯到 root 或缓存锚点，再逐段前向解码。
     std::vector<double> getOriginalDataByInternalId(tableint internal_id, bool collect_metrics = false) const {
         auto original_data_start = std::chrono::high_resolution_clock::now();
-        if (enable_profiling_metrics_) {
-            getOriginalData_calls++;
-        }
+        // if (enable_profiling_metrics_) {
+        //     getOriginalData_calls++;
+        // }
 
         if (!use_encoding_algorithm_ || !is_compacted_) {
             size_t dim = data_size_ / sizeof(double);
@@ -590,6 +591,13 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                 getOriginalData_backtrack_hops++;
             }
             cursor = parent;
+        }
+
+        if (enable_profiling_metrics_) {
+            getOriginalData_calls++;
+            if(found_anchor_in_cache_) {
+                cache_hit_times++;
+            }
         }
 
         std::reverse(decode_path.begin(), decode_path.end());
@@ -2823,6 +2831,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         getOriginalData_backtrack_hops = 0;
         metric_distance_computations = 0;
         metric_hops = 0;
+        cache_hit_times = 0;
     }
 
     // 根据internal id获取该节点在level0的linkLists中元素的数量
@@ -2910,6 +2919,10 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
     long getOriginalDataCallCount() const {
         return getOriginalData_calls;
+    }
+
+    long getCacheHitTimes() const {
+        return cache_hit_times;
     }
 
     long getOriginalDataBacktrackHops() const {
