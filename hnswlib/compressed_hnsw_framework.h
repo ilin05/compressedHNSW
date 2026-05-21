@@ -2805,6 +2805,10 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         total_size += data_level0_memory_.size();
         // total_size += element_levels_.size() * sizeof(int);
         // total_size += sizeof(void*) * max_elements_;
+
+        // cache size: root_state_cache_
+        total_size += root_state_cache_.size() * sizeof(root_state_cache_[0]);
+
         for (size_t i = 0; i < cur_element_count; i++) {
             // int level = element_levels_[i];
             unsigned int linkListSize = element_levels_[i] > 0 ? size_links_per_element_ * element_levels_[i] : 0;

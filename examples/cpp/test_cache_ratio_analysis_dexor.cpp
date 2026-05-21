@@ -105,6 +105,7 @@ struct CacheAnalysisResult {
     double cache_efficiency_ratio;
     double cache_hit_rate;
     int num_rounds;
+    size_t index_size;
 };
 
 // Perform search on an already-loaded and cached index
@@ -130,6 +131,7 @@ CacheAnalysisResult perform_search_on_compressed_index(
     result.avg_decode_per_query = 0.0;
     result.cache_efficiency_ratio = 0.0;
     result.cache_hit_rate = 0.0;
+    result.index_size = 0;
     // Load queries
     size_t qsize = 0, qdim = 0;
     double* massQ = load_fvecs_as_double(query_file, qsize, qdim);
@@ -209,7 +211,7 @@ void write_results_to_csv(const std::string& csv_path,
         file << "Dataset,Cache_Ratio(%),Cache_Size,"
              << "QPS(avg),QPS_StdDev,Recall@1,Decoding_Calls,Distance_Computations,"
              << "GetOriginalData_Calls,Backtrack_Hops,Avg_Decode_Per_Query,"
-             << "Cache_Efficiency_Ratio,Cache_Hit_Rate,Num_Rounds\n";
+             << "Cache_Efficiency_Ratio,Cache_Hit_Rate,Index_Size,Num_Rounds\n";
         
         for (const auto& res : results) {
             file << res.dataset_name << ","
@@ -225,6 +227,7 @@ void write_results_to_csv(const std::string& csv_path,
                  << fixed << setprecision(6) << res.avg_decode_per_query << ","
                  << fixed << setprecision(6) << res.cache_efficiency_ratio << ","
                  << fixed << setprecision(6) << res.cache_hit_rate << ","
+                 << res.index_size << ","
                  << res.num_rounds << "\n";
         }
         file.close();
@@ -329,10 +332,12 @@ int main(int argc, char** argv) {
             vector<double> qps_values;
             
             for (int round = 0; round < num_rounds; ++round) {
+                appr_alg->resetProfilingMetrics();
                 CacheAnalysisResult res = perform_search_on_compressed_index(
                     prefix, query_file, gt_file,
                     appr_alg, ratio, num_vectors, dim
                 );
+                res.index_size = appr_alg->getCompressedIndexSize();
                 if (res.qps > 0) {
                     round_results.push_back(res);
                     qps_values.push_back(res.qps);
@@ -382,7 +387,9 @@ int main(int argc, char** argv) {
                 
                 cout << "  Average QPS: " << fixed << setprecision(2) << aggregated.qps 
                      << " ± " << setprecision(2) << aggregated.qps_std_dev 
+                     << ", Index Size: " << aggregated.index_size
                      << ", GetOriginalData calls: " << aggregated.getOriginalData_calls
+                     << ", Cache Hit Rate: " << setprecision(4) << aggregated.cache_hit_rate
                      << ", Backtrack hops: " << aggregated.backtrack_hops << endl;
                 
                 all_results.push_back(aggregated);
