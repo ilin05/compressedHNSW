@@ -20,6 +20,12 @@ namespace hnswlib {
 typedef unsigned int tableint;
 typedef unsigned int linklistsizeint;
 
+enum class CompressionRootPolicy {
+    Level,
+    Random,
+    Level0Degree
+};
+
 template<typename dist_t, typename CodecPolicy>
 class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
  public:
@@ -1364,7 +1370,81 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     // compress_chain_max_length 表示包含 root 在内的最大链长。
     // 默认值为 2：root -> child，与历史逻辑保持一致。
     // 当 compress_chain_max_length = -1 时表示不限制链长。
-    void compress_dataset(int compress_chain_max_length = 2) {
+    const char* compressionRootPolicyName(CompressionRootPolicy root_policy) const {
+        switch (root_policy) {
+            case CompressionRootPolicy::Level:
+                return "level";
+            case CompressionRootPolicy::Random:
+                return "random";
+            case CompressionRootPolicy::Level0Degree:
+                return "level0_degree";
+            default:
+                return "unknown";
+        }
+    }
+
+    size_t select_compression_roots(
+        size_t target_root_count,
+        CompressionRootPolicy root_policy,
+        std::vector<tableint>& assigned_root,
+        std::vector<bool>& is_root) {
+        assigned_root.assign(cur_element_count, (tableint)-1);
+        is_root.assign(cur_element_count, false);
+
+        std::vector<tableint> candidates;
+        candidates.reserve(cur_element_count);
+        for (size_t i = 0; i < cur_element_count; ++i) {
+            if (!isMarkedDeleted(i)) {
+                candidates.push_back((tableint)i);
+            }
+        }
+
+        if (candidates.empty()) {
+            return 0;
+        }
+
+        switch (root_policy) {
+            case CompressionRootPolicy::Level:
+                std::sort(candidates.begin(), candidates.end(), [&](tableint a, tableint b) {
+                    if (element_levels_[a] != element_levels_[b]) {
+                        return element_levels_[a] > element_levels_[b];
+                    }
+                    return a < b;
+                });
+                break;
+
+            case CompressionRootPolicy::Random:
+                std::shuffle(candidates.begin(), candidates.end(), level_generator_);
+                break;
+
+            case CompressionRootPolicy::Level0Degree:
+                std::sort(candidates.begin(), candidates.end(), [&](tableint a, tableint b) {
+                    int degree_a = getListCount(get_linklist_at_level(a, 0));
+                    int degree_b = getListCount(get_linklist_at_level(b, 0));
+                    if (degree_a != degree_b) {
+                        return degree_a > degree_b;
+                    }
+                    return a < b;
+                });
+                break;
+        }
+
+        size_t roots_found = 0;
+        size_t roots_to_select = std::min(target_root_count, candidates.size());
+        for (size_t i = 0; i < roots_to_select; ++i) {
+            tableint idx = candidates[i];
+            is_root[idx] = true;
+            assigned_root[idx] = idx;
+            ++roots_found;
+        }
+
+        return roots_found;
+    }
+
+    void compress_dataset(
+        int compress_chain_max_length = 2,
+        double root_percentage = 0.01,
+        CompressionRootPolicy root_policy = CompressionRootPolicy::Level) {
         if (is_compacted_) return;
         if (!use_encoding_algorithm_) return;
 
@@ -1381,42 +1461,20 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         train_pq(dim, cur_element_count);
         // -------------------
 
-        size_t target_root_count = std::max((size_t)1, cur_element_count / 100);
+        // size_t target_root_count = std::max((size_t)1, cur_element_count / 100);
+        size_t target_root_count = std::max((size_t)1, static_cast<size_t>(cur_element_count * root_percentage));
         
+        // assign compression roots
         std::vector<tableint> assigned_root(cur_element_count, (tableint)-1);
         std::vector<bool> is_root(cur_element_count, false);
-
-        // 1. Select Roots (Top 1% by level)
-        std::vector<tableint> indices(cur_element_count);
-        std::iota(indices.begin(), indices.end(), 0);
-        
-        std::sort(indices.begin(), indices.end(), [&](tableint a, tableint b) {
-            return element_levels_[a] > element_levels_[b];
-        });
-
-        size_t roots_found = 0;
-        for(size_t i=0; i<cur_element_count && roots_found < target_root_count; ++i) {
-            tableint idx = indices[i];
-            if (isMarkedDeleted(idx)) continue;
-            
-            is_root[idx] = true;
-            assigned_root[idx] = idx;
-            roots_found++;
-        }
-        
-        // Fallback if no roots found
-        if(roots_found == 0 && cur_element_count > 0) {
-             for(size_t i=0; i<cur_element_count; ++i) {
-                 if(!isMarkedDeleted(i)) {
-                     is_root[i] = true;
-                     assigned_root[i] = i;
-                     roots_found++;
-                     break;
-                 }
-             }
-        }
-
-        std::cout << "Compression: Selected " << roots_found << " roots." << std::endl;
+        size_t roots_found = select_compression_roots(
+            target_root_count,
+            root_policy,
+            assigned_root,
+            is_root);
+        std::cout << "Compression: Selected " << roots_found
+                  << " roots using policy "
+                  << compressionRootPolicyName(root_policy) << "." << std::endl;
 
         // 2. Assign prenode
         // assigned_prenode[i] = -1 表示 root；否则为其父节点。
@@ -1962,7 +2020,6 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         // 加载cache
         if( cache_max_size_ > 0){
             root_state_cache_.reserve(cache_max_size_);
-            // loadCache();
             loadCacheByLevel();
         }
 
@@ -2807,8 +2864,10 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         // total_size += element_levels_.size() * sizeof(int);
         // total_size += sizeof(void*) * max_elements_;
 
-        // cache size: root_state_cache_
-        total_size += root_state_cache_.size() * sizeof(root_state_cache_[0]);
+        // cache size: root_state_cache_. Avoid operator[] here because it
+        // would insert an empty cache entry when the cache is empty.
+        using RootCacheEntry = std::pair<const tableint, std::vector<typename CodecPolicy::StateType>>;
+        total_size += root_state_cache_.size() * sizeof(RootCacheEntry);
 
         for (size_t i = 0; i < cur_element_count; i++) {
             // int level = element_levels_[i];
