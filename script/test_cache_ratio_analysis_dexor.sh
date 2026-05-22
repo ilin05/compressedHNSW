@@ -1,19 +1,23 @@
 #!/bin/bash
 set -e
 
-echo "Testing Cache Ratio Analysis on Compressed HNSW (DeXOR Algorithm)"
-echo "=================================================================="
+echo "Testing DeXOR root policy, root-cache, and root-ratio experiments"
+echo "================================================================="
 echo ""
-
-# Test DeXOR with SIFT dataset
-# Cache ratios: 0.0% (baseline), 0.5%, 1%, 2%, 3%, 5%, 10%, 20%
-# Running 10 rounds per configuration for statistical stability
 
 ../build/test_cache_ratio_analysis_dexor \
   --dataset sift-128-euclidean_train.fvecs \
-  --cache-ratios 0.0 0.5 1.0 2.0 3.0 5.0 10.0 \
-  --num-rounds 10
+  --root-policies random level level0degree \
+  --root-ratios 0.0001 0.001 0.01 0.1 \
+  --cache-ratios 0.0 0.5 1.0 2.0 5.0 10.0 \
+  --chain-max-length -1 \
+  --build-threads 32 \
+  --search-threads 1 \
+  --num-rounds 5
 
 echo ""
-echo "✓ DeXOR cache ratio analysis completed!"
-echo "Results saved to: cache_ratio_analysis_dexor_results.csv"
+echo "DeXOR root-policy, root-cache, and root-ratio experiments completed."
+echo "Results saved to:"
+echo "  - root_selection_policy_ablation_dexor_results.csv"
+echo "  - root_cache_ratio_sensitivity_dexor_results.csv"
+echo "  - root_ratio_sensitivity_dexor_results.csv"
