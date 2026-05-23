@@ -3071,9 +3071,10 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
             std::vector<tableint> cache_nodes;
             for(size_t i=0; i<indices.size() && cache_nodes.size() < cache_max_size_; ++i) {
-                if (element_levels_[indices[i]] > 0) {
-                    cache_nodes.push_back(indices[i]);
-                }
+                // if (element_levels_[indices[i]] > 0) {
+                //     cache_nodes.push_back(indices[i]);
+                // }
+                cache_nodes.push_back(indices[i]);
             }
 
             // std::vector<tableint> root_nodes;
