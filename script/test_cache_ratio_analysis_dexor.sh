@@ -13,6 +13,7 @@ echo ""
   --chain-max-length 2 \
   --build-threads 32 \
   --search-threads 1 \
+  --cache-ratio-only \
   --num-rounds 1
 
 echo ""
