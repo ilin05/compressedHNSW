@@ -2866,8 +2866,22 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
         // cache size: root_state_cache_. Avoid operator[] here because it
         // would insert an empty cache entry when the cache is empty.
-        using RootCacheEntry = std::pair<const tableint, std::vector<typename CodecPolicy::StateType>>;
-        total_size += root_state_cache_.size() * sizeof(RootCacheEntry);
+        // using RootCacheEntry = std::pair<const tableint, std::vector<typename CodecPolicy::StateType>>;
+        // total_size += root_state_cache_.size() * sizeof(RootCacheEntry);
+        // Cache size: 遍历每个缓存的状态向量，计算其完整占用内存
+        for (const auto& entry : root_state_cache_) {
+            // key (tableint) 的大小
+            total_size += sizeof(tableint);
+            
+            // vector 容器头部大小
+            total_size += sizeof(std::vector<typename CodecPolicy::StateType>);
+            
+            // vector 实际数据部分：维度数 × 每个状态的大小
+            // 用 capacity() 更准确，因为 vector 可能预分配了空间
+            total_size += entry.second.capacity() * sizeof(typename CodecPolicy::StateType);
+        }
+
+        total_size += cur_element_count * sizeof(size_t);   // level0_element_start_positions_ 的大小
 
         for (size_t i = 0; i < cur_element_count; i++) {
             // int level = element_levels_[i];

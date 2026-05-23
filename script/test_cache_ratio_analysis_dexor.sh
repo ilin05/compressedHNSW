@@ -13,7 +13,7 @@ echo ""
   --chain-max-length -1 \
   --build-threads 32 \
   --search-threads 1 \
-  --num-rounds 5
+  --num-rounds 1
 
 echo ""
 echo "DeXOR root-policy, root-cache, and root-ratio experiments completed."
