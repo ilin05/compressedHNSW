@@ -3066,7 +3066,10 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             std::vector<tableint> indices(cur_element_count);
             std::iota(indices.begin(), indices.end(), 0);
             std::sort(indices.begin(), indices.end(), [&](tableint a, tableint b) {
-                return element_levels_[a] > element_levels_[b];
+                if (element_levels_[a] != element_levels_[b]) {
+                    return element_levels_[a] > element_levels_[b];
+                }
+                return a < b;
             });
 
             std::vector<tableint> cache_nodes;
