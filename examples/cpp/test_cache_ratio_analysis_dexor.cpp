@@ -707,13 +707,13 @@ int main(int argc, char** argv) {
     }
 
     if (!root_policy_results.empty()) {
-        write_results_to_csv("root_selection_policy_ablation_dexor_results.csv", root_policy_results);
+        write_results_to_csv("root_selection_policy_ablation_dexor_results_chain_" + std::to_string(chain_max_length) + ".csv", root_policy_results);
     }
     if (!cache_ratio_results.empty()) {
-        write_results_to_csv("root_cache_ratio_sensitivity_dexor_results.csv", cache_ratio_results);
+        write_results_to_csv("root_cache_ratio_sensitivity_dexor_results_chain_" + std::to_string(chain_max_length) + ".csv", cache_ratio_results);
     }
     if (!root_ratio_results.empty()) {
-        write_results_to_csv("root_ratio_sensitivity_dexor_results.csv", root_ratio_results);
+        write_results_to_csv("root_ratio_sensitivity_dexor_results_chain_" + std::to_string(chain_max_length) + ".csv", root_ratio_results);
     }
 
     cout << "\nDone." << endl;
