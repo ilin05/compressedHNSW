@@ -1,8 +1,11 @@
 #include <chrono>
+#include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <map>
+#include <numeric>
 #include <queue>
 #include <string>
 #include <unordered_set>
@@ -100,6 +103,84 @@ static std::string chain_tag(int chain_max_length) {
     return "ch" + std::to_string(chain_max_length);
 }
 
+struct SearchRoundMetrics {
+    size_t query_count = 0;
+    double recall = 0.0;
+    double mean_latency_us = 0.0;
+    double p99_latency_us = 0.0;
+    double qps = 0.0;
+    long decoding_calls = 0;
+    long get_original_data_calls = 0;
+    long backtrack_hops = 0;
+    double avg_decode_per_query = 0.0;
+    double avg_backtrack_hops_per_call = 0.0;
+};
+
+template <typename CodecPolicy>
+SearchRoundMetrics run_search_round(
+    HierarchicalNSWCABFRAMEWORK<double, CodecPolicy>* index,
+    const double* queries,
+    size_t qsize,
+    size_t qdim,
+    const unsigned int* gt,
+    size_t gt_dim,
+    size_t topk,
+    bool enable_profiling) {
+    SearchRoundMetrics metrics;
+    metrics.query_count = qsize;
+
+    index->resetProfilingMetrics();
+    index->setProfilingMetrics(enable_profiling);
+
+    size_t correct = 0;
+    std::vector<double> latencies_us;
+    latencies_us.reserve(qsize);
+
+    StopW total_timer;
+    for (long long i = 0; i < static_cast<long long>(qsize); ++i) {
+        StopW query_timer;
+        auto result = index->searchKnn(queries + i * qdim, topk);
+        latencies_us.push_back(query_timer.elapsed_us());
+
+        std::unordered_set<labeltype> gt_set;
+        for (size_t j = 0; j < topk; ++j) {
+            gt_set.insert(gt[i * gt_dim + j]);
+        }
+
+        while (!result.empty()) {
+            if (gt_set.find(result.top().second) != gt_set.end()) {
+                ++correct;
+            }
+            result.pop();
+        }
+    }
+
+    double total_us = total_timer.elapsed_us();
+    metrics.recall = static_cast<double>(correct) / static_cast<double>(qsize * topk);
+    metrics.mean_latency_us = std::accumulate(latencies_us.begin(), latencies_us.end(), 0.0)
+                              / static_cast<double>(latencies_us.size());
+    std::sort(latencies_us.begin(), latencies_us.end());
+    size_t p99_idx = std::min(
+        latencies_us.size() - 1,
+        static_cast<size_t>(std::ceil(latencies_us.size() * 0.99)) - 1);
+    metrics.p99_latency_us = latencies_us[p99_idx];
+    metrics.qps = total_us > 0.0 ? static_cast<double>(qsize) / (total_us / 1e6) : 0.0;
+
+    metrics.decoding_calls = index->getDecodingCallCount();
+    metrics.get_original_data_calls = index->getOriginalDataCallCount();
+    metrics.backtrack_hops = index->getOriginalDataBacktrackHops();
+    metrics.avg_decode_per_query = qsize > 0
+                                       ? static_cast<double>(metrics.decoding_calls) / static_cast<double>(qsize)
+                                       : 0.0;
+    metrics.avg_backtrack_hops_per_call = metrics.get_original_data_calls > 0
+                                              ? static_cast<double>(metrics.backtrack_hops) /
+                                                    static_cast<double>(metrics.get_original_data_calls)
+                                              : 0.0;
+
+    index->setProfilingMetrics(false);
+    return metrics;
+}
+
 template <typename CodecPolicy>
 void search_one_config(const std::string& dataset,
                        const std::string& base_dir,
@@ -110,6 +191,8 @@ void search_one_config(const std::string& dataset,
                        double tls_ratio,
                        size_t k,
                        const std::vector<size_t>& efs,
+                       bool enable_profiling,
+                       int num_rounds,
                        std::ofstream& csv) {
     const std::string query_file = base_dir + dataset + "_test.fvecs";
     const std::string gt_file = base_dir + dataset + "_neighbors.ivecs";
@@ -151,35 +234,61 @@ void search_one_config(const std::string& dataset,
               << " chain_max=" << chain_max_length
               << " cache=" << (use_cache ? 1 : 0)
               << " tls=" << (use_tls ? 1 : 0)
-              << " tls_ratio=" << tls_ratio << " ===" << std::endl;
+              << " tls_ratio=" << tls_ratio
+              << " profiling=" << (enable_profiling ? 1 : 0)
+              << " rounds=" << num_rounds << " ===" << std::endl;
 
     for (size_t ef : efs) {
         index->setEf(ef);
 
-        size_t correct = 0;
-        StopW timer;
+        SearchRoundMetrics avg;
+        for (int round = 0; round < num_rounds; ++round) {
+            SearchRoundMetrics metrics = run_search_round(
+                index, queries, qsize, qdim, gt, gt_dim, topk, enable_profiling);
+            avg.recall += metrics.recall;
+            avg.mean_latency_us += metrics.mean_latency_us;
+            avg.p99_latency_us += metrics.p99_latency_us;
+            avg.qps += metrics.qps;
+            avg.decoding_calls += metrics.decoding_calls;
+            avg.get_original_data_calls += metrics.get_original_data_calls;
+            avg.backtrack_hops += metrics.backtrack_hops;
 
-        for (long long i = 0; i < static_cast<long long>(qsize); ++i) {
-            auto result = index->searchKnn(queries + i * qdim, topk);
-            std::unordered_set<labeltype> gt_set;
-            for (size_t j = 0; j < topk; ++j) {
-                gt_set.insert(gt[i * gt_dim + j]);
-            }
-
-            while (!result.empty()) {
-                if (gt_set.find(result.top().second) != gt_set.end()) {
-                    ++correct;
-                }
-                result.pop();
-            }
+            std::cout << "  round " << (round + 1)
+                      << " ef=" << ef
+                      << " recall=" << std::fixed << std::setprecision(4) << metrics.recall
+                      << " qps=" << std::setprecision(2) << metrics.qps
+                      << " mean=" << metrics.mean_latency_us << " us/query"
+                      << " p99=" << metrics.p99_latency_us << " us"
+                      << " decoding_calls=" << metrics.decoding_calls
+                      << std::endl;
         }
 
-        double recall = static_cast<double>(correct) / static_cast<double>(qsize * topk);
-        double time_us = timer.elapsed_us() / static_cast<double>(qsize);
+        const double denom = static_cast<double>(num_rounds);
+        avg.recall /= denom;
+        avg.mean_latency_us /= denom;
+        avg.p99_latency_us /= denom;
+        avg.qps /= denom;
+        avg.decoding_calls /= num_rounds;
+        avg.get_original_data_calls /= num_rounds;
+        avg.backtrack_hops /= num_rounds;
+        avg.avg_decode_per_query = qsize > 0
+                                       ? static_cast<double>(avg.decoding_calls) / static_cast<double>(qsize)
+                                       : 0.0;
+        avg.avg_backtrack_hops_per_call = avg.get_original_data_calls > 0
+                                              ? static_cast<double>(avg.backtrack_hops) /
+                                                    static_cast<double>(avg.get_original_data_calls)
+                                              : 0.0;
 
         std::cout << "ef=" << ef
-                  << " recall=" << std::fixed << std::setprecision(4) << recall
-                  << " time=" << std::setprecision(2) << time_us << " us/query" << std::endl;
+                  << " recall=" << std::fixed << std::setprecision(4) << avg.recall
+                  << " qps=" << std::setprecision(2) << avg.qps
+                  << " mean=" << avg.mean_latency_us << " us/query"
+                  << " p99=" << avg.p99_latency_us << " us"
+                  << " decoding_calls=" << avg.decoding_calls
+                  << " getOriginalData_calls=" << avg.get_original_data_calls
+                  << " avg_decode_per_query=" << avg.avg_decode_per_query
+                  << " avg_backtrack_hops_per_call=" << avg.avg_backtrack_hops_per_call
+                  << std::endl;
 
         csv << dataset << ','
             << algo << ','
@@ -189,10 +298,18 @@ void search_one_config(const std::string& dataset,
             << std::fixed << std::setprecision(4) << tls_ratio << ','
             << topk << ','
             << ef << ','
-            << std::setprecision(6) << recall << ','
-            << std::setprecision(6) << time_us << '\n';
+            << num_rounds << ','
+            << (enable_profiling ? 1 : 0) << ','
+            << std::setprecision(6) << avg.recall << ','
+            << std::setprecision(6) << avg.mean_latency_us << ','
+            << std::setprecision(2) << avg.p99_latency_us << ','
+            << std::setprecision(2) << avg.qps << ','
+            << avg.decoding_calls << ','
+            << avg.get_original_data_calls << ','
+            << std::setprecision(6) << avg.avg_decode_per_query << ','
+            << std::setprecision(6) << avg.avg_backtrack_hops_per_call << '\n';
 
-        if (recall >= 0.99) {
+        if (avg.recall >= 0.99) {
             break;
         }
     }
@@ -211,12 +328,14 @@ void dispatch_search(const std::string& dataset,
                      double tls_ratio,
                      size_t k,
                      const std::vector<size_t>& efs,
+                     bool enable_profiling,
+                     int num_rounds,
                      std::ofstream& csv) {
-    if (algo == "DeXOR") return search_one_config<codecs::DeXORCodecPolicy>(dataset, base_dir, algo, chain_max_length, use_cache, use_tls, tls_ratio, k, efs, csv);
-    if (algo == "Gorilla") return search_one_config<codecs::GorillaCodecPolicy>(dataset, base_dir, algo, chain_max_length, use_cache, use_tls, tls_ratio, k, efs, csv);
-    if (algo == "Elf") return search_one_config<codecs::ElfCodecPolicy>(dataset, base_dir, algo, chain_max_length, use_cache, use_tls, tls_ratio, k, efs, csv);
-    if (algo == "Camel") return search_one_config<codecs::CamelCodecPolicy>(dataset, base_dir, algo, chain_max_length, use_cache, use_tls, tls_ratio, k, efs, csv);
-    if (algo == "DeXORPlus") return search_one_config<codecs::DeXORPlusCodecPolicy>(dataset, base_dir, algo, chain_max_length, use_cache, use_tls, tls_ratio, k, efs, csv);
+    if (algo == "DeXOR") return search_one_config<codecs::DeXORCodecPolicy>(dataset, base_dir, algo, chain_max_length, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
+    if (algo == "Gorilla") return search_one_config<codecs::GorillaCodecPolicy>(dataset, base_dir, algo, chain_max_length, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
+    if (algo == "Elf") return search_one_config<codecs::ElfCodecPolicy>(dataset, base_dir, algo, chain_max_length, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
+    if (algo == "Camel") return search_one_config<codecs::CamelCodecPolicy>(dataset, base_dir, algo, chain_max_length, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
+    if (algo == "DeXORPlus") return search_one_config<codecs::DeXORPlusCodecPolicy>(dataset, base_dir, algo, chain_max_length, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
     throw std::runtime_error("Unknown algorithm: " + algo);
 }
 
@@ -224,6 +343,8 @@ int main(int argc, char** argv) {
     std::string base_dir = "../datasets/hdf5files/";
     std::string out_csv = "compressed_hnsw_ablation_search_results.csv";
     int threads = 32;
+    int num_rounds = 1;
+    bool enable_profiling = false;
     size_t k = 1;
 
     std::vector<std::string> datasets = {
@@ -255,6 +376,10 @@ int main(int argc, char** argv) {
             out_csv = argv[++i];
         } else if (arg == "--threads" && i + 1 < argc) {
             threads = std::stoi(argv[++i]);
+        } else if (arg == "--num_rounds" && i + 1 < argc) {
+            num_rounds = std::max(1, std::stoi(argv[++i]));
+        } else if (arg == "--enable_profiling" && i + 1 < argc) {
+            enable_profiling = std::stoi(argv[++i]) != 0;
         } else if (arg == "--k" && i + 1 < argc) {
             k = static_cast<size_t>(std::stoul(argv[++i]));
         } else if (arg == "--dataset" && i + 1 < argc) {
@@ -310,7 +435,9 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    csv << "Dataset,Algorithm,ChainMaxLength,UseCacheTop1PctByLevel,UseTwoLevelSearch,TlsRatio,K,ef,Recall,TimePerQuery(us)\n";
+    csv << "Dataset,Algorithm,ChainMaxLength,UseCacheTop1PctByLevel,UseTwoLevelSearch,TlsRatio,K,ef,"
+        << "Num_Rounds,Enable_Profiling,Recall,TimePerQuery(us),P99_Latency(us),QPS,"
+        << "Decoding_Calls,GetOriginalData_Calls,Avg_Decode_Per_Query,Avg_Backtrack_Hops_Per_Call\n";
 
     for (const auto& ds : datasets) {
         for (const auto& algo : algorithms) {
@@ -318,10 +445,10 @@ int main(int argc, char** argv) {
                 for (int cache_flag : cache_flags) {
                     for (int tls_flag : tls_flags) {
                         if (tls_flag == 0) {
-                            dispatch_search(ds, base_dir, algo, chain_max, cache_flag != 0, false, 0.0, k, efs, csv);
+                            dispatch_search(ds, base_dir, algo, chain_max, cache_flag != 0, false, 0.0, k, efs, enable_profiling, num_rounds, csv);
                         } else {
                             for (double ratio : tls_ratios) {
-                                dispatch_search(ds, base_dir, algo, chain_max, cache_flag != 0, true, ratio, k, efs, csv);
+                                dispatch_search(ds, base_dir, algo, chain_max, cache_flag != 0, true, ratio, k, efs, enable_profiling, num_rounds, csv);
                             }
                         }
                     }
