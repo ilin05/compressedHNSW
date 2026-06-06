@@ -92,6 +92,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_vq_recall examples/cpp/test_vq_recall.cpp)
     target_link_libraries(test_vq_recall faiss hnswlib OpenMP::OpenMP_CXX)
 
+    add_executable(test_quantization_recall_compression_ratio examples/cpp/test_quantization_recall_compression_ratio.cpp)
+    target_link_libraries(test_quantization_recall_compression_ratio faiss OpenMP::OpenMP_CXX)
+
     add_executable(test_build_bigann_faiss_hnsw_pq_sq examples/cpp/test_build_bigann_faiss_hnsw_pq_sq.cpp)
     target_link_libraries(test_build_bigann_faiss_hnsw_pq_sq faiss OpenMP::OpenMP_CXX)
 
