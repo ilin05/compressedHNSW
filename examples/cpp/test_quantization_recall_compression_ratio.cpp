@@ -86,6 +86,10 @@ static string clean_csv_field(string s) {
     return s;
 }
 
+static size_t min_training_points_for_pq(int code_bits) {
+    return static_cast<size_t>(39) * (static_cast<size_t>(1) << code_bits);
+}
+
 static double compute_recall(
         size_t qn,
         size_t gt_k,
@@ -155,16 +159,30 @@ static vector<TestConfig> make_configs_for_dim(
                 }
             } else if (method == "PQ") {
                 int code_bits = 0;
-                if (ratio == 2) code_bits = 16;
-                else if (ratio == 4) code_bits = 8;
-                else if (ratio == 8) code_bits = 4;
-                else if (ratio == 16) code_bits = 2;
+                size_t pq_m = 0;
+                if (ratio == 2) {
+                    code_bits = 16;
+                    pq_m = dim;
+                } else if (ratio == 4) {
+                    code_bits = 8;
+                    pq_m = dim;
+                } else if (ratio == 8) {
+                    code_bits = 8;
+                    pq_m = dim / 2;
+                } else if (ratio == 16) {
+                    code_bits = 8;
+                    pq_m = dim / 4;
+                }
 
                 if (code_bits == 0) {
                     configs.push_back({"PQ", ratio, 0, 0, faiss::ScalarQuantizer::QT_8bit, false,
                                        "unsupported PQ compression ratio"});
+                } else if (pq_m == 0 || dim % pq_m != 0) {
+                    configs.push_back({"PQ", ratio, static_cast<int>(pq_m), code_bits,
+                                       faiss::ScalarQuantizer::QT_8bit, false,
+                                       "PQ_M must be positive and divide the vector dimension"});
                 } else {
-                    configs.push_back({"PQ", ratio, static_cast<int>(dim), code_bits});
+                    configs.push_back({"PQ", ratio, static_cast<int>(pq_m), code_bits});
                 }
             }
         }
@@ -268,6 +286,18 @@ int main(int argc, char** argv) {
                 cout << "Skip " << cfg.method << " " << cfg.compression_ratio << "x: " << cfg.message << endl;
                 write_failure_row(csv, ds, cfg, k, cfg.message);
                 continue;
+            }
+            if (cfg.method == "PQ") {
+                const size_t min_train_points = min_training_points_for_pq(cfg.code_bits);
+                if (n < min_train_points) {
+                    std::ostringstream oss;
+                    oss << "skip PQ training because " << n << " training vectors are fewer than "
+                        << min_train_points << " required for code_bits=" << cfg.code_bits;
+                    cout << "Skip " << cfg.method << " " << cfg.compression_ratio << "x: "
+                         << oss.str() << endl;
+                    write_failure_row(csv, ds, cfg, k, oss.str());
+                    continue;
+                }
             }
 
             cout << "Build " << cfg.method << " ratio=" << cfg.compression_ratio
