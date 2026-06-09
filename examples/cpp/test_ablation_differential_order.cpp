@@ -219,29 +219,49 @@ struct Histogram {
     vector<size_t> counts;
 };
 
-Histogram build_histogram(const vector<double>& values, size_t num_bins = 100) {
+struct HistogramRange {
+    double vmin = 0.0;
+    double vmax = 0.0;
+};
+
+static void update_max_abs_residual(const vector<double>& values, double& max_abs) {
+    for (double v : values) {
+        max_abs = std::max(max_abs, std::abs(v));
+    }
+}
+
+HistogramRange build_shared_symmetric_range(const vector<double>& intra,
+                                            const vector<double>& id_order,
+                                            const vector<double>& graph) {
+    double max_abs = 0.0;
+    update_max_abs_residual(intra, max_abs);
+    update_max_abs_residual(id_order, max_abs);
+    update_max_abs_residual(graph, max_abs);
+
+    if (max_abs < 1e-10) {
+        max_abs = 0.1;
+    }
+
+    return {-max_abs, max_abs};
+}
+
+Histogram build_histogram(const vector<double>& values,
+                          const HistogramRange& range,
+                          size_t num_bins = 100) {
     Histogram h;
-    if (values.empty()) return h;
+    if (values.empty() || num_bins == 0) return h;
 
-    double vmin = *min_element(values.begin(), values.end());
-    double vmax = *max_element(values.begin(), values.end());
-
-    // Expand range slightly for edge values
-    double margin = (vmax - vmin) * 0.01;
-    if (margin < 1e-10) margin = 0.1;
-    vmin -= margin;
-    vmax += margin;
-
-    double bin_width = (vmax - vmin) / num_bins;
+    double bin_width = (range.vmax - range.vmin) / static_cast<double>(num_bins);
+    if (bin_width <= 0.0) return h;
     h.counts.resize(num_bins, 0);
     h.bin_centers.resize(num_bins);
 
     for (size_t i = 0; i < num_bins; ++i) {
-        h.bin_centers[i] = vmin + (i + 0.5) * bin_width;
+        h.bin_centers[i] = range.vmin + (i + 0.5) * bin_width;
     }
 
     for (double v : values) {
-        int idx = static_cast<int>((v - vmin) / bin_width);
+        int idx = static_cast<int>((v - range.vmin) / bin_width);
         if (idx < 0) idx = 0;
         if (idx >= static_cast<int>(num_bins)) idx = static_cast<int>(num_bins) - 1;
         h.counts[idx]++;
@@ -338,33 +358,15 @@ int main(int argc, char** argv) {
         cout << "\n=== Dataset: " << ds << "  N=" << N << "  d=" << d << " ===" << endl;
 
         // -----------------------------------------------------------------
-        // 1) Intra-Vector residuals (independent of codec algorithm)
+        // Residuals are computed first and histogrammed later with a shared
+        // dataset-level range, so BinCenter is directly comparable.
         // -----------------------------------------------------------------
-        {
-            vector<double> residuals = compute_residuals_intra(data, N, d);
-            Histogram hist = build_histogram(residuals, hist_bins);
-            for (size_t b = 0; b < hist.bin_centers.size(); ++b) {
-                csv_residual << ds << ",IntraVector,"
-                             << hist.bin_centers[b] << ","
-                             << hist.counts[b] << "\n";
-            }
-            cout << "  IntraVector residuals: " << residuals.size()
-                 << " values, range [" << hist.bin_centers.front() - (hist.bin_centers[1]-hist.bin_centers[0])/2
-                 << ", " << hist.bin_centers.back() + (hist.bin_centers[1]-hist.bin_centers[0])/2
-                 << "]" << endl;
-        }
+        vector<double> residuals_intra = compute_residuals_intra(data, N, d);
+        vector<double> residuals_id_order = compute_residuals_id_order(data, N, d);
+        vector<double> residuals_graph;
 
-        // 2) ID-Order residuals (independent of codec algorithm)
-        {
-            vector<double> residuals = compute_residuals_id_order(data, N, d);
-            Histogram hist = build_histogram(residuals, hist_bins);
-            for (size_t b = 0; b < hist.bin_centers.size(); ++b) {
-                csv_residual << ds << ",IDOrder,"
-                             << hist.bin_centers[b] << ","
-                             << hist.counts[b] << "\n";
-            }
-            cout << "  IDOrder residuals: " << residuals.size() << " values" << endl;
-        }
+        cout << "  IntraVector residuals: " << residuals_intra.size() << " values" << endl;
+        cout << "  IDOrder residuals: " << residuals_id_order.size() << " values" << endl;
 
         // -----------------------------------------------------------------
         // Compression ratios for Intra-Vector and ID-Order
@@ -439,14 +441,28 @@ int main(int argc, char** argv) {
 
         // Graph-Guided residuals (use prenodes from DeXOR build as representative)
         if (!graph_prenodes.empty()) {
-            vector<double> residuals = compute_residuals_graph(data, N, d, graph_prenodes);
-            Histogram hist = build_histogram(residuals, hist_bins);
+            residuals_graph = compute_residuals_graph(data, N, d, graph_prenodes);
+            cout << "  GraphGuided residuals: " << residuals_graph.size() << " values" << endl;
+        }
+
+        HistogramRange shared_range = build_shared_symmetric_range(
+            residuals_intra, residuals_id_order, residuals_graph);
+        cout << "  Shared residual histogram range: [" << shared_range.vmin
+             << ", " << shared_range.vmax << "] with " << hist_bins << " bins" << endl;
+
+        auto write_residual_histogram = [&](const string& strategy, const vector<double>& residuals) {
+            Histogram hist = build_histogram(residuals, shared_range, hist_bins);
             for (size_t b = 0; b < hist.bin_centers.size(); ++b) {
-                csv_residual << ds << ",GraphGuided,"
+                csv_residual << ds << "," << strategy << ","
                              << hist.bin_centers[b] << ","
                              << hist.counts[b] << "\n";
             }
-            cout << "  GraphGuided residuals: " << residuals.size() << " values" << endl;
+        };
+
+        write_residual_histogram("IntraVector", residuals_intra);
+        write_residual_histogram("IDOrder", residuals_id_order);
+        if (!residuals_graph.empty()) {
+            write_residual_histogram("GraphGuided", residuals_graph);
         }
 
         delete[] data;
