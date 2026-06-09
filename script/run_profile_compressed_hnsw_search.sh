@@ -8,7 +8,6 @@ set -e
 
 DATASET=${1:-sift-128-euclidean}
 ALGO=${2:-DeXOR}
-EF=${3:-100}
 K=${4:-10}
 
 echo "[Profile] compressed HNSW retrieval bottleneck analysis"
@@ -22,7 +21,6 @@ echo "dataset=${DATASET}, algorithm=${ALGO}, ef=${EF}, k=${K}"
   --use_cache 0 \
   --use_tls 0 \
   --tls_ratio 0.0 \
-  --ef "${EF}" \
   --k "${K}" \
   --output_csv "compressed_hnsw_profile_${DATASET}_${ALGO}.csv"
 

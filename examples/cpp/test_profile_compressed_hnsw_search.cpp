@@ -152,7 +152,7 @@ int run_profile(const std::string& dataset,
                 bool use_tls,
                 double tls_ratio,
                 size_t k,
-                size_t ef,
+                const std::vector<size_t>& efs,
                 const std::string& out_csv) {
     const std::string query_file = base_dir + dataset + "_test.fvecs";
     const std::string gt_file = base_dir + dataset + "_neighbors.ivecs";
@@ -195,63 +195,8 @@ int run_profile(const std::string& dataset,
     index->setUseTls(use_tls);
     index->setTlsRatio(tls_ratio);
     index->setProfilingMetrics(true);
-    index->setEf(ef);
 
     const size_t topk = has_gt ? std::min(k, gt_dim) : k;
-
-    index->resetProfilingMetrics();
-    StopW timer;
-
-    size_t correct = 0;
-    for (size_t i = 0; i < qsize; ++i) {
-        auto result = index->searchKnn(queries + i * qdim, topk);
-
-        if (has_gt) {
-            std::unordered_set<labeltype> gt_set;
-            for (size_t j = 0; j < topk; ++j) {
-                gt_set.insert(gt[i * gt_dim + j]);
-            }
-            while (!result.empty()) {
-                if (gt_set.find(result.top().second) != gt_set.end()) {
-                    ++correct;
-                }
-                result.pop();
-            }
-        }
-    }
-
-    const double total_us = timer.elapsed_us();
-    
-    // Disable metrics collection after search
-    enable_metrics = false;
-    
-    // Get distance computation metrics from TimedL2SpaceDouble
-    const double dist_us = static_cast<double>(distance_time_us.load());
-    const long dist_calls = distance_calls.load();
-    
-    const double dec_us = static_cast<double>(index->getTotalTimeDecoding());
-    const double get_raw_us = static_cast<double>(index->getTotalTimeGetOriginalData());
-    const double dist_share = (total_us > 0.0) ? (dist_us / total_us * 100.0) : 0.0;
-    const double dec_share = (total_us > 0.0) ? (dec_us / total_us * 100.0) : 0.0;
-
-    const long dec_calls = index->getDecodingCallCount();
-    const long get_raw_calls = index->getOriginalDataCallCount();
-    const long backtrack_hops = index->getOriginalDataBacktrackHops();
-
-    const double avg_total_us_per_query = total_us / static_cast<double>(qsize);
-    const double avg_dist_us_per_query = dist_us / static_cast<double>(qsize);
-    const double avg_dec_us_per_query = dec_us / static_cast<double>(qsize);
-    const double avg_get_raw_us_per_query = get_raw_us / static_cast<double>(qsize);
-    const double avg_dec_calls_per_query = static_cast<double>(dec_calls) / static_cast<double>(qsize);
-    const double avg_get_raw_calls_per_query = static_cast<double>(get_raw_calls) / static_cast<double>(qsize);
-    const double avg_backtrack_per_get = (get_raw_calls > 0)
-        ? static_cast<double>(backtrack_hops) / static_cast<double>(get_raw_calls)
-        : 0.0;
-    const double avg_backtrack_per_query = static_cast<double>(backtrack_hops) / static_cast<double>(qsize);
-
-    const double recall = (has_gt && topk > 0)
-        ? static_cast<double>(correct) / static_cast<double>(qsize * topk)
-        : -1.0;
 
     std::ofstream csv(out_csv);
     if (!csv.is_open()) {
@@ -267,53 +212,110 @@ int run_profile(const std::string& dataset,
         << "DistanceTimeShare(%),DecodingTimeShare(%),DistanceCalls,DecodingCalls,GetOriginalDataCalls,"
         << "AvgDecodingCallsPerQuery,AvgGetOriginalDataCallsPerQuery,BacktrackHops,AvgBacktrackPerGet,AvgBacktrackPerQuery\n";
 
-    csv << dataset << ','
-        << algo << ','
-        << chain_max_length << ','
-        << (use_cache ? 1 : 0) << ','
-        << (use_tls ? 1 : 0) << ','
-        << std::fixed << std::setprecision(4) << tls_ratio << ','
-        << topk << ','
-        << ef << ','
-        << qsize << ','
-        << std::setprecision(6) << recall << ','
-        << std::setprecision(6) << avg_total_us_per_query << ','
-        << avg_dist_us_per_query << ','
-        << avg_dec_us_per_query << ','
-        << avg_get_raw_us_per_query << ','
-        << dist_share << ','
-        << dec_share << ','
-        << dist_calls << ','
-        << dec_calls << ','
-        << get_raw_calls << ','
-        << avg_dec_calls_per_query << ','
-        << avg_get_raw_calls_per_query << ','
-        << backtrack_hops << ','
-        << avg_backtrack_per_get << ','
-        << avg_backtrack_per_query << '\n';
+    for (size_t ef : efs) {
+        distance_calls.store(0);
+        distance_time_us.store(0);
+        enable_metrics = true;
+        index->setEf(ef);
+        index->resetProfilingMetrics();
+        StopW timer;
+
+        size_t correct = 0;
+        for (size_t i = 0; i < qsize; ++i) {
+            auto result = index->searchKnn(queries + i * qdim, topk);
+
+            if (has_gt) {
+                std::unordered_set<labeltype> gt_set;
+                for (size_t j = 0; j < topk; ++j) {
+                    gt_set.insert(gt[i * gt_dim + j]);
+                }
+                while (!result.empty()) {
+                    if (gt_set.find(result.top().second) != gt_set.end()) {
+                        ++correct;
+                    }
+                    result.pop();
+                }
+            }
+        }
+
+        const double total_us = timer.elapsed_us();
+        enable_metrics = false;
+
+        const double dist_us = static_cast<double>(distance_time_us.load());
+        const long dist_calls = distance_calls.load();
+
+        const double dec_us = static_cast<double>(index->getTotalTimeDecoding());
+        const double get_raw_us = static_cast<double>(index->getTotalTimeGetOriginalData());
+        const double dist_share = (total_us > 0.0) ? (dist_us / total_us * 100.0) : 0.0;
+        const double dec_share = (total_us > 0.0) ? (dec_us / total_us * 100.0) : 0.0;
+
+        const long dec_calls = index->getDecodingCallCount();
+        const long get_raw_calls = index->getOriginalDataCallCount();
+        const long backtrack_hops = index->getOriginalDataBacktrackHops();
+
+        const double avg_total_us_per_query = total_us / static_cast<double>(qsize);
+        const double avg_dist_us_per_query = dist_us / static_cast<double>(qsize);
+        const double avg_dec_us_per_query = dec_us / static_cast<double>(qsize);
+        const double avg_get_raw_us_per_query = get_raw_us / static_cast<double>(qsize);
+        const double avg_dec_calls_per_query = static_cast<double>(dec_calls) / static_cast<double>(qsize);
+        const double avg_get_raw_calls_per_query = static_cast<double>(get_raw_calls) / static_cast<double>(qsize);
+        const double avg_backtrack_per_get = (get_raw_calls > 0)
+            ? static_cast<double>(backtrack_hops) / static_cast<double>(get_raw_calls)
+            : 0.0;
+        const double avg_backtrack_per_query = static_cast<double>(backtrack_hops) / static_cast<double>(qsize);
+
+        const double recall = (has_gt && topk > 0)
+            ? static_cast<double>(correct) / static_cast<double>(qsize * topk)
+            : -1.0;
+
+        csv << dataset << ','
+            << algo << ','
+            << chain_max_length << ','
+            << (use_cache ? 1 : 0) << ','
+            << (use_tls ? 1 : 0) << ','
+            << std::fixed << std::setprecision(4) << tls_ratio << ','
+            << topk << ','
+            << ef << ','
+            << qsize << ','
+            << std::setprecision(6) << recall << ','
+            << std::setprecision(6) << avg_total_us_per_query << ','
+            << avg_dist_us_per_query << ','
+            << avg_dec_us_per_query << ','
+            << avg_get_raw_us_per_query << ','
+            << dist_share << ','
+            << dec_share << ','
+            << dist_calls << ','
+            << dec_calls << ','
+            << get_raw_calls << ','
+            << avg_dec_calls_per_query << ','
+            << avg_get_raw_calls_per_query << ','
+            << backtrack_hops << ','
+            << avg_backtrack_per_get << ','
+            << avg_backtrack_per_query << '\n';
+
+        std::cout << "\n[Profile Summary]" << std::endl;
+        std::cout << "dataset=" << dataset << ", algo=" << algo
+                  << ", chain_max=" << chain_max_length
+                  << ", use_cache=" << (use_cache ? 1 : 0)
+                  << ", use_tls=" << (use_tls ? 1 : 0)
+                  << ", ef=" << ef
+                  << ", k=" << topk << std::endl;
+        if (has_gt) {
+            std::cout << "recall@" << topk << "=" << std::fixed << std::setprecision(6) << recall << std::endl;
+        }
+        std::cout << "avg_total_us/query=" << std::fixed << std::setprecision(4) << avg_total_us_per_query << std::endl;
+        std::cout << "avg_distance_us/query=" << avg_dist_us_per_query
+                  << " (" << dist_share << "%)" << std::endl;
+        std::cout << "avg_decoding_us/query=" << avg_dec_us_per_query
+                  << " (" << dec_share << "%)" << std::endl;
+        std::cout << "avg_getOriginalData_us/query=" << avg_get_raw_us_per_query << std::endl;
+        std::cout << "avg_decoding_calls/query=" << avg_dec_calls_per_query << std::endl;
+        std::cout << "avg_getOriginalData_calls/query=" << avg_get_raw_calls_per_query << std::endl;
+        std::cout << "avg_backtrack_per_getOriginalData=" << avg_backtrack_per_get << std::endl;
+        std::cout << "avg_backtrack_per_query=" << avg_backtrack_per_query << std::endl;
+    }
 
     csv.close();
-
-    std::cout << "\n[Profile Summary]" << std::endl;
-    std::cout << "dataset=" << dataset << ", algo=" << algo
-              << ", chain_max=" << chain_max_length
-              << ", use_cache=" << (use_cache ? 1 : 0)
-              << ", use_tls=" << (use_tls ? 1 : 0)
-              << ", ef=" << ef
-              << ", k=" << topk << std::endl;
-    if (has_gt) {
-        std::cout << "recall@" << topk << "=" << std::fixed << std::setprecision(6) << recall << std::endl;
-    }
-    std::cout << "avg_total_us/query=" << std::fixed << std::setprecision(4) << avg_total_us_per_query << std::endl;
-    std::cout << "avg_distance_us/query=" << avg_dist_us_per_query
-              << " (" << dist_share << "%)" << std::endl;
-    std::cout << "avg_decoding_us/query=" << avg_dec_us_per_query
-              << " (" << dec_share << "%)" << std::endl;
-    std::cout << "avg_getOriginalData_us/query=" << avg_get_raw_us_per_query << std::endl;
-    std::cout << "avg_decoding_calls/query=" << avg_dec_calls_per_query << std::endl;
-    std::cout << "avg_getOriginalData_calls/query=" << avg_get_raw_calls_per_query << std::endl;
-    std::cout << "avg_backtrack_per_getOriginalData=" << avg_backtrack_per_get << std::endl;
-    std::cout << "avg_backtrack_per_query=" << avg_backtrack_per_query << std::endl;
     std::cout << "saved_csv=" << out_csv << std::endl;
 
     delete[] queries;
@@ -334,7 +336,7 @@ int main(int argc, char** argv) {
     int use_tls = 0;
     double tls_ratio = 0.0;
     size_t k = 10;
-    size_t ef = 100;
+    std::vector<size_t> efs = {10, 20, 40, 80, 120, 200, 400, 600, 800, 1000};
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -353,7 +355,15 @@ int main(int argc, char** argv) {
         } else if (arg == "--k" && i + 1 < argc) {
             k = static_cast<size_t>(std::stoul(argv[++i]));
         } else if (arg == "--ef" && i + 1 < argc) {
-            ef = static_cast<size_t>(std::stoul(argv[++i]));
+            efs.clear();
+            while (i + 1 < argc && argv[i + 1][0] != '-') {
+                efs.push_back(static_cast<size_t>(std::stoul(argv[++i])));
+            }
+        } else if (arg == "--efs" && i + 1 < argc) {
+            efs.clear();
+            while (i + 1 < argc && argv[i + 1][0] != '-') {
+                efs.push_back(static_cast<size_t>(std::stoul(argv[++i])));
+            }
         } else if (arg == "--use_cache" && i + 1 < argc) {
             use_cache = std::stoi(argv[++i]);
         } else if (arg == "--use_tls" && i + 1 < argc) {
@@ -370,22 +380,27 @@ int main(int argc, char** argv) {
         base_dir += '/';
     }
 
+    if (efs.empty()) {
+        std::cerr << "No ef values specified." << std::endl;
+        return -1;
+    }
+
     omp_set_num_threads(threads);
 
     if (algorithm == "DeXOR") {
-        return run_profile<codecs::DeXORCodecPolicy>(dataset, base_dir, algorithm, chain_max, use_cache != 0, use_tls != 0, tls_ratio, k, ef, out_csv);
+        return run_profile<codecs::DeXORCodecPolicy>(dataset, base_dir, algorithm, chain_max, use_cache != 0, use_tls != 0, tls_ratio, k, efs, out_csv);
     }
     if (algorithm == "Gorilla") {
-        return run_profile<codecs::GorillaCodecPolicy>(dataset, base_dir, algorithm, chain_max, use_cache != 0, use_tls != 0, tls_ratio, k, ef, out_csv);
+        return run_profile<codecs::GorillaCodecPolicy>(dataset, base_dir, algorithm, chain_max, use_cache != 0, use_tls != 0, tls_ratio, k, efs, out_csv);
     }
     if (algorithm == "Elf") {
-        return run_profile<codecs::ElfCodecPolicy>(dataset, base_dir, algorithm, chain_max, use_cache != 0, use_tls != 0, tls_ratio, k, ef, out_csv);
+        return run_profile<codecs::ElfCodecPolicy>(dataset, base_dir, algorithm, chain_max, use_cache != 0, use_tls != 0, tls_ratio, k, efs, out_csv);
     }
     if (algorithm == "Camel") {
-        return run_profile<codecs::CamelCodecPolicy>(dataset, base_dir, algorithm, chain_max, use_cache != 0, use_tls != 0, tls_ratio, k, ef, out_csv);
+        return run_profile<codecs::CamelCodecPolicy>(dataset, base_dir, algorithm, chain_max, use_cache != 0, use_tls != 0, tls_ratio, k, efs, out_csv);
     }
     if (algorithm == "DeXORPlus") {
-        return run_profile<codecs::DeXORPlusCodecPolicy>(dataset, base_dir, algorithm, chain_max, use_cache != 0, use_tls != 0, tls_ratio, k, ef, out_csv);
+        return run_profile<codecs::DeXORPlusCodecPolicy>(dataset, base_dir, algorithm, chain_max, use_cache != 0, use_tls != 0, tls_ratio, k, efs, out_csv);
     }
 
     std::cerr << "Unknown algorithm: " << algorithm << std::endl;
