@@ -213,6 +213,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_search_compressed_hnsw_ablation examples/cpp/test_search_compressed_hnsw_ablation.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_search_compressed_hnsw_ablation hnswlib)
 
+    add_executable(test_perf_breakdown_hnsw examples/cpp/test_perf_breakdown_hnsw.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_perf_breakdown_hnsw hnswlib)
+
     add_executable(test_profile_compressed_hnsw_search examples/cpp/test_profile_compressed_hnsw_search.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_profile_compressed_hnsw_search hnswlib)
 
@@ -308,6 +311,7 @@ if(HNSWLIB_EXAMPLES)
       test_search_compressed_hnsw
       test_build_compressed_hnsw_ablation
       test_search_compressed_hnsw_ablation
+      test_perf_breakdown_hnsw
       test_build_bigann_hnswalp_pq
       test_search_bigann_hnswalp_pq
       test_build_bigann_hnswdexor_pq
