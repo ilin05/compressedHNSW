@@ -46,7 +46,7 @@ for mode in "${MODES[@]}"; do
   stat_csv="${OUT_DIR}/${mode}_perf_stat.csv"
   log_file="${OUT_DIR}/${mode}.log"
 
-  OMP_NUM_THREADS=1 perf stat \
+  if ! OMP_NUM_THREADS=1 perf stat \
     -x, \
     -o "${stat_csv}" \
     -e "${PERF_EVENTS}" \
@@ -60,7 +60,12 @@ for mode in "${MODES[@]}"; do
       --tls_ratio "${TLS_RATIO}" \
       --output_csv "${SUMMARY_CSV}" \
       --append "${append}" \
-      > "${log_file}" 2>&1
+      > "${log_file}" 2>&1; then
+    echo "perf stat failed for mode=${mode}. Program/perf output:"
+    cat "${log_file}" || true
+    echo "Perf stat output, if any: ${stat_csv}"
+    exit 1
+  fi
 
   append=1
   cat "${log_file}"
@@ -73,7 +78,7 @@ for mode in "${MODES[@]}"; do
   report_file="${OUT_DIR}/${mode}.perf.report.txt"
   record_log="${OUT_DIR}/${mode}.perf_record.log"
 
-  OMP_NUM_THREADS=1 perf record \
+  if ! OMP_NUM_THREADS=1 perf record \
     -F 99 \
     --call-graph dwarf,16384 \
     -o "${data_file}" \
@@ -86,14 +91,21 @@ for mode in "${MODES[@]}"; do
       --num_rounds "${NUM_ROUNDS}" \
       --tls_ratio "${TLS_RATIO}" \
       --write_csv 0 \
-      > "${record_log}" 2>&1
+      > "${record_log}" 2>&1; then
+    echo "perf record failed for mode=${mode}. Program/perf output:"
+    cat "${record_log}" || true
+    exit 1
+  fi
 
-  perf report \
+  if ! perf report \
     --stdio \
     --sort comm,dso,symbol \
     --percent-limit 0.5 \
     -i "${data_file}" \
-    > "${report_file}"
+    > "${report_file}"; then
+    echo "perf report failed for mode=${mode}, data=${data_file}"
+    exit 1
+  fi
 
   echo "Saved ${data_file}"
   echo "Saved ${report_file}"
