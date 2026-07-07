@@ -358,7 +358,6 @@ static void profile_differential_lvc_impl(const std::string& dataset,
 static std::string lvc_variant_from_path(const std::string& path) {
     const std::string name = filename_only(path);
     if (name.find("hnswalp") != std::string::npos) return "ALP";
-    if (name.find("DeXORPlus") != std::string::npos) return "DeXORPlus";
     if (name.find("DeXOR") != std::string::npos || name.find("hnswdexor") != std::string::npos) return "DeXOR";
     if (name.find("Gorilla") != std::string::npos) return "Gorilla";
     if (name.find("Elf") != std::string::npos) return "Elf";
@@ -455,9 +454,6 @@ static void profile_differential_lvc(const std::string& dataset,
     } else if (actual_variant == "Camel") {
         profile_differential_lvc_impl<codecs::CamelCodecPolicy>(
             dataset, actual_variant, path, dim, cache_ratio_percent, rows);
-    } else if (actual_variant == "DeXORPlus") {
-        profile_differential_lvc_impl<codecs::DeXORPlusCodecPolicy>(
-            dataset, actual_variant, path, dim, cache_ratio_percent, rows);
     } else {
         throw std::runtime_error("Unsupported LVC codec variant: " + actual_variant);
     }
@@ -467,7 +463,7 @@ static std::vector<std::string> lvc_candidate_names(const std::string& dataset) 
     std::vector<std::string> names;
     names.push_back(dataset + "_train.fvecs_hnswalp_simplified_pq.bin");
     names.push_back(dataset + "_hnswalp_pq.bin");
-    const std::vector<std::string> algos = {"DeXOR", "DeXORPlus", "Gorilla", "Elf", "Camel"};
+    const std::vector<std::string> algos = {"DeXOR", "Gorilla", "Elf", "Camel"};
     const std::vector<std::string> chain_tags = {
         "ch2", "ch3", "ch4", "ch5", "ch6", "ch7", "ch8", "chunlim"
     };
