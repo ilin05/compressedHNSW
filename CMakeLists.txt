@@ -262,6 +262,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_build_index_size_comparison examples/cpp/test_build_index_size_comparison.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_build_index_size_comparison hnswlib faiss OpenMP::OpenMP_CXX)
 
+    add_executable(test_index_storage_breakdown examples/cpp/test_index_storage_breakdown.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_index_storage_breakdown hnswlib faiss OpenMP::OpenMP_CXX)
+
     add_executable(test_build_hnsw_float examples/cpp/test_build_hnsw_float.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_build_hnsw_float hnswlib)
 
