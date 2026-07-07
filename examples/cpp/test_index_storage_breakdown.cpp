@@ -37,6 +37,14 @@ struct ComponentRow {
     std::string note;
 };
 
+struct LvcCandidateRow {
+    std::string dataset;
+    std::string variant;
+    std::string index_file;
+    uint64_t bytes = 0;
+    bool selected = false;
+};
+
 static std::string join_path(const std::string& dir, const std::string& name) {
     if (dir.empty() || dir == ".") return name;
     const char back = dir.back();
@@ -469,22 +477,43 @@ static std::vector<std::string> lvc_candidate_names(const std::string& dataset) 
         }
         names.push_back(dataset + "_train.fvecs_" + algo + "_pq.bin");
     }
-    names.push_back(dataset + "_train.fvecs_hnswcableann_pq.bin");
     names.push_back(dataset + "_hnswdexor_pq.bin");
     return names;
 }
 
-static std::string smallest_existing_file(const std::string& index_dir,
-                                          const std::vector<std::string>& names) {
-    std::string best;
-    uint64_t best_size = 0;
-    for (const auto& name : names) {
+static std::vector<LvcCandidateRow> collect_lvc_candidates(
+        const std::string& dataset,
+        const std::string& index_dir) {
+    std::vector<LvcCandidateRow> candidates;
+    for (const auto& name : lvc_candidate_names(dataset)) {
         std::string path = join_path(index_dir, name);
         if (!exists_file(path)) continue;
-        uint64_t sz = file_size_bytes(path);
-        if (best.empty() || sz < best_size) {
-            best = path;
-            best_size = sz;
+        LvcCandidateRow row;
+        row.dataset = dataset;
+        row.variant = lvc_variant_from_path(path);
+        row.index_file = filename_only(path);
+        row.bytes = file_size_bytes(path);
+        if (row.variant != "Unknown") {
+            candidates.push_back(std::move(row));
+        }
+    }
+    std::sort(candidates.begin(), candidates.end(), [](const auto& a, const auto& b) {
+        return a.bytes < b.bytes;
+    });
+    if (!candidates.empty()) {
+        candidates.front().selected = true;
+    }
+    return candidates;
+}
+
+static std::string selected_lvc_path_from_candidates(
+        const std::string& index_dir,
+        const std::vector<LvcCandidateRow>& candidates) {
+    std::string best;
+    for (const auto& candidate : candidates) {
+        if (candidate.selected) {
+            best = join_path(index_dir, candidate.index_file);
+            break;
         }
     }
     return best;
@@ -512,10 +541,29 @@ static void write_csv(const std::string& path, const std::vector<ComponentRow>& 
     }
 }
 
+static void write_lvc_overview_csv(const std::string& path,
+                                   const std::vector<LvcCandidateRow>& rows) {
+    std::ofstream out(path);
+    if (!out) {
+        throw std::runtime_error("Cannot open LVC overview CSV: " + path);
+    }
+    out << "Dataset,Variant,IndexFile,Bytes,GiB,Selected\n";
+    out << std::fixed << std::setprecision(6);
+    for (const auto& r : rows) {
+        out << r.dataset << ','
+            << r.variant << ','
+            << r.index_file << ','
+            << r.bytes << ','
+            << static_cast<double>(r.bytes) / (1024.0 * 1024.0 * 1024.0) << ','
+            << (r.selected ? 1 : 0) << '\n';
+    }
+}
+
 int main(int argc, char** argv) {
     std::string index_dir = ".";
     std::string base_dir = "../datasets/hdf5files";
     std::string output_csv = "index_storage_breakdown.csv";
+    std::string lvc_overview_csv = "lvc_codec_index_size_overview.csv";
     size_t diff_cache_ratio_percent = 1;
     std::vector<std::string> datasets = {
         "deep-image-96-angular",
@@ -533,6 +581,8 @@ int main(int argc, char** argv) {
             base_dir = argv[++i];
         } else if (arg == "--output_csv" && i + 1 < argc) {
             output_csv = argv[++i];
+        } else if (arg == "--lvc_overview_csv" && i + 1 < argc) {
+            lvc_overview_csv = argv[++i];
         } else if (arg == "--diff_cache_percent" && i + 1 < argc) {
             diff_cache_ratio_percent = static_cast<size_t>(std::stoull(argv[++i]));
         } else if (arg == "--dataset" && i + 1 < argc) {
@@ -544,6 +594,7 @@ int main(int argc, char** argv) {
     }
 
     std::vector<ComponentRow> rows;
+    std::vector<LvcCandidateRow> lvc_overview_rows;
     for (const auto& dataset : datasets) {
         const size_t dim = read_fvecs_dim_or_infer(base_dir, dataset);
         std::cout << "\n[Storage Breakdown] dataset=" << dataset
@@ -563,13 +614,7 @@ int main(int argc, char** argv) {
 
         const std::string pq_path = first_existing(index_dir, {
             dataset + "_train.fvecs_HNSWPQ_1.bin",
-            dataset + "_HNSWPQ_1.bin",
-            dataset + "_train.fvecs_HNSWPQ_2.bin",
-            dataset + "_HNSWPQ_2.bin",
-            dataset + "_train.fvecs_HNSWPQ_4.bin",
-            dataset + "_HNSWPQ_4.bin",
-            dataset + "_train.fvecs_HNSWPQ_8.bin",
-            dataset + "_HNSWPQ_8.bin"
+            dataset + "_HNSWPQ_1.bin"
         });
         if (!pq_path.empty()) {
             std::cout << "  HNSW+PQ: " << pq_path << std::endl;
@@ -581,8 +626,6 @@ int main(int argc, char** argv) {
         }
 
         const std::string sq_path = first_existing(index_dir, {
-            dataset + "_train.fvecs_HNSWSQ_4.bin",
-            dataset + "_HNSWSQ_4.bin",
             dataset + "_train.fvecs_HNSWSQ_8.bin",
             dataset + "_HNSWSQ_8.bin"
         });
@@ -595,7 +638,17 @@ int main(int argc, char** argv) {
             std::cerr << "  [skip] HNSW+SQ index not found for " << dataset << std::endl;
         }
 
-        const std::string lvc_path = smallest_existing_file(index_dir, lvc_candidate_names(dataset));
+        auto lvc_candidates = collect_lvc_candidates(dataset, index_dir);
+        if (!lvc_candidates.empty()) {
+            std::cout << "  LVC codec size overview:" << std::endl;
+            for (const auto& c : lvc_candidates) {
+                std::cout << "    " << (c.selected ? "* " : "  ")
+                          << c.variant << " " << c.index_file
+                          << " " << c.bytes << " bytes" << std::endl;
+                lvc_overview_rows.push_back(c);
+            }
+        }
+        const std::string lvc_path = selected_lvc_path_from_candidates(index_dir, lvc_candidates);
         if (!lvc_path.empty()) {
             const std::string variant = lvc_variant_from_path(lvc_path);
             std::cout << "  LVC(" << variant << "): " << lvc_path << std::endl;
@@ -611,6 +664,8 @@ int main(int argc, char** argv) {
     }
 
     write_csv(output_csv, rows);
+    write_lvc_overview_csv(lvc_overview_csv, lvc_overview_rows);
     std::cout << "\nSaved storage breakdown CSV: " << output_csv << std::endl;
+    std::cout << "Saved LVC codec overview CSV: " << lvc_overview_csv << std::endl;
     return 0;
 }
