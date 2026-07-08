@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <numeric>
 #include <vector>
+#include <cstdint>
 #include "../examples/utils/memory_stream_reader.h"
 #include "../examples/utils/memory_stream_writer.h"
 
@@ -107,6 +108,47 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
     bool use_tls_ = false;
     double tls_ratio_ = 0.2;
     bool enable_profiling_metrics_ = false;
+    bool enable_tls_retention_diagnostic_ = false;
+
+    struct TLSRetentionStats {
+        uint64_t expansion_pools = 0;
+        uint64_t pool_candidates = 0;
+        uint64_t shortlisted_candidates = 0;
+        uint64_t top1_retained = 0;
+        uint64_t top5_total = 0;
+        uint64_t top5_retained = 0;
+        uint64_t exact_admissible_total = 0;
+        uint64_t exact_admissible_retained = 0;
+
+        double decoded_fraction() const {
+            return pool_candidates == 0 ? 0.0 :
+                static_cast<double>(shortlisted_candidates) / static_cast<double>(pool_candidates);
+        }
+
+        double top1_retention() const {
+            return expansion_pools == 0 ? 0.0 :
+                static_cast<double>(top1_retained) / static_cast<double>(expansion_pools);
+        }
+
+        double top5_retention() const {
+            return top5_total == 0 ? 0.0 :
+                static_cast<double>(top5_retained) / static_cast<double>(top5_total);
+        }
+
+        double exact_admissible_retention() const {
+            return exact_admissible_total == 0 ? 0.0 :
+                static_cast<double>(exact_admissible_retained) / static_cast<double>(exact_admissible_total);
+        }
+    };
+
+    mutable std::atomic<uint64_t> tls_diag_expansion_pools_{0};
+    mutable std::atomic<uint64_t> tls_diag_pool_candidates_{0};
+    mutable std::atomic<uint64_t> tls_diag_shortlisted_candidates_{0};
+    mutable std::atomic<uint64_t> tls_diag_top1_retained_{0};
+    mutable std::atomic<uint64_t> tls_diag_top5_total_{0};
+    mutable std::atomic<uint64_t> tls_diag_top5_retained_{0};
+    mutable std::atomic<uint64_t> tls_diag_exact_admissible_total_{0};
+    mutable std::atomic<uint64_t> tls_diag_exact_admissible_retained_{0};
 
     // Helper to get squared L2 distance between two sub-vectors
     inline float dist_l2_sq(const float* a, const float* b, size_t d) const {
@@ -522,7 +564,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         return (char*)(data_level0_memory_.data() + internal_id * size_data_per_element_ + offsetData_);
     }
 
-    std::vector<dist_t> getOriginalDataByInternalId(tableint internal_id, bool collect_metrics = false) const {
+    std::vector<dist_t> getOriginalDataByInternalId(tableint internal_id, bool collect_metrics = false, bool suppress_metrics = false) const {
         size_t dim = *((size_t *) dist_func_param_);
         std::vector<dist_t> result(dim);
 
@@ -541,13 +583,13 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         if (uncompressed_mask_[internal_id]) {
              const float* data_ptr = reinterpret_cast<const float*>(data_level0_memory_.data() + start + offset);
              for(size_t i=0; i<dim; ++i) result[i] = static_cast<dist_t>(data_ptr[i]);
-             if(collect_metrics || enable_profiling_metrics_) {
+             if((collect_metrics || enable_profiling_metrics_) && !suppress_metrics) {
                 get_original_data_call_count++;
              }
         } else {
             utils::MemoryStreamReader reader((const unsigned char*)(data_level0_memory_.data() + start + offset));
             
-            if (collect_metrics || enable_profiling_metrics_) {
+            if ((collect_metrics || enable_profiling_metrics_) && !suppress_metrics) {
                 auto start_time = std::chrono::high_resolution_clock::now();
                 alp_decode_vector(reader, result);
                 auto end_time = std::chrono::high_resolution_clock::now();
@@ -795,6 +837,58 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                 std::partial_sort(approx_candidates.begin(), 
                                   approx_candidates.begin() + candidates_to_check, 
                                   approx_candidates.end());
+
+                if (enable_tls_retention_diagnostic_) {
+                    std::unordered_set<tableint> shortlisted;
+                    shortlisted.reserve(candidates_to_check * 2 + 1);
+                    for (size_t i = 0; i < candidates_to_check; ++i) {
+                        shortlisted.insert(approx_candidates[i].second);
+                    }
+
+                    std::vector<std::pair<dist_t, tableint>> exact_candidates;
+                    exact_candidates.reserve(approx_candidates.size());
+                    uint64_t admissible_total = 0;
+                    uint64_t admissible_retained = 0;
+
+                    for (const auto& approx_candidate : approx_candidates) {
+                        tableint cand_id = approx_candidate.second;
+                        dist_t exact_dist;
+                        if (is_compacted_) {
+                            std::vector<dist_t> vec = getOriginalDataByInternalId(cand_id, false, true);
+                            exact_dist = fstdistfunc_(query_data, vec.data(), dist_func_param_);
+                        } else {
+                            exact_dist = fstdistfunc_(query_data, getDataByInternalId(cand_id), dist_func_param_);
+                        }
+
+                        exact_candidates.emplace_back(exact_dist, cand_id);
+                        if (top_candidates.size() < ef || exact_dist < lowerBound) {
+                            ++admissible_total;
+                            if (shortlisted.find(cand_id) != shortlisted.end()) {
+                                ++admissible_retained;
+                            }
+                        }
+                    }
+
+                    std::sort(exact_candidates.begin(), exact_candidates.end());
+                    uint64_t top5_total = std::min<uint64_t>(5, exact_candidates.size());
+                    uint64_t top5_retained = 0;
+                    for (uint64_t i = 0; i < top5_total; ++i) {
+                        if (shortlisted.find(exact_candidates[i].second) != shortlisted.end()) {
+                            ++top5_retained;
+                        }
+                    }
+
+                    tls_diag_expansion_pools_.fetch_add(1, std::memory_order_relaxed);
+                    tls_diag_pool_candidates_.fetch_add(approx_candidates.size(), std::memory_order_relaxed);
+                    tls_diag_shortlisted_candidates_.fetch_add(candidates_to_check, std::memory_order_relaxed);
+                    if (!exact_candidates.empty() && shortlisted.find(exact_candidates[0].second) != shortlisted.end()) {
+                        tls_diag_top1_retained_.fetch_add(1, std::memory_order_relaxed);
+                    }
+                    tls_diag_top5_total_.fetch_add(top5_total, std::memory_order_relaxed);
+                    tls_diag_top5_retained_.fetch_add(top5_retained, std::memory_order_relaxed);
+                    tls_diag_exact_admissible_total_.fetch_add(admissible_total, std::memory_order_relaxed);
+                    tls_diag_exact_admissible_retained_.fetch_add(admissible_retained, std::memory_order_relaxed);
+                }
 
                 // 3. Compute Exact Distance for Survivors
                 
@@ -2343,6 +2437,34 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
 
     void setProfilingMetrics(bool use) {
         enable_profiling_metrics_ = use;
+    }
+
+    void setTLSRetentionDiagnostic(bool use) {
+        enable_tls_retention_diagnostic_ = use;
+    }
+
+    void resetTLSRetentionStats() const {
+        tls_diag_expansion_pools_.store(0, std::memory_order_relaxed);
+        tls_diag_pool_candidates_.store(0, std::memory_order_relaxed);
+        tls_diag_shortlisted_candidates_.store(0, std::memory_order_relaxed);
+        tls_diag_top1_retained_.store(0, std::memory_order_relaxed);
+        tls_diag_top5_total_.store(0, std::memory_order_relaxed);
+        tls_diag_top5_retained_.store(0, std::memory_order_relaxed);
+        tls_diag_exact_admissible_total_.store(0, std::memory_order_relaxed);
+        tls_diag_exact_admissible_retained_.store(0, std::memory_order_relaxed);
+    }
+
+    TLSRetentionStats getTLSRetentionStats() const {
+        TLSRetentionStats stats;
+        stats.expansion_pools = tls_diag_expansion_pools_.load(std::memory_order_relaxed);
+        stats.pool_candidates = tls_diag_pool_candidates_.load(std::memory_order_relaxed);
+        stats.shortlisted_candidates = tls_diag_shortlisted_candidates_.load(std::memory_order_relaxed);
+        stats.top1_retained = tls_diag_top1_retained_.load(std::memory_order_relaxed);
+        stats.top5_total = tls_diag_top5_total_.load(std::memory_order_relaxed);
+        stats.top5_retained = tls_diag_top5_retained_.load(std::memory_order_relaxed);
+        stats.exact_admissible_total = tls_diag_exact_admissible_total_.load(std::memory_order_relaxed);
+        stats.exact_admissible_retained = tls_diag_exact_admissible_retained_.load(std::memory_order_relaxed);
+        return stats;
     }
 };
 }  // namespace hnswlib

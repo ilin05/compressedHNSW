@@ -192,6 +192,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_search_hnswalp_pq examples/cpp/test_search_hnswalp_pq.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_search_hnswalp_pq hnswlib)
 
+    add_executable(test_tls_retention_diagnostic examples/cpp/test_tls_retention_diagnostic.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_tls_retention_diagnostic hnswlib)
+
     add_executable(test_cache_ratio_analysis examples/cpp/test_cache_ratio_analysis.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_cache_ratio_analysis hnswlib)
 
