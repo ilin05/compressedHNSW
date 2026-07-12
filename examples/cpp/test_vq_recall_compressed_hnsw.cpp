@@ -247,6 +247,7 @@ void run_one_index(const std::string& dataset,
                     << index_kb << ','
                     << vectors_per_kb << ','
                     << vq << '\n';
+                csv.flush();
 
                 std::cout << index_type
                           << " " << param
@@ -301,7 +302,7 @@ int main(int argc, char** argv) {
     };
     std::vector<std::string> algorithms = {"DeXOR", "Gorilla", "Camel", "Elf"};
     std::vector<double> tls_ratios = {0.0, 0.1, 0.2, 0.3, 0.5};
-    std::vector<int> efs = {10, 20, 30, 40, 60, 80, 100, 150, 200, 250, 300, 350, 400, 500};
+    std::vector<int> efs = {10, 20, 30, 40, 60, 80, 100, 150, 200};
     std::vector<int> ks = {1, 10};
 
     for (int i = 1; i < argc; ++i) {
@@ -314,6 +315,7 @@ int main(int argc, char** argv) {
             chain_max_length = std::stoi(argv[++i]);
         } else if (arg == "--num_rounds" && i + 1 < argc) {
             num_rounds = std::max(1, std::stoi(argv[++i]));
+            std::cout << "Set num_rounds = " << num_rounds << std::endl;
         } else if (arg == "--dataset" && i + 1 < argc) {
             datasets.clear();
             while (i + 1 < argc && std::string(argv[i + 1]).rfind("--", 0) != 0) {
@@ -339,6 +341,10 @@ int main(int argc, char** argv) {
             while (i + 1 < argc && std::string(argv[i + 1]).rfind("--", 0) != 0) {
                 ks.push_back(std::stoi(argv[++i]));
             }
+            std::cout << "Set ks = ";
+            for (size_t j = 0; j < ks.size(); ++j) {
+                std::cout << ks[j] << (j + 1 < ks.size() ? ", " : "\n");
+            }
         } else {
             std::cerr << "Unknown or incomplete argument: " << arg << std::endl;
             return -1;
@@ -355,6 +361,7 @@ int main(int argc, char** argv) {
         return -1;
     }
     csv << "Dataset,IndexType,Param,K,Recall,QPS,Latency(us),IndexSizeKB,VectorsPerKB,VQ\n";
+    csv.flush();
 
     for (const auto& ds : datasets) {
         for (const auto& algo : algorithms) {

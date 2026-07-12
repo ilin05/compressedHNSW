@@ -123,12 +123,14 @@ int main(int argc, char** argv) {
     vector<string> datasets = {"fashion-mnist-784-euclidean","gist-960-euclidean","mnist-784-euclidean","sift-128-euclidean","deep-image-96-angular"};
 
     // parameter sweeps
-    vector<int> hnsw_efs = {10,20,30,40,60,80,100,150,200,250,300,350,400,500};
+    // vector<int> hnsw_efs = {10,20,30,40,60,80,100,150,200,250,300,350,400,500};
+    vector<int> hnsw_efs = {10,20,30,40,60,80,100,150,200};
     vector<int> ivf_nprobes = {1,2,4,6,8,10,15,20,25,30,40,50,60,80,100};
     vector<int> pq_ms = {1,2};
     vector<int> sq_nbits = {4,8};
     vector<float> tls_ratios = {0.1f, 0.2f, 0.3f, 0.5f};
     vector<int> nsg_search_Ls = {1,2,4,6,8,10,15,20,25,30,40,50,60,80,100};
+    vector<int> ks = {1,10};
     int num_rounds = 1; // for stability, we can run multiple rounds and average results, but for now we'll just do 1 round per config
 
     // Algorithm flags
@@ -153,6 +155,9 @@ int main(int argc, char** argv) {
             while (i + 1 < argc && argv[i + 1][0] != '-') algorithms.push_back(argv[++i]);
         } else if (arg == "--num_rounds" && i + 1 < argc) {
             num_rounds = stoi(argv[++i]);
+        } else if (arg == "--k" && i + 1 < argc) {
+            ks.clear();
+            while (i + 1 < argc && argv[i + 1][0] != '-') ks.push_back(stoi(argv[++i]));
         }
     }
 
@@ -184,6 +189,7 @@ int main(int argc, char** argv) {
 
     ofstream csv("vq_recall_results.csv");
     csv << "Dataset,IndexType,Param,K,Recall,QPS,Latency(us),IndexSizeKB,VectorsPerKB,VQ\n";
+    csv.flush();
 
     for (const auto& ds : datasets) {
         cout << "\n--- Dataset: " << ds << " ---" << endl;
@@ -219,7 +225,7 @@ int main(int argc, char** argv) {
                     double v_per_kb = static_cast<double>(nvecs) / index_kb;
 
                     // test k=1 and k=10 using the HNSW ef sweep (use ef values for search)
-                    for (int k : {1,10}) {
+                    for (int k : ks) {
                         for (int ef : hnsw_efs) {
                             cidx->setEf(ef);
                             // std::cout << "Testing HNSWALP with TLS ratio " << tls_ratio << ", ef=" << ef << ", k=" << k << std::endl;
@@ -253,6 +259,7 @@ int main(int argc, char** argv) {
                             double avg_latency = std::accumulate(latencies.begin(), latencies.end(), 0.0) / latencies.size();
                             double vq = v_per_kb * avg_qps;
                             csv << ds << ",HNSWALP" << tls_ratio <<",ef=" << ef << "," << k << "," << fixed << setprecision(6) << avg_recall << "," << avg_qps << "," << avg_latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                            csv.flush();
                             cout << "HNSWALP" << tls_ratio << " ef=" << ef << " k=" << k << " recall=" << avg_recall << " QPS=" << avg_qps << " Latency=" << avg_latency << "us VQ=" << vq << endl;
                             if(avg_recall > 0.999) {
                                 cout << "Recall is very high, skipping higher ef values for this TLS ratio." << endl;
@@ -298,7 +305,7 @@ int main(int argc, char** argv) {
                 double index_kb = static_cast<double>(index_size_bytes) / 1024.0;
                 double v_per_kb = static_cast<double>(nvecs) / index_kb;
 
-                for (int k : {1,10}) {
+                for (int k : ks) {
                     for (int ef : hnsw_efs) {
                         idx->setEf(ef);
 
@@ -328,6 +335,7 @@ int main(int argc, char** argv) {
                         double avg_latency = std::accumulate(latencies.begin(), latencies.end(), 0.0) / latencies.size();
                         double vq = v_per_kb * avg_qps;
                         csv << ds << ",HNSW,ef=" << ef << "," << k << "," << fixed << setprecision(6) << avg_recall << "," << avg_qps << "," << avg_latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                        csv.flush();
                         cout << "HNSW ef=" << ef << " k=" << k << " recall=" << avg_recall << " QPS=" << avg_qps << " Latency=" << avg_latency << "us VQ=" << vq << endl;
                         if(avg_recall > 0.999) {
                             cout << "Recall is very high, skipping higher ef values for this TLS ratio." << endl;
@@ -354,7 +362,7 @@ int main(int argc, char** argv) {
                     double index_kb = static_cast<double>(file_size_bytes(idx_path)) / 1024.0;
                     double v_per_kb = static_cast<double>(nvecs) / index_kb;
 
-                    for (int k : {1,10}) {
+                    for (int k : ks) {
                         for (int ef : hnsw_efs) {
                             hnsw->hnsw.efSearch = ef;
 
@@ -380,6 +388,7 @@ int main(int argc, char** argv) {
                             csv << ds << ",FaissHNSW,ef=" << ef << "," << k << "," << fixed << setprecision(6)
                                 << avg_recall << "," << avg_qps << "," << avg_latency << "," << index_kb << "," << v_per_kb << ","
                                 << vq << "\n";
+                            csv.flush();
                             cout << "FaissHNSW ef=" << ef << " k=" << k << " recall=" << avg_recall
                                  << " QPS=" << avg_qps << " Latency=" << avg_latency << "us VQ=" << vq << endl;
                             if(avg_recall > 0.999) {
@@ -405,7 +414,7 @@ int main(int argc, char** argv) {
                 double index_kb = static_cast<double>(file_size_bytes(ivf_index_path)) / 1024.0;
                 double v_per_kb = static_cast<double>(nvecs) / index_kb;
 
-                for (int k : {1,10}) {
+                for (int k : ks) {
                     for (int nprobe : ivf_nprobes) {
                         faiss::IndexIVF* iivf = dynamic_cast<faiss::IndexIVF*>(ivf);
                         if (iivf) iivf->nprobe = nprobe;
@@ -431,6 +440,7 @@ int main(int argc, char** argv) {
                         double avg_latency = accumulate(latencies.begin(), latencies.end(), 0.0) / latencies.size();
                         double vq = v_per_kb * avg_qps;
                         csv << ds << ",IVF,nprobe=" << nprobe << "," << k << "," << fixed << setprecision(6) << avg_recall << "," << avg_qps << "," << avg_latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                        csv.flush();
                         cout << "IVF nprobe=" << nprobe << " k=" << k << " recall=" << avg_recall << " QPS=" << avg_qps << " Latency=" << avg_latency << "us VQ=" << vq << endl;
                         if(avg_recall > 0.999){
                             cout << "Recall is very high, skipping higher nprobe values for this dataset." << endl;
@@ -455,7 +465,7 @@ int main(int argc, char** argv) {
                 double v_per_kb = static_cast<double>(nvecs) / index_kb;
 
                 // Faiss NSG typically uses default search; sweeping nprobe not applicable. We'll run single config for k=1,10
-                for (int k : {1,10}) {
+                for (int k : ks) {
                     for(int search_L : nsg_search_Ls) {
                         if(search_L < k) continue; // search_L must be >= k
                         faiss::IndexNSG* nsg_ptr = dynamic_cast<faiss::IndexNSG*>(nsg);
@@ -482,6 +492,7 @@ int main(int argc, char** argv) {
                         
                         double vq = v_per_kb * avg_qps;
                         csv << ds << ",NSG," << search_L << "," << k << "," << fixed << setprecision(6) << avg_latency << "," << avg_qps << "," << avg_latency << "," << index_kb << "," << v_per_kb << "," << vq << "\n";
+                        csv.flush();
                         cout << "NSG search_L=" << search_L << " k=" << k << " recall=" << avg_recall << " QPS=" << avg_qps << " Latency=" << avg_latency << "us VQ=" << vq << endl;
                         if(avg_recall > 0.999){
                             cout << "Recall is very high, skipping higher search_L values for this dataset." << endl;
@@ -513,7 +524,7 @@ int main(int argc, char** argv) {
                     double index_kb = static_cast<double>(file_size_bytes(idx_path)) / 1024.0;
                     double v_per_kb = static_cast<double>(nvecs) / index_kb;
 
-                    for (int k : {1, 10}) {
+                    for (int k : ks) {
                         for (int ef : hnsw_efs) {
                             if (real_index) {
                                 real_index->hnsw.efSearch = ef;
@@ -541,6 +552,7 @@ int main(int argc, char** argv) {
                             csv << ds << "," << current_algo_name << ",ef=" << ef << "," << k << "," << fixed << setprecision(6)
                                 << avg_recall << "," << avg_qps << "," << avg_latency << "," << index_kb << "," << v_per_kb << ","
                                 << vq << "\n";
+                            csv.flush();
                             cout << current_algo_name << " ef=" << ef << " k=" << k << " recall=" << avg_recall
                                  << " QPS=" << avg_qps << " Latency=" << avg_latency << "us VQ=" << vq << endl;
                             if(avg_recall > 0.999) {
@@ -574,7 +586,7 @@ int main(int argc, char** argv) {
                     double index_kb = static_cast<double>(file_size_bytes(idx_path)) / 1024.0;
                     double v_per_kb = static_cast<double>(nvecs) / index_kb;
 
-                    for (int k : {1, 10}) {
+                    for (int k : ks) {
                         for (int ef : hnsw_efs) {
                             if (real_index) {
                                 real_index->hnsw.efSearch = ef;
@@ -602,6 +614,7 @@ int main(int argc, char** argv) {
                             csv << ds << "," << current_algo_name << ",ef=" << ef << "," << k << "," << fixed << setprecision(6)
                                 << avg_recall << "," << avg_qps << "," << avg_latency << "," << index_kb << "," << v_per_kb << ","
                                 << vq << "\n";
+                            csv.flush();
                             cout << current_algo_name << " ef=" << ef << " k=" << k << " recall=" << avg_recall
                                  << " QPS=" << avg_qps << " Latency=" << avg_latency << "us VQ=" << vq << endl;
                             if(avg_recall > 0.999) {
