@@ -92,6 +92,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_vq_recall examples/cpp/test_vq_recall.cpp)
     target_link_libraries(test_vq_recall faiss hnswlib OpenMP::OpenMP_CXX)
 
+    add_executable(test_vq_recall_compressed_hnsw examples/cpp/test_vq_recall_compressed_hnsw.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_vq_recall_compressed_hnsw hnswlib OpenMP::OpenMP_CXX)
+
     add_executable(test_quantization_recall_compression_ratio examples/cpp/test_quantization_recall_compression_ratio.cpp)
     target_link_libraries(test_quantization_recall_compression_ratio faiss OpenMP::OpenMP_CXX)
 
@@ -327,6 +330,7 @@ if(HNSWLIB_EXAMPLES)
       test_refresh_compressed_hnsw_ratios
       test_build_index_size_comparison
       test_vq_recall
+      test_vq_recall_compressed_hnsw
       test_ablation_differential_order
       test_cache_ratio_analysis
       test_cache_ratio_analysis_dexor
