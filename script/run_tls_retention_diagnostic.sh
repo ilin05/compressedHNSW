@@ -1,19 +1,22 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-DATASET="sift-128-euclidean"
 BASE_DIR="../datasets/hdf5files/"
 EF=100
-OUTPUT="tls_first_stage_retention_sift.csv"
+OUTPUT="tls_accuracy_stability.csv"
 
-echo "[TLS Retention Diagnostic] dataset=${DATASET}, ef=${EF}"
-echo "[TLS Retention Diagnostic] output=${OUTPUT}"
+echo "[TLS Accuracy] alpha sensitivity with repeated end-to-end measurements"
+echo "[TLS Accuracy] output=${OUTPUT}"
 
 ../build/test_tls_retention_diagnostic \
   --base_dir "${BASE_DIR}" \
-  --dataset "${DATASET}" \
+  --dataset sift-128-euclidean gist-960-euclidean fashion-mnist-784-euclidean \
   --ef "${EF}" \
-  --alpha 0.05 0.1 0.2 0.3 0.5 1.0 \
-  --output "${OUTPUT}"
+  --k 10 \
+  --alpha 0.1 0.2 0.3 0.5 1.0 \
+  --num_rounds 3 \
+  --warmup_rounds 1 \
+  --output "${OUTPUT}" \
+  "$@"
 
-echo "[TLS Retention Diagnostic] done"
+echo "[TLS Accuracy] done"
