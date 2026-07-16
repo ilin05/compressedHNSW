@@ -217,6 +217,8 @@ vector<double> compute_residuals_graph(double* data, size_t N, size_t d,
 struct Histogram {
     vector<double> bin_centers;
     vector<size_t> counts;
+    vector<double> residual_sums;
+    vector<double> abs_residual_sums;
 };
 
 struct HistogramRange {
@@ -255,6 +257,8 @@ Histogram build_histogram(const vector<double>& values,
     if (bin_width <= 0.0) return h;
     h.counts.resize(num_bins, 0);
     h.bin_centers.resize(num_bins);
+    h.residual_sums.resize(num_bins, 0.0);
+    h.abs_residual_sums.resize(num_bins, 0.0);
 
     for (size_t i = 0; i < num_bins; ++i) {
         h.bin_centers[i] = range.vmin + (i + 0.5) * bin_width;
@@ -265,6 +269,8 @@ Histogram build_histogram(const vector<double>& values,
         if (idx < 0) idx = 0;
         if (idx >= static_cast<int>(num_bins)) idx = static_cast<int>(num_bins) - 1;
         h.counts[idx]++;
+        h.residual_sums[idx] += v;
+        h.abs_residual_sums[idx] += std::abs(v);
     }
 
     return h;
@@ -344,7 +350,7 @@ int main(int argc, char** argv) {
 
     csv_ratio << "Dataset,Algorithm,Strategy,CompressionRatio\n";
     csv_ratio << fixed << setprecision(6);
-    csv_residual << "Dataset,Strategy,BinCenter,BinCount\n";
+    csv_residual << "Dataset,Strategy,BinCenter,BinCount,BinResidualSum,BinAbsResidualSum\n";
     csv_residual << fixed << setprecision(6);
 
     for (const auto& ds : datasets) {
@@ -455,7 +461,9 @@ int main(int argc, char** argv) {
             for (size_t b = 0; b < hist.bin_centers.size(); ++b) {
                 csv_residual << ds << "," << strategy << ","
                              << hist.bin_centers[b] << ","
-                             << hist.counts[b] << "\n";
+                             << hist.counts[b] << ","
+                             << hist.residual_sums[b] << ","
+                             << hist.abs_residual_sums[b] << "\n";
             }
         };
 
