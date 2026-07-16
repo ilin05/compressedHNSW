@@ -1,0 +1,11 @@
+Dataset,Backend,ScalarType,ChainMaxLength,HubCacheRatio,VectorsChecked,CoordinatesChecked,VectorMismatches,CoordinateMismatches,FirstMismatchVector,FirstMismatchCoordinate
+sift-128-euclidean,DeXOR,float64,2,0.01,1000000,128000000,0,0,-1,-1
+sift-128-euclidean,Gorilla,float64,2,0.01,1000000,128000000,0,0,-1,-1
+sift-128-euclidean,Camel,float64,2,0.01,1000000,128000000,0,0,-1,-1
+sift-128-euclidean,Elf,float64,2,0.01,1000000,128000000,0,0,-1,-1
+sift-128-euclidean,ALP,float32,2,0.01,1000000,128000000,0,0,-1,-1
+gist-960-euclidean,DeXOR,float64,2,0.01,1000000,960000000,999990,165596136,0,1
+gist-960-euclidean,Gorilla,float64,2,0.01,1000000,960000000,0,0,-1,-1
+gist-960-euclidean,Camel,float64,2,0.01,1000000,960000000,989990,949114410,0,0
+gist-960-euclidean,Elf,float64,2,0.01,1000000,960000000,0,0,-1,-1
+gist-960-euclidean,ALP,float32,2,0.01,1000000,960000000,989990,934297213,0,0
