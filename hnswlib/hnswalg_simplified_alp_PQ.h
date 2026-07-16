@@ -359,7 +359,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             for (size_t i = 0; i < dim; ++i) {
                 float origin = data[i];
                 float reconstructed = std::round(origin * factor) * inv_factor;
-                if (std::abs(origin - reconstructed) > 1e-10) {
+                if (std::abs(origin - reconstructed) > 1e-4) {
                     ok = false;
                     break;
                 }
