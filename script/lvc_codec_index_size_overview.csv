@@ -1,7 +1,7 @@
 Dataset,Variant,IndexFile,Bytes,GiB,Selected
-deep-image-96-angular,Camel,deep-image-96-angular_Camel_ch2_pq.bin,3658985376,3.407696,1
+deep-image-96-angular,ALP,deep-image-96-angular_train.fvecs_hnswalp_simplified_pq.bin,2970484941,2.766480,1
+deep-image-96-angular,Camel,deep-image-96-angular_Camel_ch2_pq.bin,3658985376,3.407696,0
 deep-image-96-angular,Elf,deep-image-96-angular_Elf_ch2_pq.bin,6757347704,6.293270,0
-deep-image-96-angular,ALP,deep-image-96-angular_train.fvecs_hnswalp_simplified_pq.bin,7706818785,7.177534,0
 deep-image-96-angular,DeXOR,deep-image-96-angular_DeXOR_ch2_pq.bin,8333624256,7.761292,0
 deep-image-96-angular,Gorilla,deep-image-96-angular_Gorilla_ch2_pq.bin,9229498830,8.595641,0
 fashion-mnist-784-euclidean,ALP,fashion-mnist-784-euclidean_train.fvecs_hnswalp_simplified_pq.bin,60778637,0.056605,1
