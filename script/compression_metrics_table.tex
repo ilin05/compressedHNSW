@@ -1,18 +1,26 @@
+% Requires \usepackage[table]{xcolor} for \cellcolor.
 \begin{table*}[t]
 \centering
-\caption{Compression metrics for HNSW+LVC. Double-baseline ratios are measured directly; float-baseline ratios are derived using the same conversion as Figure~\ref{fig:compression_ratio_float}. MNIST uses DeXOR with ChainMaxLength=$-1$; all other datasets use ALP.}
-\label{tab:compression_metrics}
-\small
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{l l r r r r r r r}
+\caption{Compression effectiveness and offline overhead. \textsc{Dx}, \textsc{Gor}, and \textsc{Cam} denote \DeXOR{}, \Gorilla{}, and \Camel{}. DR and IR denote data (payload) and index compression ratios under F32 and F64 payload conventions. BT and CT are index-build and compression times in seconds; OH is CT/BT. Blue cells mark the highest DR/IR for each dataset; red cells mark the lowest CT/OH.}
+\label{tab:compression_effectiveness_overhead}
+\scriptsize
+\setlength{\tabcolsep}{2.2pt}
+\renewcommand{\arraystretch}{1.05}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrrrrrrrrrrrrrrrrrrrrrr}
 \toprule
-\textbf{Dataset} & \textbf{Codec} & \textbf{Data Ratio (double)} & \textbf{Index Ratio (double)} & \textbf{Data Ratio (float)} & \textbf{Index Ratio (float)} & \textbf{Build (s)} & \textbf{Compress (s)} & \textbf{Overhead (\%)} \\
+Metric & \multicolumn{5}{c}{\textbf{\textsf{MNIST}}} & \multicolumn{5}{c}{\textbf{\textsf{Fashion-MNIST}}} & \multicolumn{5}{c}{\textbf{\textsf{SIFT}}} & \multicolumn{5}{c}{\textbf{\textsf{GIST}}} & \multicolumn{5}{c}{\textbf{\textsf{DEEP}}} \\
+\cmidrule(lr){2-6}\cmidrule(lr){7-11}\cmidrule(lr){12-16}\cmidrule(lr){17-21}\cmidrule(lr){22-26}
+ & \textsc{Dx} & \textsc{Gor} & \Elf{} & \textsc{Cam} & \ALP{} & \textsc{Dx} & \textsc{Gor} & \Elf{} & \textsc{Cam} & \ALP{} & \textsc{Dx} & \textsc{Gor} & \Elf{} & \textsc{Cam} & \ALP{} & \textsc{Dx} & \textsc{Gor} & \Elf{} & \textsc{Cam} & \ALP{} & \textsc{Dx} & \textsc{Gor} & \Elf{} & \textsc{Cam} & \ALP{} \\
 \midrule
-MNIST & DeXOR & 12.49$\times$ & 10.76$\times$ & 6.25$\times$ & 5.45$\times$ & 9.24 & 34.86 & 377.45\
-Fashion-MNIST & ALP & 7.90$\times$ & 7.39$\times$ & 3.95$\times$ & 3.73$\times$ & 6.08 & 20.58 & 338.40\
-GIST & ALP & 5.39$\times$ & 5.23$\times$ & 2.69$\times$ & 2.63$\times$ & 353.40 & 101.38 & 28.69\
-SIFT & ALP & 8.06$\times$ & 5.05$\times$ & 4.03$\times$ & 2.74$\times$ & 74.98 & 13.46 & 17.96\
-DEEP & ALP & 4.47$\times$ & 3.27$\times$ & 2.23$\times$ & 1.81$\times$ & 505.37 & 17.68 & 3.50\
+DR$_{\mathrm{F32}}$$\uparrow$ & \cellcolor{blue!18}6.25$\times$ & 5.63$\times$ & 4.66$\times$ & 2.80$\times$ & 3.95$\times$ & 3.86$\times$ & 3.00$\times$ & 2.84$\times$ & 1.97$\times$ & \cellcolor{blue!18}3.95$\times$ & 3.28$\times$ & 2.22$\times$ & 2.30$\times$ & 1.91$\times$ & \cellcolor{blue!18}4.03$\times$ & 0.59$\times$ & 0.99$\times$ & 0.95$\times$ & 1.79$\times$ & \cellcolor{blue!18}2.69$\times$ & 0.55$\times$ & 0.88$\times$ & 0.87$\times$ & \cellcolor{blue!18}1.64$\times$ & 0.60$\times$ \\
+IR$_{\mathrm{F32}}$$\uparrow$ & \cellcolor{blue!18}5.45$\times$ & 5.00$\times$ & 4.24$\times$ & 2.67$\times$ & 3.67$\times$ & 3.64$\times$ & 2.89$\times$ & 2.74$\times$ & 1.94$\times$ & \cellcolor{blue!18}3.73$\times$ & 2.41$\times$ & 1.87$\times$ & 1.92$\times$ & 1.68$\times$ & \cellcolor{blue!18}2.74$\times$ & 0.57$\times$ & 0.99$\times$ & 0.95$\times$ & 1.77$\times$ & \cellcolor{blue!18}2.63$\times$ & 0.38$\times$ & 0.89$\times$ & 0.88$\times$ & \cellcolor{blue!18}1.47$\times$ & 0.71$\times$ \\
+DR$_{\mathrm{F64}}$$\uparrow$ & \cellcolor{blue!18}12.49$\times$ & 11.26$\times$ & 9.32$\times$ & 5.59$\times$ & 7.90$\times$ & 7.72$\times$ & 6.01$\times$ & 5.67$\times$ & 3.94$\times$ & \cellcolor{blue!18}7.90$\times$ & 6.57$\times$ & 4.44$\times$ & 4.60$\times$ & 3.82$\times$ & \cellcolor{blue!18}8.06$\times$ & 1.18$\times$ & 1.99$\times$ & 1.91$\times$ & 3.58$\times$ & \cellcolor{blue!18}5.39$\times$ & 1.10$\times$ & 1.76$\times$ & 1.74$\times$ & \cellcolor{blue!18}3.28$\times$ & 1.20$\times$ \\
+IR$_{\mathrm{F64}}$$\uparrow$ & \cellcolor{blue!18}10.76$\times$ & 9.85$\times$ & 8.37$\times$ & 5.28$\times$ & 7.25$\times$ & 7.20$\times$ & 5.72$\times$ & 5.42$\times$ & 3.85$\times$ & \cellcolor{blue!18}7.39$\times$ & 4.44$\times$ & 3.46$\times$ & 3.55$\times$ & 3.12$\times$ & \cellcolor{blue!18}5.05$\times$ & 1.19$\times$ & 1.99$\times$ & 1.91$\times$ & 3.53$\times$ & \cellcolor{blue!18}5.23$\times$ & 1.13$\times$ & 1.68$\times$ & 1.66$\times$ & \cellcolor{blue!18}2.66$\times$ & 1.14$\times$ \\
+BT (s) & 9.24 & 9.25 & 9.23 & 9.72 & 9.08 & 7.75 & 7.47 & 7.86 & 7.29 & 6.08 & 64.74 & 74.29 & 69.24 & 75.25 & 74.98 & 307.53 & 289.66 & 258.98 & 307.96 & 353.40 & 791.69 & 727.80 & 693.32 & 691.17 & 373.19 \\
+CT (s)$\downarrow$ & 34.86 & 27.26 & 33.45 & 39.13 & \cellcolor{red!16}20.76 & 41.34 & 30.40 & 36.14 & 40.20 & \cellcolor{red!16}20.58 & 109.91 & 68.41 & 91.04 & 93.95 & \cellcolor{red!16}13.46 & 2497.73 & 243.02 & 432.22 & 293.98 & \cellcolor{red!16}101.38 & 2938.79 & 244.94 & 442.98 & 280.36 & \cellcolor{red!16}62.87 \\
+OH (\%)$\downarrow$ & 377.45 & 294.72 & 362.38 & 402.40 & \cellcolor{red!16}228.73 & 533.51 & 406.90 & 459.73 & 551.13 & \cellcolor{red!16}338.40 & 169.77 & 92.08 & 131.48 & 124.86 & \cellcolor{red!16}17.96 & 812.20 & 83.90 & 166.90 & 95.46 & \cellcolor{red!16}28.69 & 371.20 & 33.66 & 63.89 & 40.56 & \cellcolor{red!16}16.85 \\
 \bottomrule
 \end{tabular}
+}%
 \end{table*}
