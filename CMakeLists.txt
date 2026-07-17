@@ -92,6 +92,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_vq_recall examples/cpp/test_vq_recall.cpp)
     target_link_libraries(test_vq_recall faiss hnswlib OpenMP::OpenMP_CXX)
 
+    add_executable(test_hnswpq_tradeoff examples/cpp/test_hnswpq_tradeoff.cpp)
+    target_link_libraries(test_hnswpq_tradeoff faiss OpenMP::OpenMP_CXX)
+
     add_executable(test_vq_recall_compressed_hnsw examples/cpp/test_vq_recall_compressed_hnsw.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_vq_recall_compressed_hnsw hnswlib OpenMP::OpenMP_CXX)
 
