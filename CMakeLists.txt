@@ -225,6 +225,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_exact_lvc_correctness examples/cpp/test_exact_lvc_correctness.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_exact_lvc_correctness hnswlib)
 
+    add_executable(test_alp_tolerance_recall examples/cpp/test_alp_tolerance_recall.cpp)
+    target_link_libraries(test_alp_tolerance_recall hnswlib OpenMP::OpenMP_CXX)
+
     add_executable(test_perf_breakdown_hnsw examples/cpp/test_perf_breakdown_hnsw.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_perf_breakdown_hnsw hnswlib)
 

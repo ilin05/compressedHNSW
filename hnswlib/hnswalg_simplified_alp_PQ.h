@@ -78,6 +78,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
     mutable std::atomic<long> metric_hops{0};
 
     bool allow_replace_deleted_ = false;  // flag to replace deleted elements (marked as deleted) during insertions
+    float reconstruction_tolerance_ = 1e-4f;
 
     std::mutex deleted_elements_lock;  // lock for deleted_elements
     std::unordered_set<tableint> deleted_elements;  // contains internal ids of deleted elements
@@ -359,7 +360,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             for (size_t i = 0; i < dim; ++i) {
                 float origin = data[i];
                 float reconstructed = std::round(origin * factor) * inv_factor;
-                if (std::abs(origin - reconstructed) > 1e-4) {
+                if (std::abs(origin - reconstructed) > reconstruction_tolerance_) {
                     ok = false;
                     break;
                 }
@@ -438,12 +439,17 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         size_t M = 16,
         size_t ef_construction = 200,
         size_t random_seed = 100,
-        bool allow_replace_deleted = false)
+        bool allow_replace_deleted = false,
+        float reconstruction_tolerance = 1e-4f)
         : label_op_locks_(MAX_LABEL_OPERATION_LOCKS),
             link_list_locks_(max_elements),
             level0_element_start_positions_(max_elements),
             element_levels_(max_elements),
-            allow_replace_deleted_(allow_replace_deleted) {
+            allow_replace_deleted_(allow_replace_deleted),
+            reconstruction_tolerance_(reconstruction_tolerance) {
+        if (!std::isfinite(reconstruction_tolerance_) || reconstruction_tolerance_ < 0.0f) {
+            throw std::invalid_argument("reconstruction tolerance must be finite and non-negative");
+        }
         max_elements_ = max_elements;
         num_deleted_ = 0;
         data_size_ = s->get_data_size();
@@ -2426,6 +2432,20 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
 
     void setUseTLS(bool use_tls) {
         use_tls_ = use_tls;
+    }
+
+    void setReconstructionTolerance(float tolerance) {
+        if (!std::isfinite(tolerance) || tolerance < 0.0f) {
+            throw std::invalid_argument("reconstruction tolerance must be finite and non-negative");
+        }
+        if (is_compacted_) {
+            throw std::logic_error("reconstruction tolerance must be set before compress_dataset");
+        }
+        reconstruction_tolerance_ = tolerance;
+    }
+
+    float getReconstructionTolerance() const {
+        return reconstruction_tolerance_;
     }
 
     void setTLSRatio(float ratio) {

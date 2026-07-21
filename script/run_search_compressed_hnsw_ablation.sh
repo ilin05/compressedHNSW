@@ -12,7 +12,7 @@ echo "[Ablation] Search compressed_hnsw_framework indexes"
   --chain_max 2 -1 \
   --use_cache 0 1 \
   --use_tls 0 1 \
-  --tls_ratio 0.2 \
+  --tls_ratio 0.1 0.2 0.3 0.5 0 \
   --output_csv compressed_hnsw_DeXOR_sift_ablation_search_results.csv
 
 echo "Saved CSV: compressed_hnsw_DeXOR_sift_ablation_search_results.csv"
