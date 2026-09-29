@@ -112,6 +112,12 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     
     // Flag to indicate if the index has been compacted
     bool is_compacted_ = false;
+    bool enable_dynamic_updates_ = false;
+    tableint pending_insert_id_ = static_cast<tableint>(-1);
+    int compressed_chain_max_length_ = 2;
+    std::mutex dynamic_update_lock_;
+    double dynamic_graph_us_ = 0;
+    double dynamic_encoding_us_ = 0;
 
     bool use_encoding_algorithm_ = true;
 
@@ -365,7 +371,8 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         bool use_encoding_algorithm = true,
         size_t cache_max_size = 0,
         size_t random_seed = 100,
-        bool allow_replace_deleted = false)
+        bool allow_replace_deleted = false,
+        bool enable_dynamic_updates = false)
         : label_op_locks_(MAX_LABEL_OPERATION_LOCKS),
             link_list_locks_(max_elements),
             level0_element_start_positions_(max_elements),
@@ -373,6 +380,9 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             allow_replace_deleted_(allow_replace_deleted),
             use_encoding_algorithm_(use_encoding_algorithm),
             cache_max_size_(cache_max_size) {
+        enable_dynamic_updates_ = enable_dynamic_updates;
+        if (enable_dynamic_updates_ && allow_replace_deleted_)
+            throw std::invalid_argument("Dynamic compression does not reuse deleted IDs");
         max_elements_ = max_elements;
         num_deleted_ = 0;
         data_size_ = s->get_data_size();
@@ -526,7 +536,8 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
             unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + linklist_size_offset));
             // Data starts after neighbors
-            size_t offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+            size_t offset = linklist_size_offset + sizeof(linklistsizeint) +
+                            (enable_dynamic_updates_ ? maxM0_ : size) * sizeof(tableint);
             return (char*)(data_level0_memory_.data() + level0_element_start_positions_[internal_id] + offset);
         }
         return (char*)(data_level0_memory_.data() + internal_id * size_data_per_element_ + offsetData_);
@@ -536,7 +547,8 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         if (is_compacted_) {
             size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
             unsigned short int size = *((unsigned short int*)(data_level0_memory + level0_element_start_positions_[internal_id] + linklist_size_offset));
-            size_t offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+            size_t offset = linklist_size_offset + sizeof(linklistsizeint) +
+                            (enable_dynamic_updates_ ? maxM0_ : size) * sizeof(tableint);
             return (char*)(data_level0_memory + level0_element_start_positions_[internal_id] + offset);
         }
         return (char*)(data_level0_memory + internal_id * size_data_per_element_ + offsetData_);
@@ -545,6 +557,11 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     // 支持任意长度的差分编码链：从目标节点沿 prenode 回溯到 root 或缓存锚点，再逐段前向解码。
     std::vector<double> getOriginalDataByInternalId(tableint internal_id, bool collect_metrics = false) const {
         auto original_data_start = std::chrono::high_resolution_clock::now();
+        if (internal_id == pending_insert_id_) {
+            std::vector<double> result(data_size_ / sizeof(double));
+            memcpy(result.data(), getDataByInternalId(internal_id), data_size_);
+            return result;
+        }
         // if (enable_profiling_metrics_) {
         //     getOriginalData_calls++;
         // }
@@ -614,7 +631,8 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                     data_level0_memory_.data() + level0_element_start_positions_[node_id] +
                     linklist_size_offset));
             size_t data_offset =
-                    linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+                    linklist_size_offset + sizeof(linklistsizeint) +
+                    (enable_dynamic_updates_ ? maxM0_ : size) * sizeof(tableint);
             size_t start = level0_element_start_positions_[node_id] + data_offset;
 
             size_t end;
@@ -852,7 +870,8 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         dist_t dist = fstdistfunc_(query_data, vec_ep.data(), dist_func_param_);
         
         dist_t lowerBound = dist;
-        top_candidates.emplace(dist, ep_id);
+        if (!isMarkedDeleted(ep_id) && (!isIdAllowed || (*isIdAllowed)(getExternalLabel(ep_id))))
+            top_candidates.emplace(dist, ep_id);
         candidate_set.emplace(-dist, ep_id);
         
         visited_array[ep_id] = visited_array_tag;
@@ -1331,7 +1350,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             linklistsizeint size = *((linklistsizeint*)old_ll_ptr);
             
             size_t ll_header_size = sizeof(linklistsizeint);
-            size_t neighbors_size = size * sizeof(tableint);
+            size_t neighbors_size = (enable_dynamic_updates_ ? maxM0_ : size) * sizeof(tableint);
             
             new_memory.resize(new_memory.size() + ll_header_size + neighbors_size);
             
@@ -1362,6 +1381,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         data_level0_memory_ = std::move(new_memory);
         level0_element_start_positions_ = std::move(new_start_positions);
         is_compacted_ = true;
+        if (enable_dynamic_updates_) level0_element_start_positions_.resize(max_elements_);
         
         // Shrink to fit to release unused memory
         data_level0_memory_.shrink_to_fit();
@@ -1447,6 +1467,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         CompressionRootPolicy root_policy = CompressionRootPolicy::Level) {
         if (is_compacted_) return;
         if (!use_encoding_algorithm_) return;
+        compressed_chain_max_length_ = compress_chain_max_length;
 
         size_t dim = data_size_ / sizeof(double);
         bool unlimited_chain = (compress_chain_max_length < 0);
@@ -1700,7 +1721,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             linklistsizeint size = *((linklistsizeint*)old_ll_ptr);
             
             size_t ll_header_size = sizeof(linklistsizeint);
-            size_t neighbors_size = size * sizeof(tableint);
+            size_t neighbors_size = (enable_dynamic_updates_ ? maxM0_ : size) * sizeof(tableint);
             
             new_memory.resize(new_memory.size() + ll_header_size + neighbors_size);
             
@@ -1762,6 +1783,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         data_level0_memory_ = std::move(new_memory);
         level0_element_start_positions_ = std::move(new_start_positions);
         is_compacted_ = true;
+        if (enable_dynamic_updates_) level0_element_start_positions_.resize(max_elements_);
         
         data_level0_memory_.shrink_to_fit();
     }
@@ -1878,6 +1900,10 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             }
         }
 
+        const uint32_t update_magic = 0x4c564355;
+        writeBinaryPOD(output, update_magic);
+        writeBinaryPOD(output, enable_dynamic_updates_);
+        writeBinaryPOD(output, compressed_chain_max_length_);
         output.close();
     }
 
@@ -2015,6 +2041,15 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             }
         }
 
+        uint32_t update_magic = 0;
+        if (input.read(reinterpret_cast<char*>(&update_magic), sizeof(update_magic))) {
+            if (update_magic != 0x4c564355)
+                throw std::runtime_error("Unsupported LVC update metadata");
+            readBinaryPOD(input, enable_dynamic_updates_);
+            readBinaryPOD(input, compressed_chain_max_length_);
+        } else {
+            enable_dynamic_updates_ = false;
+        }
         input.close();
 
         // 加载cache
@@ -2155,7 +2190,98 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     * Adds point. Updates the point if it is already in the index.
     * If replacement of deleted elements is enabled: replaces previously deleted point if any, updating it with new point
     */
+    dist_t distanceToStoredNode(const void* point, tableint id) const {
+        if (!is_compacted_)
+            return fstdistfunc_(point, getDataByInternalId(id), dist_func_param_);
+        auto decoded = getOriginalDataByInternalId(id);
+        return fstdistfunc_(point, decoded.data(), dist_func_param_);
+    }
+
+    void appendDynamicPQ(const double* point, tableint id) {
+        if (pq_m_ == 0) return;
+        pq_data_.resize((static_cast<size_t>(id) + 1) * pq_m_);
+        const size_t dim = data_size_ / sizeof(double);
+        for (size_t m = 0; m < pq_m_; ++m) {
+            const size_t start = m * pq_d_sub_;
+            const size_t width = std::min(pq_d_sub_, dim - start);
+            double best = std::numeric_limits<double>::max();
+            uint8_t best_code = 0;
+            for (size_t k = 0; k < pq_k_; ++k) {
+                const double d = dist_l2_sq(point + start,
+                    pq_centroids_[m].data() + k * width, width);
+                if (d < best) { best = d; best_code = static_cast<uint8_t>(k); }
+            }
+            pq_data_[static_cast<size_t>(id) * pq_m_ + m] = best_code;
+        }
+    }
+
+    void finishDynamicInsert(tableint id, const double* point) {
+        const size_t dim = data_size_ / sizeof(double);
+        tableint parent = static_cast<tableint>(-1);
+        double best = std::numeric_limits<double>::max();
+        if (compressed_chain_max_length_ == 2) {
+            for (tableint candidate = 0; candidate < id; ++candidate) {
+                if (isMarkedDeleted(candidate) || getPrenodeId(candidate) != static_cast<tableint>(-1)) continue;
+                auto value = getOriginalDataByInternalId(candidate);
+                const double d = fstdistfunc_(point, value.data(), dist_func_param_);
+                if (d < best) { best = d; parent = candidate; }
+            }
+        } else {
+            auto* ll = get_linklist0(id);
+            const tableint* neighbors = reinterpret_cast<const tableint*>(ll + 1);
+            for (size_t j = 0; j < getListCount(ll); ++j) {
+                tableint candidate = neighbors[j];
+                if (isMarkedDeleted(candidate)) continue;
+                size_t depth = 1;
+                for (tableint p = getPrenodeId(candidate); p != static_cast<tableint>(-1); p = getPrenodeId(p)) ++depth;
+                if (compressed_chain_max_length_ > 0 && depth >= static_cast<size_t>(compressed_chain_max_length_)) continue;
+                auto value = getOriginalDataByInternalId(candidate);
+                const double d = fstdistfunc_(point, value.data(), dist_func_param_);
+                if (d < best) { best = d; parent = candidate; }
+            }
+            if (parent == static_cast<tableint>(-1)) {
+                for (tableint candidate = 0; candidate < id; ++candidate) {
+                    if (isMarkedDeleted(candidate)) continue;
+                    size_t depth = 1;
+                    for (tableint p = getPrenodeId(candidate); p != static_cast<tableint>(-1); p = getPrenodeId(p)) ++depth;
+                    if (compressed_chain_max_length_ > 0 && depth >= static_cast<size_t>(compressed_chain_max_length_)) continue;
+                    auto value = getOriginalDataByInternalId(candidate);
+                    const double d = fstdistfunc_(point, value.data(), dist_func_param_);
+                    if (d < best) { best = d; parent = candidate; }
+                }
+            }
+        }
+
+        std::vector<typename CodecPolicy::StateType> states(dim);
+        std::vector<tableint> path;
+        for (tableint p = parent; p != static_cast<tableint>(-1); p = getPrenodeId(p)) path.push_back(p);
+        std::reverse(path.begin(), path.end());
+        std::vector<char> discard;
+        utils::MemoryStreamWriter state_writer(&discard);
+        for (tableint p : path) {
+            auto value = getOriginalDataByInternalId(p);
+            for (size_t k = 0; k < dim; ++k) CodecPolicy::encode(value[k], states[k], state_writer);
+        }
+        std::vector<char> encoded;
+        utils::MemoryStreamWriter writer(&encoded);
+        for (size_t k = 0; k < dim; ++k) CodecPolicy::encode(point[k], states[k], writer);
+        writer.align();
+        setPrenodeId(id, parent);
+        const size_t payload_start = level0_element_start_positions_[id] +
+            sizeof(tableint) + sizeof(labeltype) + size_links_level0_;
+        data_level0_memory_.resize(payload_start);
+        data_level0_memory_.insert(data_level0_memory_.end(), encoded.begin(), encoded.end());
+        appendDynamicPQ(point, id);
+        pending_insert_id_ = static_cast<tableint>(-1);
+    }
+
     void addPoint(const void *data_point, labeltype label, bool replace_deleted = false) {
+        std::unique_lock<std::mutex> dynamic_lock(dynamic_update_lock_, std::defer_lock);
+        if (is_compacted_) {
+            if (!enable_dynamic_updates_ || replace_deleted)
+                throw std::runtime_error("Compressed index requires append-only dynamic updates");
+            dynamic_lock.lock();
+        }
         if ((allow_replace_deleted_ == false) && (replace_deleted == true)) {
             throw std::runtime_error("Replacement of deleted elements is disabled in constructor");
         }
@@ -2370,6 +2496,9 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
     // label是外部的id。存储在label_lookup_中的是外部id到内部id的映射
     tableint addPoint(const void *data_point, labeltype label, int level) {
+        if (is_compacted_ && !enable_dynamic_updates_)
+            throw std::runtime_error("Cannot insert into static compressed index");
+        const auto dynamic_started = std::chrono::steady_clock::now();
         tableint cur_c = 0;
         {
             // Checking if the element with the same label already exists
@@ -2377,6 +2506,8 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             std::unique_lock <std::mutex> lock_table(label_lookup_lock);
             auto search = label_lookup_.find(label);
             if (search != label_lookup_.end()) {
+                if (is_compacted_)
+                    throw std::runtime_error("Dynamic compressed index requires a new label");
                 tableint existingInternalId = search->second;
                 if (allow_replace_deleted_) {
                     if (isMarkedDeleted(existingInternalId)) {
@@ -2422,7 +2553,16 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         tableint enterpoint_copy = enterpoint_node_;
 
         // 每个节点的数据大小是一定的，size_data_per_element_。在这里为level0分配内存
-        memset(data_level0_memory_.data() + cur_c * size_data_per_element_ + offsetLevel0_, 0, size_data_per_element_);
+        if (is_compacted_) {
+            const size_t start = data_level0_memory_.size();
+            level0_element_start_positions_[cur_c] = start;
+            data_level0_memory_.resize(start + sizeof(tableint) + sizeof(labeltype) +
+                                       size_links_level0_ + data_size_, 0);
+            pending_insert_id_ = cur_c;
+            setPrenodeId(cur_c, static_cast<tableint>(-1));
+        } else {
+            memset(data_level0_memory_.data() + cur_c * size_data_per_element_ + offsetLevel0_, 0, size_data_per_element_);
+        }
 
         // Initialisation of the data and label
         memcpy(getExternalLabeLp(cur_c), &label, sizeof(labeltype));
@@ -2440,7 +2580,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
         if ((signed)currObj != -1) {
             if (curlevel < maxlevelcopy) {
-                dist_t curdist = fstdistfunc_(data_point, getDataByInternalId(currObj), dist_func_param_);
+                dist_t curdist = distanceToStoredNode(data_point, currObj);
                 for (int level = maxlevelcopy; level > curlevel; level--) {
                     bool changed = true;
                     while (changed) {
@@ -2456,7 +2596,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                             tableint cand = datal[i];
                             if (cand < 0 || cand > max_elements_)
                                 throw std::runtime_error("cand error");
-                            dist_t d = fstdistfunc_(data_point, getDataByInternalId(cand), dist_func_param_);
+                            dist_t d = distanceToStoredNode(data_point, cand);
                             if (d < curdist) {
                                 curdist = d;
                                 currObj = cand;
@@ -2476,7 +2616,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                 std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(
                         currObj, data_point, level);
                 if (epDeleted) {
-                    top_candidates.emplace(fstdistfunc_(data_point, getDataByInternalId(enterpoint_copy), dist_func_param_), enterpoint_copy);
+                    top_candidates.emplace(distanceToStoredNode(data_point, enterpoint_copy), enterpoint_copy);
                     if (top_candidates.size() > ef_construction_)
                         top_candidates.pop();
                 }
@@ -2493,6 +2633,13 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         if (curlevel > maxlevelcopy) {
             enterpoint_node_ = cur_c;
             maxlevel_ = curlevel;
+        }
+        if (is_compacted_) {
+            const auto encoding_started = std::chrono::steady_clock::now();
+            dynamic_graph_us_ += std::chrono::duration<double, std::micro>(encoding_started - dynamic_started).count();
+            finishDynamicInsert(cur_c, static_cast<const double*>(data_point));
+            dynamic_encoding_us_ += std::chrono::duration<double, std::micro>(
+                std::chrono::steady_clock::now() - encoding_started).count();
         }
         return cur_c;
     }
@@ -2581,10 +2728,10 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
             std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidates;
             
-            if (isIdAllowed) {
-                candidates = searchBaseLayerTwoLevel<false>(currObj, query_data, adc_table, ef_search, isIdAllowed);
-            } else {
+            if (!num_deleted_ && !isIdAllowed) {
                 candidates = searchBaseLayerTwoLevel<true>(currObj, query_data, adc_table, ef_search, isIdAllowed);
+            } else {
+                candidates = searchBaseLayerTwoLevel<false>(currObj, query_data, adc_table, ef_search, isIdAllowed);
             }
 
             // 4. Result Construction (candidates already contains Exact Distances)
@@ -2812,7 +2959,8 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             if (is_compacted_) {
                 size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
                 unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[i] + linklist_size_offset));
-                size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+                size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) +
+                                     (enable_dynamic_updates_ ? maxM0_ : size) * sizeof(tableint);
                 start = level0_element_start_positions_[i] + data_offset;
             } else {
                 start = level0_element_start_positions_[i] + offsetData_;
@@ -3033,7 +3181,8 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                 size_t start, end;
                 size_t linklist_size_offset = sizeof(tableint) + sizeof(labeltype);
                 unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[id] + linklist_size_offset));
-                size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+                size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) +
+                                     (enable_dynamic_updates_ ? maxM0_ : size) * sizeof(tableint);
                 start = level0_element_start_positions_[id] + data_offset;
                 
                 if (id + 1 < cur_element_count && level0_element_start_positions_[id+1] > 0) {
@@ -3114,7 +3263,8 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                 
                 for(size_t idx = 0; idx < decode_path.size(); ++idx) {
                     unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[decode_path[decode_path.size() - 1 - idx]] + linklist_size_offset));
-                    size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+                    size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) +
+                                         (enable_dynamic_updates_ ? maxM0_ : size) * sizeof(tableint);
 
                     tableint curr_id = decode_path[decode_path.size() - 1 - idx];
                     size_t curr_start = level0_element_start_positions_[curr_id] + data_offset;

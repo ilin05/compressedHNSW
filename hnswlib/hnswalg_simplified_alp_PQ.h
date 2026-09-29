@@ -58,6 +58,11 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
     mutable std::vector<char> data_level0_memory_;
     std::vector<size_t> level0_element_start_positions_;
     bool is_compacted_ = false;
+    bool enable_dynamic_updates_ = false;
+    tableint pending_insert_id_ = static_cast<tableint>(-1);
+    std::mutex dynamic_update_lock_;
+    double dynamic_graph_us_ = 0;
+    double dynamic_encoding_us_ = 0;
 
     char **linkLists_{nullptr};
     std::vector<int> element_levels_;  // keeps level of each element
@@ -440,7 +445,8 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         size_t ef_construction = 200,
         size_t random_seed = 100,
         bool allow_replace_deleted = false,
-        float reconstruction_tolerance = 1e-4f)
+        float reconstruction_tolerance = 1e-4f,
+        bool enable_dynamic_updates = false)
         : label_op_locks_(MAX_LABEL_OPERATION_LOCKS),
             link_list_locks_(max_elements),
             level0_element_start_positions_(max_elements),
@@ -450,6 +456,9 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         if (!std::isfinite(reconstruction_tolerance_) || reconstruction_tolerance_ < 0.0f) {
             throw std::invalid_argument("reconstruction tolerance must be finite and non-negative");
         }
+        enable_dynamic_updates_ = enable_dynamic_updates;
+        if (enable_dynamic_updates_ && allow_replace_deleted_)
+            throw std::invalid_argument("Dynamic compression does not reuse deleted IDs");
         max_elements_ = max_elements;
         num_deleted_ = 0;
         data_size_ = s->get_data_size();
@@ -573,6 +582,12 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
     std::vector<dist_t> getOriginalDataByInternalId(tableint internal_id, bool collect_metrics = false, bool suppress_metrics = false) const {
         size_t dim = *((size_t *) dist_func_param_);
         std::vector<dist_t> result(dim);
+        if (internal_id == pending_insert_id_) {
+            const float* raw = reinterpret_cast<const float*>(data_level0_memory_.data() +
+                              level0_element_start_positions_[internal_id] + sizeof(labeltype) + size_links_level0_);
+            for (size_t i = 0; i < dim; ++i) result[i] = static_cast<dist_t>(raw[i]);
+            return result;
+        }
 
         if (!is_compacted_) {
             const float* ptr = reinterpret_cast<const float*>(getDataByInternalId(internal_id));
@@ -584,7 +599,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         size_t offset = sizeof(labeltype);
         linklistsizeint size = *((linklistsizeint*)(data_level0_memory_.data() + start + offset));
         offset += sizeof(linklistsizeint);
-        offset += size * sizeof(tableint);
+        offset += (enable_dynamic_updates_ ? maxM0_ : size) * sizeof(tableint);
         
         if (uncompressed_mask_[internal_id]) {
              const float* data_ptr = reinterpret_cast<const float*>(data_level0_memory_.data() + start + offset);
@@ -711,8 +726,8 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             if (!is_compacted_) {
                 _mm_prefetch((char *) (visited_array + *(data + 1)), _MM_HINT_T0);
                 _mm_prefetch((char *) (visited_array + *(data + 1) + 64), _MM_HINT_T0);
-                _mm_prefetch(getDataByInternalId(*datal), _MM_HINT_T0);
-                _mm_prefetch(getDataByInternalId(*(datal + 1)), _MM_HINT_T0);
+                if (size > 0) _mm_prefetch(getDataByInternalId(*datal), _MM_HINT_T0);
+                if (size > 1) _mm_prefetch(getDataByInternalId(*(datal + 1)), _MM_HINT_T0);
             }
 #endif
 
@@ -723,7 +738,8 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
 #ifdef USE_SSE
                 if (!is_compacted_) {
                     _mm_prefetch((char *) (visited_array + *(datal + j + 1)), _MM_HINT_T0);
-                    _mm_prefetch(getDataByInternalId(*(datal + j + 1)), _MM_HINT_T0);
+                    if (j + 1 < size)
+                        _mm_prefetch(getDataByInternalId(*(datal + j + 1)), _MM_HINT_T0);
                 }
 #endif
                 // 如果candidate已经访问过（对应论文中，如果e属于v，无操作，循环次数加1）
@@ -803,7 +819,8 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         }
         
         dist_t lowerBound = dist;
-        top_candidates.emplace(dist, ep_id);
+        if (!isMarkedDeleted(ep_id) && (!isIdAllowed || (*isIdAllowed)(getExternalLabel(ep_id))))
+            top_candidates.emplace(dist, ep_id);
         candidate_set.emplace(-dist, ep_id);
         
         visited_array[ep_id] = visited_array_tag;
@@ -1144,10 +1161,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             // 对于return_list(R)中的每一个元素
             for (std::pair<dist_t, tableint> second_pair : return_list) {
                 
-                dist_t curdist =
-                        fstdistfunc_(getDataByInternalId(second_pair.second),
-                                        getDataByInternalId(curent_pair.second),
-                                        dist_func_param_);
+                dist_t curdist = distanceBetweenStoredNodes(second_pair.second, curent_pair.second);
                 // 如果curent_pair 与已经与q连接元素的距离 < curent_pair与query的距离
                 if (curdist < dist_to_query) {
                     // curent_pair将不会作为q的邻居返回
@@ -1277,17 +1291,14 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                     setListCount(ll_other, sz_link_list_other + 1);
                 } else {
                     // finding the "weakest" element to replace it with the new one
-                    dist_t d_max = fstdistfunc_(getDataByInternalId(cur_c), getDataByInternalId(selectedNeighbors[idx]),
-                                                dist_func_param_);
+                    dist_t d_max = distanceBetweenStoredNodes(cur_c, selectedNeighbors[idx]);
                     // Heuristic:
                     std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidates;
                     candidates.emplace(d_max, cur_c);
 
                     // 邻居的linkList已经满了，需要重新选出最好的Mcurmax个邻居。逐个计算距离，放入candidates中
                     for (size_t j = 0; j < sz_link_list_other; j++) {
-                        candidates.emplace(
-                                fstdistfunc_(getDataByInternalId(data[j]), getDataByInternalId(selectedNeighbors[idx]),
-                                                dist_func_param_), data[j]);
+                        candidates.emplace(distanceBetweenStoredNodes(data[j], selectedNeighbors[idx]), data[j]);
                     }
 
                     getNeighborsByHeuristic2(candidates, Mcurmax);
@@ -1321,7 +1332,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
 
 
     void resizeIndex(size_t new_max_elements) {
-        if (is_compacted_)
+        if (is_compacted_ && !enable_dynamic_updates_)
             throw std::runtime_error("Cannot resize compacted index");
 
         if (new_max_elements < cur_element_count)
@@ -1335,7 +1346,8 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         std::vector<std::mutex>(new_max_elements).swap(link_list_locks_);
 
         // Reallocate base layer
-        data_level0_memory_.resize(new_max_elements * size_data_per_element_);
+        if (!is_compacted_)
+            data_level0_memory_.resize(new_max_elements * size_data_per_element_);
 
         // Reallocate all other layers
         char ** linkLists_new = (char **) realloc(linkLists_, sizeof(void *) * new_max_elements);
@@ -1421,7 +1433,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             linklistsizeint size = *((linklistsizeint*)old_ll_ptr);
             
             size_t ll_header_size = sizeof(linklistsizeint);
-            size_t neighbors_size = size * sizeof(tableint);
+            size_t neighbors_size = (enable_dynamic_updates_ ? maxM0_ : size) * sizeof(tableint);
             
             // Write Size
             char* size_ptr = (char*)&size;
@@ -1512,6 +1524,10 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             if (linkListSize)
                 output.write(linkLists_[i], linkListSize);
         }
+        const uint32_t update_magic = 0x414c5055;
+        writeBinaryPOD(output, update_magic);
+        writeBinaryPOD(output, enable_dynamic_updates_);
+        writeBinaryPOD(output, reconstruction_tolerance_);
         output.close();
     }
 
@@ -1632,6 +1648,15 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             }
         }
 
+        uint32_t update_magic = 0;
+        if (input.read(reinterpret_cast<char*>(&update_magic), sizeof(update_magic))) {
+            if (update_magic != 0x414c5055)
+                throw std::runtime_error("Unsupported ALP update metadata");
+            readBinaryPOD(input, enable_dynamic_updates_);
+            readBinaryPOD(input, reconstruction_tolerance_);
+        } else {
+            enable_dynamic_updates_ = false;
+        }
         input.close();
 
         return;
@@ -1651,6 +1676,10 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         tableint internalId = search->second;
         lock_table.unlock();
 
+        if (is_compacted_) {
+            auto decoded = getOriginalDataByInternalId(internalId);
+            return std::vector<data_t>(decoded.begin(), decoded.end());
+        }
         char* data_ptrv = getDataByInternalId(internalId);
         size_t dim = *((size_t *) dist_func_param_);
         std::vector<data_t> data;
@@ -1767,7 +1796,57 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
     * Adds point. Updates the point if it is already in the index.
     * If replacement of deleted elements is enabled: replaces previously deleted point if any, updating it with new point
     */
+    dist_t distanceToStoredNode(const void* point, tableint id) const {
+        if (!is_compacted_)
+            return fstdistfunc_(point, getDataByInternalId(id), dist_func_param_);
+        auto decoded = getOriginalDataByInternalId(id);
+        return fstdistfunc_(point, decoded.data(), dist_func_param_);
+    }
+
+    dist_t distanceBetweenStoredNodes(tableint a, tableint b) const {
+        if (!is_compacted_)
+            return fstdistfunc_(getDataByInternalId(a), getDataByInternalId(b), dist_func_param_);
+        auto va = getOriginalDataByInternalId(a);
+        auto vb = getOriginalDataByInternalId(b);
+        return fstdistfunc_(va.data(), vb.data(), dist_func_param_);
+    }
+
+    void finishDynamicInsert(tableint id, const float* point) {
+        const size_t dim = data_size_ / sizeof(float);
+        std::vector<char> encoded;
+        utils::MemoryStreamWriter writer(&encoded);
+        alp_encode_vector(point, dim, writer);
+        writer.align();
+        const size_t payload_start = level0_element_start_positions_[id] +
+            sizeof(labeltype) + size_links_level0_;
+        data_level0_memory_.resize(payload_start);
+        data_level0_memory_.insert(data_level0_memory_.end(), encoded.begin(), encoded.end());
+        uncompressed_mask_.push_back(0);
+        if (pq_m_ != 0) {
+            pq_data_.resize((static_cast<size_t>(id) + 1) * pq_m_);
+            for (size_t m = 0; m < pq_m_; ++m) {
+                const size_t start = m * pq_d_sub_;
+                const size_t width = std::min(pq_d_sub_, dim - start);
+                float best = std::numeric_limits<float>::max();
+                uint8_t code = 0;
+                for (size_t k = 0; k < pq_k_; ++k) {
+                    const float d = dist_l2_sq(point + start,
+                        pq_centroids_[m].data() + k * width, width);
+                    if (d < best) { best = d; code = static_cast<uint8_t>(k); }
+                }
+                pq_data_[static_cast<size_t>(id) * pq_m_ + m] = code;
+            }
+        }
+        pending_insert_id_ = static_cast<tableint>(-1);
+    }
+
     void addPoint(const void *data_point, labeltype label, bool replace_deleted = false) {
+        std::unique_lock<std::mutex> dynamic_lock(dynamic_update_lock_, std::defer_lock);
+        if (is_compacted_) {
+            if (!enable_dynamic_updates_ || replace_deleted)
+                throw std::runtime_error("Compressed index requires append-only dynamic updates");
+            dynamic_lock.lock();
+        }
         if ((allow_replace_deleted_ == false) && (replace_deleted == true)) {
             throw std::runtime_error("Replacement of deleted elements is disabled in constructor");
         }
@@ -1968,6 +2047,9 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
 
     // label是外部的id。存储在label_lookup_中的是外部id到内部id的映射
     tableint addPoint(const void *data_point, labeltype label, int level) {
+        if (is_compacted_ && !enable_dynamic_updates_)
+            throw std::runtime_error("Cannot insert into static compressed index");
+        const auto dynamic_started = std::chrono::steady_clock::now();
         tableint cur_c = 0;
         {
             // Checking if the element with the same label already exists
@@ -1975,6 +2057,8 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             std::unique_lock <std::mutex> lock_table(label_lookup_lock);
             auto search = label_lookup_.find(label);
             if (search != label_lookup_.end()) {
+                if (is_compacted_)
+                    throw std::runtime_error("Dynamic compressed index requires a new label");
                 tableint existingInternalId = search->second;
                 if (allow_replace_deleted_) {
                     if (isMarkedDeleted(existingInternalId)) {
@@ -2020,11 +2104,22 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         tableint enterpoint_copy = enterpoint_node_;
 
         // 每个节点的数据大小是一定的，size_data_per_element_。在这里为level0分配内存
-        memset(data_level0_memory_.data() + cur_c * size_data_per_element_ + offsetLevel0_, 0, size_data_per_element_);
+        if (is_compacted_) {
+            const size_t start = data_level0_memory_.size();
+            level0_element_start_positions_[cur_c] = start;
+            data_level0_memory_.resize(start + sizeof(labeltype) + size_links_level0_ + data_size_, 0);
+            pending_insert_id_ = cur_c;
+        } else {
+            memset(data_level0_memory_.data() + cur_c * size_data_per_element_ + offsetLevel0_, 0, size_data_per_element_);
+        }
 
         // Initialisation of the data and label
         memcpy(getExternalLabeLp(cur_c), &label, sizeof(labeltype));
-        memcpy(getDataByInternalId(cur_c), data_point, data_size_);
+        if (is_compacted_)
+            memcpy(data_level0_memory_.data() + level0_element_start_positions_[cur_c] +
+                   sizeof(labeltype) + size_links_level0_, data_point, data_size_);
+        else
+            memcpy(getDataByInternalId(cur_c), data_point, data_size_);
 
         if (curlevel) {
             // 为非level0的层分配内存
@@ -2038,7 +2133,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
 
         if ((signed)currObj != -1) {
             if (curlevel < maxlevelcopy) {
-                dist_t curdist = fstdistfunc_(data_point, getDataByInternalId(currObj), dist_func_param_);
+                dist_t curdist = distanceToStoredNode(data_point, currObj);
                 for (int level = maxlevelcopy; level > curlevel; level--) {
                     bool changed = true;
                     while (changed) {
@@ -2054,7 +2149,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                             tableint cand = datal[i];
                             if (cand < 0 || cand > max_elements_)
                                 throw std::runtime_error("cand error");
-                            dist_t d = fstdistfunc_(data_point, getDataByInternalId(cand), dist_func_param_);
+                            dist_t d = distanceToStoredNode(data_point, cand);
                             if (d < curdist) {
                                 curdist = d;
                                 currObj = cand;
@@ -2074,7 +2169,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                 std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(
                         currObj, data_point, level);
                 if (epDeleted) {
-                    top_candidates.emplace(fstdistfunc_(data_point, getDataByInternalId(enterpoint_copy), dist_func_param_), enterpoint_copy);
+                    top_candidates.emplace(distanceToStoredNode(data_point, enterpoint_copy), enterpoint_copy);
                     if (top_candidates.size() > ef_construction_)
                         top_candidates.pop();
                 }
@@ -2091,6 +2186,13 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         if (curlevel > maxlevelcopy) {
             enterpoint_node_ = cur_c;
             maxlevel_ = curlevel;
+        }
+        if (is_compacted_) {
+            const auto encoding_started = std::chrono::steady_clock::now();
+            dynamic_graph_us_ += std::chrono::duration<double, std::micro>(encoding_started - dynamic_started).count();
+            finishDynamicInsert(cur_c, static_cast<const float*>(data_point));
+            dynamic_encoding_us_ += std::chrono::duration<double, std::micro>(
+                std::chrono::steady_clock::now() - encoding_started).count();
         }
         return cur_c;
     }
@@ -2395,7 +2497,8 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             if(is_compacted_){
                 size_t linklist_size_offset = sizeof(labeltype);
                 unsigned short int size = *((unsigned short int*)(data_level0_memory_.data() + level0_element_start_positions_[i] + linklist_size_offset));
-                size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) + size * sizeof(tableint);
+                size_t data_offset = linklist_size_offset + sizeof(linklistsizeint) +
+                                     (enable_dynamic_updates_ ? maxM0_ : size) * sizeof(tableint);
                 start = level0_element_start_positions_[i] + data_offset;
             }else{
                 start = level0_element_start_positions_[i] + offsetData_;
