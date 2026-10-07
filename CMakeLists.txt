@@ -225,6 +225,12 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_dynamic_compressed_hnsw examples/cpp/test_dynamic_compressed_hnsw.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_dynamic_compressed_hnsw hnswlib)
 
+    add_executable(test_dynamic_update_batches examples/cpp/test_dynamic_update_batches.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_dynamic_update_batches hnswlib OpenMP::OpenMP_CXX)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+      target_compile_options(test_dynamic_update_batches PRIVATE -g -fno-omit-frame-pointer)
+    endif()
+
     add_executable(test_exact_lvc_correctness examples/cpp/test_exact_lvc_correctness.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_exact_lvc_correctness hnswlib)
 
@@ -333,6 +339,7 @@ if(HNSWLIB_EXAMPLES)
       test_build_compressed_hnsw_ablation
       test_search_compressed_hnsw_ablation
       test_dynamic_compressed_hnsw
+      test_dynamic_update_batches
       test_perf_breakdown_hnsw
       test_build_bigann_hnswalp_pq
       test_search_bigann_hnswalp_pq
