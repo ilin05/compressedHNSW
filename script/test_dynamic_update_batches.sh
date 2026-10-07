@@ -127,9 +127,18 @@ PY
     else
       update_status "$dataset" "$codec" PASS PASS
     fi
-    if [[ -x "$HOME/FlameGraph/stackcollapse-perf.pl" && -x "$HOME/FlameGraph/flamegraph.pl" ]]; then
-      "$HOME/FlameGraph/stackcollapse-perf.pl" "$profile_dir/stacks.perf" > "$profile_dir/stacks.folded"
-      "$HOME/FlameGraph/flamegraph.pl" "$profile_dir/stacks.folded" > "$profile_dir/flamegraph.svg"
+    rm -f "$profile_dir/stacks.folded" "$profile_dir/flamegraph.svg"
+    if [[ "$samples" -gt 0 && -x "$HOME/FlameGraph/stackcollapse-perf.pl" &&
+          -x "$HOME/FlameGraph/flamegraph.pl" ]]; then
+      if "$HOME/FlameGraph/stackcollapse-perf.pl" "$profile_dir/stacks.perf" > "$profile_dir/stacks.folded" &&
+         [[ -s "$profile_dir/stacks.folded" ]]; then
+        "$HOME/FlameGraph/flamegraph.pl" "$profile_dir/stacks.folded" > "$profile_dir/flamegraph.svg" || {
+          rm -f "$profile_dir/flamegraph.svg"
+          echo "FlameGraph failed for $dataset $codec; perf report and stacks are preserved" >&2
+        }
+      else
+        echo "No usable folded stacks for $dataset $codec; perf report and stacks are preserved" >&2
+      fi
     fi
   done
 done
