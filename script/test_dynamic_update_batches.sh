@@ -9,6 +9,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA_DIR="${DATA_DIR:-$ROOT/datasets/hdf5files}"
 OUT="${OUT:-$ROOT/script/dynamic_update_batches_results}"
 BIN="${BIN:-$ROOT/build/dynamic_update_batches/test_dynamic_update_batches}"
+LEGACY_OUT="${LEGACY_OUT:-$ROOT/build/dynamic_update_batches}"
 BASE="${BASE:-4096}"
 BATCH="${BATCH:-256}"
 BATCHES="${BATCHES:-3}"
@@ -26,6 +27,15 @@ CODECS="${CODECS:-raw_f64 raw_f32 dexor gorilla elf alp}"
 perf_cmd=("$PERF_BIN")
 if [[ "$PERF_SUDO" == 1 ]]; then perf_cmd=(sudo -n "$PERF_BIN"); fi
 mkdir -p "$OUT" "$(dirname "$BIN")"
+if [[ ( "$PERF_ONLY" == 1 || "$RESUME" == 1 ) && ! -f "$OUT/all_metrics.csv" &&
+      "$OUT" != "$LEGACY_OUT" && -f "$LEGACY_OUT/all_metrics.csv" ]]; then
+  echo "Copying existing results from $LEGACY_OUT to $OUT"
+  for item in "$LEGACY_OUT"/*; do
+    [[ -e "$item" ]] || continue
+    [[ "$item" == "$LEGACY_OUT/test_dynamic_update_batches" ]] && continue
+    cp -a -n "$item" "$OUT/"
+  done
+fi
 build_benchmark() {
   "$CXX" -std=c++17 -O2 -g -fno-omit-frame-pointer -fopenmp -DTWO_LEVEL_SEARCH \
     -I "$ROOT" "$ROOT/examples/cpp/test_dynamic_update_batches.cpp" \
