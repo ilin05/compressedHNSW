@@ -1,0 +1,8 @@
+Training PQ: dim=784, m=98, d_sub=8, K=256
+Encoding dataset with PQ...
+Compression: Selected 40 roots using policy level.
+Compression: chain max length = 2, actual roots = 40
+elf before batch=0 bytes=8285739 recall@1=0.99 mean_us=6057.46
+elf after batch=1 bytes=8686200 recall@1=0.99 mean_us=6283.42
+elf after batch=2 bytes=9090602 recall@1=0.99 mean_us=6843.79
+elf after batch=3 bytes=9502325 recall@1=0.99 mean_us=7195.6

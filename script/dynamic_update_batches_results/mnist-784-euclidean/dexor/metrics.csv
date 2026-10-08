@@ -1,0 +1,5 @@
+codec,stage,batch,active,deleted,index_bytes,recall_at_1,mean_query_us,qps,insert_mean_us,delete_mean_us,graph_mean_us,encoding_mean_us,max_insert_abs_error
+dexor,before,0,4096,0,4887283,1,5324,187.829,0,0,0,0,0
+dexor,after,1,4096,256,5093017,1,5513.18,181.383,79526.6,0.267781,78442.4,1083.56,0
+dexor,after,2,4096,512,5297304,1,5673.11,176.27,79734.7,0.290273,78661.1,1072.77,0
+dexor,after,3,4096,768,5502252,1,6006.71,166.48,82097.4,0.350488,81089.6,1007.15,0

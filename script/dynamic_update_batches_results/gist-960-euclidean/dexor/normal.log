@@ -1,0 +1,6 @@
+Training PQ: dim=960, m=120, d_sub=8, K=256
+Encoding dataset with PQ...
+Compression: Selected 40 roots using policy level.
+Compression: chain max length = 2, actual roots = 40
+dexor before batch=0 bytes=29504951 recall@1=1 mean_us=14489.6
+FAIL: lossless insert mismatch at id=663 coordinate=73 expected_bits=1027879626 actual_bits=1027879358

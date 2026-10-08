@@ -1,0 +1,5 @@
+codec,stage,batch,active,deleted,index_bytes,recall_at_1,mean_query_us,qps,insert_mean_us,delete_mean_us,graph_mean_us,encoding_mean_us,max_insert_abs_error
+elf,before,0,4096,0,22377874,1,11418.9,87.5742,0,0,0,0,0
+elf,after,1,4096,256,23645708,0.99,11622.3,86.0414,168064,0.332258,166281,1782.47,0
+elf,after,2,4096,512,24913281,0.99,12380.9,80.7693,169383,0.652969,167539,1841.44,0
+elf,after,3,4096,768,26181649,0.99,13258.2,75.4251,178642,1.11338,177004,1636.17,0

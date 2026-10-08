@@ -1,0 +1,5 @@
+codec,stage,batch,active,deleted,index_bytes,recall_at_1,mean_query_us,qps,insert_mean_us,delete_mean_us,graph_mean_us,encoding_mean_us,max_insert_abs_error
+gorilla,before,0,4096,0,17716991,0.99,5230.77,191.176,0,0,0,0,0
+gorilla,after,1,4096,256,18706120,0.99,5316.54,188.092,60671.1,0.42518,59476.5,1193.86,0
+gorilla,after,2,4096,512,19703926,0.99,5522.25,181.086,61591.5,0.301117,60428,1162.79,0
+gorilla,after,3,4096,768,20719203,0.99,5856.7,170.745,63972.7,0.305652,62872.8,1099.21,0

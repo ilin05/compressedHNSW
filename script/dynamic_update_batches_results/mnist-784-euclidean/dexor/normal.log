@@ -1,0 +1,8 @@
+Training PQ: dim=784, m=98, d_sub=8, K=256
+Encoding dataset with PQ...
+Compression: Selected 40 roots using policy level.
+Compression: chain max length = 2, actual roots = 40
+dexor before batch=0 bytes=4887283 recall@1=1 mean_us=5324
+dexor after batch=1 bytes=5093017 recall@1=1 mean_us=5513.18
+dexor after batch=2 bytes=5297304 recall@1=1 mean_us=5673.11
+dexor after batch=3 bytes=5502252 recall@1=1 mean_us=6006.71

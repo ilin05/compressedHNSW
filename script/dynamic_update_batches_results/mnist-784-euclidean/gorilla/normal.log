@@ -1,0 +1,8 @@
+Training PQ: dim=784, m=98, d_sub=8, K=256
+Encoding dataset with PQ...
+Compression: Selected 40 roots using policy level.
+Compression: chain max length = 2, actual roots = 40
+gorilla before batch=0 bytes=9202779 recall@1=1 mean_us=4685.98
+gorilla after batch=1 bytes=9665935 recall@1=1 mean_us=4732.04
+gorilla after batch=2 bytes=10124486 recall@1=1 mean_us=4963.71
+gorilla after batch=3 bytes=10583201 recall@1=1 mean_us=5320.98

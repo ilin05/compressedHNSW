@@ -1,0 +1,5 @@
+codec,stage,batch,active,deleted,index_bytes,recall_at_1,mean_query_us,qps,insert_mean_us,delete_mean_us,graph_mean_us,encoding_mean_us,max_insert_abs_error
+raw_f64,before,0,4096,0,4803536,1,95.4222,10479.7,0,0,0,0,0
+raw_f64,after,1,4096,256,5103700,1,107.006,9345.31,336.19,0.200156,0,0,0
+raw_f64,after,2,4096,512,5404204,1,110.751,9029.28,356.287,0.225773,0,0,0
+raw_f64,after,3,4096,768,5703620,1,118.478,8440.39,360.594,0.382332,0,0,0

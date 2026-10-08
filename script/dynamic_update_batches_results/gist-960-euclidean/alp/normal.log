@@ -1,0 +1,6 @@
+Training PQ: dim=960, m=120, d_sub=8, K=256
+Encoding dataset with PQ...
+alp before batch=0 bytes=7959574 recall@1=1 mean_us=1422.13
+alp after batch=1 bytes=8393306 recall@1=0.99 mean_us=1513.35
+alp after batch=2 bytes=8825790 recall@1=0.99 mean_us=1583.17
+alp after batch=3 bytes=9261718 recall@1=0.99 mean_us=1675.37

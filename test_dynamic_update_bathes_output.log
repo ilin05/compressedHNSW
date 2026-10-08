@@ -1,0 +1,28 @@
+nohup: ignoring input
+Running sift-128-euclidean raw_f64
+Running sift-128-euclidean raw_f32
+Running sift-128-euclidean dexor
+Running sift-128-euclidean gorilla
+Running sift-128-euclidean elf
+Running sift-128-euclidean alp
+Running mnist-784-euclidean raw_f64
+Running mnist-784-euclidean raw_f32
+Running mnist-784-euclidean dexor
+Running mnist-784-euclidean gorilla
+Running mnist-784-euclidean elf
+Running mnist-784-euclidean alp
+Running fashion-mnist-784-euclidean raw_f64
+Running fashion-mnist-784-euclidean raw_f32
+Running fashion-mnist-784-euclidean dexor
+Running fashion-mnist-784-euclidean gorilla
+Running fashion-mnist-784-euclidean elf
+Running fashion-mnist-784-euclidean alp
+Running gist-960-euclidean raw_f64
+Running gist-960-euclidean raw_f32
+Running gist-960-euclidean dexor
+FAILED gist-960-euclidean dexor; see /home/zmy/HNSWCW/compressedhnsw/script/dynamic_update_batches_results/gist-960-euclidean/dexor/normal.log
+Running gist-960-euclidean gorilla
+Running gist-960-euclidean elf
+Running gist-960-euclidean alp
+Metrics: /home/zmy/HNSWCW/compressedhnsw/script/dynamic_update_batches_results/all_metrics.csv
+Perf breakdown: /home/zmy/HNSWCW/compressedhnsw/script/dynamic_update_batches_results/all_perf_breakdown.csv

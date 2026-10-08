@@ -1,0 +1,4 @@
+raw_f64 before batch=0 bytes=32066512 recall@1=1 mean_us=693.762
+raw_f64 after batch=1 bytes=34070612 recall@1=1 mean_us=699.13
+raw_f64 after batch=2 bytes=36075052 recall@1=1 mean_us=749.711
+raw_f64 after batch=3 bytes=38078404 recall@1=1 mean_us=799.361
