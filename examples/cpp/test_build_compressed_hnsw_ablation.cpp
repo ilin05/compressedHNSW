@@ -1,4 +1,6 @@
 #include <chrono>
+#include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -65,6 +67,19 @@ struct BuildResult {
     double data_ratio;
     double index_ratio;
     std::string index_file;
+    std::string root_policy;
+    size_t roots = 0;
+    size_t max_depth = 0;
+    double mean_reference_l2 = 0;
+    size_t payload_bytes = 0;
+    size_t graph_metadata_bytes = 0;
+    size_t file_bytes = 0;
+    double full_index_ratio_f32 = 0;
+    size_t f32_patch_bytes = 0;
+    size_t codec_bytes = 0;
+    size_t pq_code_bytes = 0;
+    size_t pq_centroid_bytes = 0;
+    std::string shared_graph_file;
 };
 
 static std::string chain_tag(int chain_max_length) {
@@ -78,11 +93,16 @@ BuildResult build_one(const std::string& dataset,
                       const std::string& algo,
                       int chain_max_length,
                       int M,
-                      int ef_construction) {
+                      int ef_construction,
+                      CompressionRootPolicy root_policy, bool verify_vectors, bool f32_lossless,
+                      const std::string& shared_graph_file, double shared_graph_build_s) {
     BuildResult r;
     r.dataset = dataset;
     r.algorithm = algo;
     r.chain_max_length = chain_max_length;
+    r.root_policy = root_policy == CompressionRootPolicy::Level0Degree ? "degree" :
+                    root_policy == CompressionRootPolicy::Random ? "random" : "level";
+    r.shared_graph_file = shared_graph_file;
     r.vectors = 0;
     r.dim = 0;
     r.build_time_s = 0.0;
@@ -98,22 +118,32 @@ BuildResult build_one(const std::string& dataset,
 
     L2SpaceDouble l2space(r.dim);
     size_t cache_max_size = r.vectors / 100;
-    auto* index = new HierarchicalNSWCABFRAMEWORK<double, CodecPolicy>(
-        &l2space, r.vectors, M, ef_construction, true, cache_max_size, 100, false);
+    auto* index = shared_graph_file.empty()
+        ? new HierarchicalNSWCABFRAMEWORK<double, CodecPolicy>(
+            &l2space, r.vectors, M, ef_construction, true, cache_max_size, 100, false)
+        : new HierarchicalNSWCABFRAMEWORK<double, CodecPolicy>(
+            &l2space, shared_graph_file, true, 0);
+    index->setF32Lossless(f32_lossless);
 
     std::cout << "\n=== Build dataset=" << dataset
               << " algo=" << algo
               << " chain_max=" << chain_max_length << " ===" << std::endl;
 
     StopW timer;
-    #pragma omp parallel for
-    for (long long i = 0; i < static_cast<long long>(r.vectors); ++i) {
-        index->addPoint(data + i * r.dim, static_cast<labeltype>(i));
+    if (shared_graph_file.empty()) {
+        #pragma omp parallel for
+        for (long long i = 0; i < static_cast<long long>(r.vectors); ++i) {
+            index->addPoint(data + i * r.dim, static_cast<labeltype>(i));
+        }
+        r.build_time_s = timer.elapsed_us() * 1e-6;
+    } else {
+        if (index->cur_element_count != r.vectors)
+            throw std::runtime_error("Shared HNSW graph vector count mismatch");
+        r.build_time_s = shared_graph_build_s;
     }
-    r.build_time_s = timer.elapsed_us() * 1e-6;
 
     timer.reset();
-    index->compress_dataset(chain_max_length);
+    index->compress_dataset(chain_max_length, 0.01, root_policy);
     r.compress_time_s = timer.elapsed_us() * 1e-6;
 
     size_t original_data_size = r.vectors * r.dim * sizeof(double);
@@ -128,8 +158,66 @@ BuildResult build_one(const std::string& dataset,
         r.index_ratio = static_cast<double>(original_index_size) / static_cast<double>(compressed_index_size);
     }
 
-    r.index_file = dataset + "_" + algo + "_" + chain_tag(chain_max_length) + "_pq.bin";
+    r.index_file = dataset + "_" + algo + "_" + chain_tag(chain_max_length) +
+                   (r.root_policy == "level" ? "" : "_" + r.root_policy) + "_pq.bin";
+    index->exportCompressionForest(r.index_file + ".forest.csv");
+    for (size_t i = 0; i < r.vectors; ++i) {
+        if (index->compression_parent_export_[i] == static_cast<tableint>(-1)) ++r.roots;
+        r.max_depth = std::max(r.max_depth, size_t(index->compression_depth_export_[i]));
+        r.mean_reference_l2 += index->compression_reference_l2_export_[i];
+    }
+    r.mean_reference_l2 /= std::max<size_t>(1, r.vectors - r.roots);
+    r.payload_bytes = compressed_data_size;
+    r.f32_patch_bytes = index->getF32PatchBytes();
+    r.codec_bytes = compressed_data_size - r.f32_patch_bytes - (f32_lossless ? r.vectors * sizeof(uint32_t) : 0);
+    r.pq_code_bytes = index->pq_data_.size();
+    for (const auto& centroids : index->pq_centroids_) r.pq_centroid_bytes += centroids.size() * sizeof(double);
+    r.graph_metadata_bytes = compressed_index_size - compressed_data_size;
+    r.full_index_ratio_f32 = compressed_index_size ?
+        double(original_index_size - original_data_size + r.vectors * r.dim * sizeof(float)) /
+            compressed_index_size : 0;
+    if (verify_vectors) {
+        for (tableint i = 0; i < r.vectors; ++i) {
+            const auto decoded = index->getOriginalDataByInternalId(i);
+            const auto label = index->getExternalLabel(i);
+            size_t first = 0;
+            if (label < r.vectors && decoded.size() == r.dim) {
+                while (first < r.dim) {
+                    const float actual = static_cast<float>(decoded[first]);
+                    const float expected = static_cast<float>(data[label * r.dim + first]);
+                    if (std::memcmp(&actual, &expected, sizeof(float)) != 0) break;
+                    ++first;
+                }
+            }
+            if (label >= r.vectors || decoded.size() != r.dim || first != r.dim) {
+                throw std::runtime_error("HNSW F32 decode failed at internal node " + std::to_string(i) +
+                    " label=" + std::to_string(label) + " coordinate=" + std::to_string(first) +
+                    " expected=" + (first < r.dim ? std::to_string(data[label * r.dim + first]) : "missing") +
+                    " decoded=" + (first < decoded.size() ? std::to_string(decoded[first]) : "missing"));
+            }
+        }
+        std::cout << "PASS HNSW F32 bitwise vectors=" << r.vectors << '/' << r.vectors << '\n';
+    }
     index->saveIndex(r.index_file);
+    r.file_bytes = std::filesystem::file_size(r.index_file);
+    if (verify_vectors) {
+        HierarchicalNSWCABFRAMEWORK<double, CodecPolicy> reloaded(
+            &l2space, r.index_file, true, cache_max_size);
+        for (tableint i = 0; i < r.vectors; ++i) {
+            const auto decoded = reloaded.getOriginalDataByInternalId(i);
+            const auto label = reloaded.getExternalLabel(i);
+            if (label >= r.vectors || decoded.size() != r.dim)
+                throw std::runtime_error("Reloaded HNSW vector shape mismatch at " + std::to_string(i));
+            for (size_t j = 0; j < r.dim; ++j) {
+                const float actual = static_cast<float>(decoded[j]);
+                const float expected = static_cast<float>(data[label * r.dim + j]);
+                if (std::memcmp(&actual, &expected, sizeof(float)) != 0)
+                    throw std::runtime_error("Reloaded HNSW F32 decode failed at node " + std::to_string(i) +
+                                             " coordinate=" + std::to_string(j));
+            }
+        }
+        std::cout << "PASS reloaded HNSW F32 bitwise vectors=" << r.vectors << '/' << r.vectors << '\n';
+    }
 
     delete index;
     delete[] data;
@@ -141,12 +229,13 @@ BuildResult dispatch_build(const std::string& dataset,
                            const std::string& algo,
                            int chain_max_length,
                            int M,
-                           int ef_construction) {
-    if (algo == "DeXOR") return build_one<codecs::DeXORCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction);
-    if (algo == "Gorilla") return build_one<codecs::GorillaCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction);
-    if (algo == "Elf") return build_one<codecs::ElfCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction);
-    if (algo == "Camel") return build_one<codecs::CamelCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction);
-    if (algo == "DeXORPlus") return build_one<codecs::DeXORPlusCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction);
+                           int ef_construction, CompressionRootPolicy root_policy, bool verify_vectors,
+                           bool f32_lossless, const std::string& shared_graph_file, double shared_graph_build_s) {
+    if (algo == "DeXOR") return build_one<codecs::DeXORCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction, root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s);
+    if (algo == "Gorilla") return build_one<codecs::GorillaCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction, root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s);
+    if (algo == "Elf") return build_one<codecs::ElfCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction, root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s);
+    if (algo == "Camel") return build_one<codecs::CamelCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction, root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s);
+    if (algo == "DeXORPlus") return build_one<codecs::DeXORPlusCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction, root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s);
     throw std::runtime_error("Unknown algorithm: " + algo);
 }
 
@@ -156,6 +245,10 @@ int main(int argc, char** argv) {
     int threads = 32;
     int M = 16;
     int ef_construction = 200;
+    CompressionRootPolicy root_policy = CompressionRootPolicy::Level;
+    bool verify_vectors = false;
+    bool f32_lossless = false;
+    bool reuse_graph = false;
 
     std::vector<std::string> datasets = {
         "fashion-mnist-784-euclidean",
@@ -187,6 +280,18 @@ int main(int argc, char** argv) {
             M = std::stoi(argv[++i]);
         } else if (arg == "--ef_construction" && i + 1 < argc) {
             ef_construction = std::stoi(argv[++i]);
+        } else if (arg == "--root_policy" && i + 1 < argc) {
+            const std::string policy = argv[++i];
+            if (policy == "degree") root_policy = CompressionRootPolicy::Level0Degree;
+            else if (policy == "level") root_policy = CompressionRootPolicy::Level;
+            else if (policy == "random") root_policy = CompressionRootPolicy::Random;
+            else throw std::runtime_error("Unknown root policy: " + policy);
+        } else if (arg == "--verify_vectors") {
+            verify_vectors = true;
+        } else if (arg == "--f32_lossless") {
+            f32_lossless = true;
+        } else if (arg == "--reuse_graph") {
+            reuse_graph = true;
         } else if (arg == "--dataset" && i + 1 < argc) {
             datasets.clear();
             while (i + 1 < argc && std::string(argv[i + 1]).rfind("--", 0) != 0) {
@@ -220,12 +325,32 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    csv << "Dataset,Algorithm,ChainMaxLength,Vectors,Dim,BuildTime(s),CompressTime(s),DataCompressionRatio,IndexCompressionRatio,IndexFile\n";
-
+    csv << "Dataset,Algorithm,ChainMaxLength,Vectors,Dim,BuildTime(s),CompressTime(s),DataCompressionRatio,IndexCompressionRatio,IndexFile,RootPolicy,Roots,MaxDepth,MeanReferenceL2,PayloadBytes,GraphMetadataBytes,IndexFileBytes,RawF32Bytes,PayloadRatioF32,FullIndexRatioF32,F32PatchBytes,CodecBytes,PQCodeBytes,PQCentroidBytes,SharedGraphFile\n";
     for (const auto& ds : datasets) {
+        std::string shared_graph_file;
+        double shared_graph_build_s = 0;
+        if (reuse_graph) {
+            size_t n = 0, dim = 0;
+            double* data = load_fvecs_as_double(base_dir + ds + "_train.fvecs", n, dim);
+            if (!data) throw std::runtime_error("Cannot load shared HNSW graph input");
+            L2SpaceDouble space(dim);
+            HierarchicalNSWCABFRAMEWORK<double, codecs::DeXORCodecPolicy> graph(
+                &space, n, M, ef_construction, true, 0, 100, false);
+            StopW graph_timer;
+            #pragma omp parallel for
+            for (long long i = 0; i < static_cast<long long>(n); ++i)
+                graph.addPoint(data + i * dim, static_cast<labeltype>(i));
+            shared_graph_build_s = graph_timer.elapsed_us() * 1e-6;
+            shared_graph_file = ds + "_shared_raw_graph.bin";
+            graph.saveIndex(shared_graph_file);
+            delete[] data;
+            std::cout << "Shared HNSW graph=" << shared_graph_file
+                      << " build_s=" << shared_graph_build_s << '\n';
+        }
         for (const auto& algo : algorithms) {
             for (int chain_max : chain_max_list) {
-                BuildResult r = dispatch_build(ds, base_dir, algo, chain_max, M, ef_construction);
+                BuildResult r = dispatch_build(ds, base_dir, algo, chain_max, M, ef_construction,
+                    root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s);
                 csv << r.dataset << ','
                     << r.algorithm << ','
                     << r.chain_max_length << ','
@@ -236,7 +361,14 @@ int main(int argc, char** argv) {
                     << r.compress_time_s << ','
                     << r.data_ratio << ','
                     << r.index_ratio << ','
-                    << r.index_file << '\n';
+                    << r.index_file << ',' << r.root_policy << ',' << r.roots << ','
+                    << r.max_depth << ',' << r.mean_reference_l2 << ',' << r.payload_bytes << ','
+                    << r.graph_metadata_bytes << ',' << r.file_bytes << ','
+                    << r.vectors * r.dim * sizeof(float) << ','
+                    << (r.payload_bytes ? double(r.vectors * r.dim * sizeof(float)) / r.payload_bytes : 0) << ','
+                    << r.full_index_ratio_f32 << ',' << r.f32_patch_bytes << ','
+                    << r.codec_bytes << ',' << r.pq_code_bytes << ',' << r.pq_centroid_bytes << ','
+                    << r.shared_graph_file << '\n';
             }
         }
     }

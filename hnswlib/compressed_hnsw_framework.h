@@ -140,6 +140,39 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     
     // Compressed codes: One contiguous block. N * m_ bytes.
     std::vector<uint8_t> pq_data_;
+    bool f32_lossless_ = false;
+    std::vector<std::vector<std::pair<uint32_t, uint32_t>>> f32_patches_;
+    CompressionRootPolicy compressed_root_policy_ = CompressionRootPolicy::Level;
+
+    void setF32Lossless(bool enabled) { f32_lossless_ = enabled; }
+    size_t getF32PatchBytes() const {
+        size_t bytes = 0;
+        for (const auto& row : f32_patches_) bytes += row.size() * 2 * sizeof(uint32_t);
+        return bytes;
+    }
+
+    // Captured before compaction, when original F32-exact F64 values remain available.
+    std::vector<tableint> compression_parent_export_;
+    std::vector<uint32_t> compression_depth_export_;
+    std::vector<double> compression_reference_l2_export_;
+
+    void exportCompressionForest(const std::string& path) {
+        if (compression_parent_export_.size() != cur_element_count)
+            throw std::runtime_error("Compression forest is unavailable");
+        std::ofstream out(path);
+        if (!out) throw std::runtime_error("Cannot write compression forest: " + path);
+        out << "internal_id,label,level0_degree,parent_internal_id,parent_label,depth,reference_l2\n";
+        for (tableint i = 0; i < cur_element_count; ++i) {
+            const tableint parent = compression_parent_export_[i];
+            out << i << ',' << getExternalLabel(i) << ','
+                << getListCount(get_linklist_at_level(i, 0)) << ',';
+            if (parent != static_cast<tableint>(-1)) out << parent;
+            out << ',';
+            if (parent != static_cast<tableint>(-1)) out << getExternalLabel(parent);
+            out << ',' << compression_depth_export_[i] << ','
+                << compression_reference_l2_export_[i] << '\n';
+        }
+    }
 
     
 
@@ -599,6 +632,13 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                         for (size_t i = 0; i < dim; ++i) {
                             result[i] = states[i].current_value;
                         }
+                        if (f32_lossless_ && internal_id < f32_patches_.size()) {
+                            for (const auto& patch : f32_patches_[internal_id]) {
+                                float exact;
+                                std::memcpy(&exact, &patch.second, sizeof(exact));
+                                result[patch.first] = static_cast<double>(exact);
+                            }
+                        }
                         return result;
                     }
                     break;
@@ -674,6 +714,14 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         if (decode_path.empty()) {
             for (size_t i = 0; i < dim; ++i) {
                 result[i] = states[i].current_value;
+            }
+        }
+
+        if (f32_lossless_ && internal_id < f32_patches_.size()) {
+            for (const auto& patch : f32_patches_[internal_id]) {
+                float exact;
+                std::memcpy(&exact, &patch.second, sizeof(exact));
+                result[patch.first] = static_cast<double>(exact);
             }
         }
 
@@ -1468,6 +1516,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         if (is_compacted_) return;
         if (!use_encoding_algorithm_) return;
         compressed_chain_max_length_ = compress_chain_max_length;
+        compressed_root_policy_ = root_policy;
 
         size_t dim = data_size_ / sizeof(double);
         bool unlimited_chain = (compress_chain_max_length < 0);
@@ -1685,6 +1734,26 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
               << (unlimited_chain ? -1 : compress_chain_max_length)
                   << ", actual roots = " << root_indices.size() << std::endl;
 
+        compression_parent_export_ = assigned_prenode;
+        compression_depth_export_.resize(cur_element_count);
+        compression_reference_l2_export_.resize(cur_element_count);
+        for (size_t i = 0; i < cur_element_count; ++i) {
+            compression_depth_export_[i] = static_cast<uint32_t>(std::max(0, chain_depth[i]));
+            const tableint parent = assigned_prenode[i];
+            if (parent == static_cast<tableint>(-1)) {
+                compression_reference_l2_export_[i] = 0;
+                continue;
+            }
+            const double* a = reinterpret_cast<const double*>(getDataByInternalId(i));
+            const double* b = reinterpret_cast<const double*>(getDataByInternalId(parent));
+            double sum = 0;
+            for (size_t j = 0; j < dim; ++j) {
+                const double delta = a[j] - b[j];
+                sum += delta * delta;
+            }
+            compression_reference_l2_export_[i] = std::sqrt(sum);
+        }
+
         // 3. Compress and Rebuild Memory
         std::vector<char> new_memory;
         new_memory.reserve(data_level0_memory_.size() / 2); 
@@ -1780,12 +1849,35 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                    data_len);
         }
 
+        std::vector<float> original_f32;
+        if (f32_lossless_) {
+            original_f32.resize(cur_element_count * dim);
+            for (size_t i = 0; i < cur_element_count; ++i) {
+                const double* source = reinterpret_cast<const double*>(getDataByInternalId(i));
+                for (size_t j = 0; j < dim; ++j) original_f32[i * dim + j] = static_cast<float>(source[j]);
+            }
+        }
         data_level0_memory_ = std::move(new_memory);
         level0_element_start_positions_ = std::move(new_start_positions);
         is_compacted_ = true;
         if (enable_dynamic_updates_) level0_element_start_positions_.resize(max_elements_);
         
         data_level0_memory_.shrink_to_fit();
+        if (f32_lossless_) {
+            f32_patches_.resize(cur_element_count);
+            for (tableint i = 0; i < cur_element_count; ++i) {
+                const auto decoded = getOriginalDataByInternalId(i);
+                for (uint32_t j = 0; j < dim; ++j) {
+                    const float rounded = static_cast<float>(decoded[j]);
+                    const float expected = original_f32[i * dim + j];
+                    if (std::memcmp(&rounded, &expected, sizeof(float)) != 0) {
+                        uint32_t bits;
+                        std::memcpy(&bits, &expected, sizeof(bits));
+                        f32_patches_[i].emplace_back(j, bits);
+                    }
+                }
+            }
+        }
     }
 
     void resizeIndex(size_t new_max_elements) {
@@ -1904,6 +1996,20 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         writeBinaryPOD(output, update_magic);
         writeBinaryPOD(output, enable_dynamic_updates_);
         writeBinaryPOD(output, compressed_chain_max_length_);
+        const uint32_t f32_magic = 0x3246564c;
+        writeBinaryPOD(output, f32_magic);
+        writeBinaryPOD(output, f32_lossless_);
+        if (f32_lossless_) {
+            for (const auto& row : f32_patches_) {
+                const uint32_t count = static_cast<uint32_t>(row.size());
+                writeBinaryPOD(output, count);
+                for (const auto& patch : row) {
+                    writeBinaryPOD(output, patch.first);
+                    writeBinaryPOD(output, patch.second);
+                }
+            }
+        }
+        writeBinaryPOD(output, compressed_root_policy_);
         output.close();
     }
 
@@ -1915,6 +2021,9 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             throw std::runtime_error("Cannot open file");
 
         clear();
+        f32_lossless_ = false;
+        f32_patches_.clear();
+        compressed_root_policy_ = CompressionRootPolicy::Level;
         // get file size:
         input.seekg(0, input.end);
         std::streampos total_filesize = input.tellg();
@@ -2047,6 +2156,32 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                 throw std::runtime_error("Unsupported LVC update metadata");
             readBinaryPOD(input, enable_dynamic_updates_);
             readBinaryPOD(input, compressed_chain_max_length_);
+            uint32_t f32_magic = 0;
+            if (input.read(reinterpret_cast<char*>(&f32_magic), sizeof(f32_magic))) {
+                if (f32_magic != 0x3246564c) throw std::runtime_error("Unsupported F32 patch metadata");
+                readBinaryPOD(input, f32_lossless_);
+                if (f32_lossless_) {
+                    f32_patches_.resize(cur_element_count);
+                    for (auto& row : f32_patches_) {
+                        uint32_t count = 0;
+                        readBinaryPOD(input, count);
+                        if (count > data_size_ / sizeof(double)) throw std::runtime_error("Invalid F32 patch count");
+                        row.resize(count);
+                        for (auto& patch : row) {
+                            readBinaryPOD(input, patch.first);
+                            readBinaryPOD(input, patch.second);
+                            if (patch.first >= data_size_ / sizeof(double))
+                                throw std::runtime_error("Invalid F32 patch coordinate");
+                        }
+                    }
+                }
+                if (!input.read(reinterpret_cast<char*>(&compressed_root_policy_), sizeof(compressed_root_policy_)))
+                    input.clear();
+                if (compressed_root_policy_ != CompressionRootPolicy::Level &&
+                    compressed_root_policy_ != CompressionRootPolicy::Random &&
+                    compressed_root_policy_ != CompressionRootPolicy::Level0Degree)
+                    throw std::runtime_error("Invalid compression root policy");
+            } else input.clear();
         } else {
             enable_dynamic_updates_ = false;
         }
@@ -2977,6 +3112,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                 total_size += (end - start);
             }
         }
+        if (f32_lossless_) total_size += getF32PatchBytes() + cur_element_count * sizeof(uint32_t);
         return total_size;
     }
 
@@ -3030,6 +3166,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         }
 
         total_size += cur_element_count * sizeof(size_t);   // level0_element_start_positions_ 的大小
+        if (f32_lossless_) total_size += getF32PatchBytes() + cur_element_count * sizeof(uint32_t);
 
         for (size_t i = 0; i < cur_element_count; i++) {
             // int level = element_levels_[i];
@@ -3209,12 +3346,17 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
     void loadCacheByLevel() {
         if (cache_max_size_ > 0) {
-            // 这里实现加载热门数据到cache的逻辑
-            // 加载 level 最高的 cache_max_size_ 个点到cache中
+            // Use the same degree policy as root selection for degree experiments.
 
             std::vector<tableint> indices(cur_element_count);
             std::iota(indices.begin(), indices.end(), 0);
             std::sort(indices.begin(), indices.end(), [&](tableint a, tableint b) {
+                if (compressed_root_policy_ == CompressionRootPolicy::Level0Degree) {
+                    const int degree_a = getListCount(get_linklist_at_level(a, 0));
+                    const int degree_b = getListCount(get_linklist_at_level(b, 0));
+                    if (degree_a != degree_b) return degree_a > degree_b;
+                    return a < b;
+                }
                 if (element_levels_[a] != element_levels_[b]) {
                     return element_levels_[a] > element_levels_[b];
                 }

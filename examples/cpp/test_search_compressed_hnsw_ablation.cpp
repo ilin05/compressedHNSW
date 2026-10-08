@@ -186,6 +186,7 @@ void search_one_config(const std::string& dataset,
                        const std::string& base_dir,
                        const std::string& algo,
                        int chain_max_length,
+                       const std::string& root_policy,
                        bool use_cache,
                        bool use_tls,
                        double tls_ratio,
@@ -219,7 +220,8 @@ void search_one_config(const std::string& dataset,
     size_t train_num = count_fvecs(train_file);
     size_t cache_size = use_cache ? std::max<size_t>(1, train_num / 100) : 0;
 
-    const std::string index_file = dataset + "_" + algo + "_" + chain_tag(chain_max_length) + "_pq.bin";
+    const std::string index_file = dataset + "_" + algo + "_" + chain_tag(chain_max_length) +
+        (root_policy == "level" ? "" : "_" + root_policy) + "_pq.bin";
 
     L2SpaceDouble l2space(qdim);
     auto* index = new HierarchicalNSWCABFRAMEWORK<double, CodecPolicy>(
@@ -323,6 +325,7 @@ void dispatch_search(const std::string& dataset,
                      const std::string& base_dir,
                      const std::string& algo,
                      int chain_max_length,
+                     const std::string& root_policy,
                      bool use_cache,
                      bool use_tls,
                      double tls_ratio,
@@ -331,11 +334,11 @@ void dispatch_search(const std::string& dataset,
                      bool enable_profiling,
                      int num_rounds,
                      std::ofstream& csv) {
-    if (algo == "DeXOR") return search_one_config<codecs::DeXORCodecPolicy>(dataset, base_dir, algo, chain_max_length, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
-    if (algo == "Gorilla") return search_one_config<codecs::GorillaCodecPolicy>(dataset, base_dir, algo, chain_max_length, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
-    if (algo == "Elf") return search_one_config<codecs::ElfCodecPolicy>(dataset, base_dir, algo, chain_max_length, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
-    if (algo == "Camel") return search_one_config<codecs::CamelCodecPolicy>(dataset, base_dir, algo, chain_max_length, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
-    if (algo == "DeXORPlus") return search_one_config<codecs::DeXORPlusCodecPolicy>(dataset, base_dir, algo, chain_max_length, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
+    if (algo == "DeXOR") return search_one_config<codecs::DeXORCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
+    if (algo == "Gorilla") return search_one_config<codecs::GorillaCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
+    if (algo == "Elf") return search_one_config<codecs::ElfCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
+    if (algo == "Camel") return search_one_config<codecs::CamelCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
+    if (algo == "DeXORPlus") return search_one_config<codecs::DeXORPlusCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
     throw std::runtime_error("Unknown algorithm: " + algo);
 }
 
@@ -346,6 +349,7 @@ int main(int argc, char** argv) {
     int num_rounds = 1;
     bool enable_profiling = false;
     size_t k = 1;
+    std::string root_policy = "level";
 
     std::vector<std::string> datasets = {
         "fashion-mnist-784-euclidean",
@@ -382,6 +386,10 @@ int main(int argc, char** argv) {
             enable_profiling = std::stoi(argv[++i]) != 0;
         } else if (arg == "--k" && i + 1 < argc) {
             k = static_cast<size_t>(std::stoul(argv[++i]));
+        } else if (arg == "--root_policy" && i + 1 < argc) {
+            root_policy = argv[++i];
+            if (root_policy != "level" && root_policy != "degree" && root_policy != "random")
+                throw std::runtime_error("Unknown root policy: " + root_policy);
         } else if (arg == "--dataset" && i + 1 < argc) {
             datasets.clear();
             while (i + 1 < argc && std::string(argv[i + 1]).rfind("--", 0) != 0) {
@@ -435,7 +443,7 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    csv << "Dataset,Algorithm,ChainMaxLength,UseCacheTop1PctByLevel,UseTwoLevelSearch,TlsRatio,K,ef,"
+    csv << "Dataset,Algorithm,ChainMaxLength,UseCacheTop1Pct,UseTwoLevelSearch,TlsRatio,K,ef,"
         << "Num_Rounds,Enable_Profiling,Recall,TimePerQuery(us),P99_Latency(us),QPS,"
         << "Decoding_Calls,GetOriginalData_Calls,Avg_Decode_Per_Query,Avg_Backtrack_Hops_Per_Call\n";
 
@@ -445,10 +453,10 @@ int main(int argc, char** argv) {
                 for (int cache_flag : cache_flags) {
                     for (int tls_flag : tls_flags) {
                         if (tls_flag == 0) {
-                            dispatch_search(ds, base_dir, algo, chain_max, cache_flag != 0, false, 0.0, k, efs, enable_profiling, num_rounds, csv);
+                            dispatch_search(ds, base_dir, algo, chain_max, root_policy, cache_flag != 0, false, 0.0, k, efs, enable_profiling, num_rounds, csv);
                         } else {
                             for (double ratio : tls_ratios) {
-                                dispatch_search(ds, base_dir, algo, chain_max, cache_flag != 0, true, ratio, k, efs, enable_profiling, num_rounds, csv);
+                                dispatch_search(ds, base_dir, algo, chain_max, root_policy, cache_flag != 0, true, ratio, k, efs, enable_profiling, num_rounds, csv);
                             }
                         }
                     }
