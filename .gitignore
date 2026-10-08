@@ -25,3 +25,4 @@ script/plots/*
 script/*.data*
 build_lvc_sift/
 script/perf_breakdown_hnsw_sift/
+build_lvc_cross_graph/
