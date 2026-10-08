@@ -1,4 +1,5 @@
 #include <chrono>
+#include <algorithm>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -68,12 +69,20 @@ struct BuildResult {
     double index_ratio;
     std::string index_file;
     std::string root_policy;
+    size_t initial_roots = 0;
     size_t roots = 0;
     size_t max_depth = 0;
+    double average_depth = 0;
+    double average_nonroot_depth = 0;
     double mean_reference_l2 = 0;
+    double p50_reference_l2 = 0;
+    double p95_reference_l2 = 0;
     size_t payload_bytes = 0;
     size_t graph_metadata_bytes = 0;
     size_t file_bytes = 0;
+    size_t raw_f32_index_bytes = 0;
+    size_t compressed_index_bytes = 0;
+    size_t state_cache_bytes = 0;
     double full_index_ratio_f32 = 0;
     size_t f32_patch_bytes = 0;
     size_t codec_bytes = 0;
@@ -115,6 +124,7 @@ BuildResult build_one(const std::string& dataset,
     if (!data) {
         return r;
     }
+    r.initial_roots = std::max<size_t>(1, static_cast<size_t>(r.vectors * 0.01));
 
     L2SpaceDouble l2space(r.dim);
     size_t cache_max_size = r.vectors / 100;
@@ -161,21 +171,38 @@ BuildResult build_one(const std::string& dataset,
     r.index_file = dataset + "_" + algo + "_" + chain_tag(chain_max_length) +
                    (r.root_policy == "level" ? "" : "_" + r.root_policy) + "_pq.bin";
     index->exportCompressionForest(r.index_file + ".forest.csv");
+    std::vector<double> reference_distances;
+    reference_distances.reserve(r.vectors);
+    uint64_t depth_sum = 0;
     for (size_t i = 0; i < r.vectors; ++i) {
         if (index->compression_parent_export_[i] == static_cast<tableint>(-1)) ++r.roots;
+        else reference_distances.push_back(index->compression_reference_l2_export_[i]);
         r.max_depth = std::max(r.max_depth, size_t(index->compression_depth_export_[i]));
+        depth_sum += index->compression_depth_export_[i];
         r.mean_reference_l2 += index->compression_reference_l2_export_[i];
     }
     r.mean_reference_l2 /= std::max<size_t>(1, r.vectors - r.roots);
-    r.payload_bytes = compressed_data_size;
+    r.average_depth = double(depth_sum) / r.vectors;
+    r.average_nonroot_depth = double(depth_sum) / std::max<size_t>(1, r.vectors - r.roots);
+    std::sort(reference_distances.begin(), reference_distances.end());
+    if (!reference_distances.empty()) {
+        r.p50_reference_l2 = reference_distances[(reference_distances.size() - 1) / 2];
+        r.p95_reference_l2 = reference_distances[(reference_distances.size() - 1) * 95 / 100];
+    }
     r.f32_patch_bytes = index->getF32PatchBytes();
     r.codec_bytes = compressed_data_size - r.f32_patch_bytes - (f32_lossless ? r.vectors * sizeof(uint32_t) : 0);
+    r.payload_bytes = r.codec_bytes + r.f32_patch_bytes;
     r.pq_code_bytes = index->pq_data_.size();
     for (const auto& centroids : index->pq_centroids_) r.pq_centroid_bytes += centroids.size() * sizeof(double);
-    r.graph_metadata_bytes = compressed_index_size - compressed_data_size;
-    r.full_index_ratio_f32 = compressed_index_size ?
-        double(original_index_size - original_data_size + r.vectors * r.dim * sizeof(float)) /
-            compressed_index_size : 0;
+    for (const auto& entry : index->root_state_cache_) {
+        r.state_cache_bytes += sizeof(tableint) + sizeof(entry.second);
+        r.state_cache_bytes += entry.second.capacity() * sizeof(typename CodecPolicy::StateType);
+    }
+    r.compressed_index_bytes = compressed_index_size - r.state_cache_bytes;
+    r.graph_metadata_bytes = r.compressed_index_bytes - r.payload_bytes;
+    r.raw_f32_index_bytes = r.graph_metadata_bytes + r.vectors * r.dim * sizeof(float);
+    r.full_index_ratio_f32 = r.compressed_index_bytes ?
+        double(r.raw_f32_index_bytes) / r.compressed_index_bytes : 0;
     if (verify_vectors) {
         for (tableint i = 0; i < r.vectors; ++i) {
             const auto decoded = index->getOriginalDataByInternalId(i);
@@ -325,7 +352,7 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    csv << "Dataset,Algorithm,ChainMaxLength,Vectors,Dim,BuildTime(s),CompressTime(s),DataCompressionRatio,IndexCompressionRatio,IndexFile,RootPolicy,Roots,MaxDepth,MeanReferenceL2,PayloadBytes,GraphMetadataBytes,IndexFileBytes,RawF32Bytes,PayloadRatioF32,FullIndexRatioF32,F32PatchBytes,CodecBytes,PQCodeBytes,PQCentroidBytes,SharedGraphFile\n";
+    csv << "Dataset,Algorithm,ChainMaxLength,Vectors,Dim,BuildTime(s),CompressTime(s),DataCompressionRatio,IndexCompressionRatio,IndexFile,RootPolicy,InitialRoots,Roots,MaxDepth,AverageDepth,AverageNonrootDepth,MeanReferenceL2,P50ReferenceL2,P95ReferenceL2,PayloadBytes,GraphMetadataBytes,IndexFileBytes,RawF32Bytes,RawF32IndexBytes,CompressedIndexBytes,PayloadRatioF32,FullIndexRatioF32,F32PatchBytes,CodecBytes,PQCodeBytes,PQCentroidBytes,StateCacheBytes,SharedGraphFile\n";
     for (const auto& ds : datasets) {
         std::string shared_graph_file;
         double shared_graph_build_s = 0;
@@ -361,13 +388,17 @@ int main(int argc, char** argv) {
                     << r.compress_time_s << ','
                     << r.data_ratio << ','
                     << r.index_ratio << ','
-                    << r.index_file << ',' << r.root_policy << ',' << r.roots << ','
-                    << r.max_depth << ',' << r.mean_reference_l2 << ',' << r.payload_bytes << ','
+                    << r.index_file << ',' << r.root_policy << ',' << r.initial_roots << ',' << r.roots << ','
+                    << r.max_depth << ',' << r.average_depth << ',' << r.average_nonroot_depth << ','
+                    << r.mean_reference_l2 << ',' << r.p50_reference_l2 << ',' << r.p95_reference_l2 << ','
+                    << r.payload_bytes << ','
                     << r.graph_metadata_bytes << ',' << r.file_bytes << ','
-                    << r.vectors * r.dim * sizeof(float) << ','
+                    << r.vectors * r.dim * sizeof(float) << ',' << r.raw_f32_index_bytes << ','
+                    << r.compressed_index_bytes << ','
                     << (r.payload_bytes ? double(r.vectors * r.dim * sizeof(float)) / r.payload_bytes : 0) << ','
                     << r.full_index_ratio_f32 << ',' << r.f32_patch_bytes << ','
                     << r.codec_bytes << ',' << r.pq_code_bytes << ',' << r.pq_centroid_bytes << ','
+                    << r.state_cache_bytes << ','
                     << r.shared_graph_file << '\n';
             }
         }

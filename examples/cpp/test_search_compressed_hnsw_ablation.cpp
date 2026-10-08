@@ -194,6 +194,7 @@ void search_one_config(const std::string& dataset,
                        const std::vector<size_t>& efs,
                        bool enable_profiling,
                        int num_rounds,
+                       bool stop_at_recall_99,
                        std::ofstream& csv) {
     const std::string query_file = base_dir + dataset + "_test.fvecs";
     const std::string gt_file = base_dir + dataset + "_neighbors.ivecs";
@@ -311,7 +312,7 @@ void search_one_config(const std::string& dataset,
             << std::setprecision(6) << avg.avg_decode_per_query << ','
             << std::setprecision(6) << avg.avg_backtrack_hops_per_call << '\n';
 
-        if (avg.recall >= 0.99) {
+        if (stop_at_recall_99 && avg.recall >= 0.99) {
             break;
         }
     }
@@ -333,12 +334,13 @@ void dispatch_search(const std::string& dataset,
                      const std::vector<size_t>& efs,
                      bool enable_profiling,
                      int num_rounds,
+                     bool stop_at_recall_99,
                      std::ofstream& csv) {
-    if (algo == "DeXOR") return search_one_config<codecs::DeXORCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
-    if (algo == "Gorilla") return search_one_config<codecs::GorillaCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
-    if (algo == "Elf") return search_one_config<codecs::ElfCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
-    if (algo == "Camel") return search_one_config<codecs::CamelCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
-    if (algo == "DeXORPlus") return search_one_config<codecs::DeXORPlusCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, csv);
+    if (algo == "DeXOR") return search_one_config<codecs::DeXORCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, csv);
+    if (algo == "Gorilla") return search_one_config<codecs::GorillaCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, csv);
+    if (algo == "Elf") return search_one_config<codecs::ElfCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, csv);
+    if (algo == "Camel") return search_one_config<codecs::CamelCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, csv);
+    if (algo == "DeXORPlus") return search_one_config<codecs::DeXORPlusCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, csv);
     throw std::runtime_error("Unknown algorithm: " + algo);
 }
 
@@ -348,6 +350,7 @@ int main(int argc, char** argv) {
     int threads = 32;
     int num_rounds = 1;
     bool enable_profiling = false;
+    bool stop_at_recall_99 = true;
     size_t k = 1;
     std::string root_policy = "level";
 
@@ -384,6 +387,8 @@ int main(int argc, char** argv) {
             num_rounds = std::max(1, std::stoi(argv[++i]));
         } else if (arg == "--enable_profiling" && i + 1 < argc) {
             enable_profiling = std::stoi(argv[++i]) != 0;
+        } else if (arg == "--no_early_stop") {
+            stop_at_recall_99 = false;
         } else if (arg == "--k" && i + 1 < argc) {
             k = static_cast<size_t>(std::stoul(argv[++i]));
         } else if (arg == "--root_policy" && i + 1 < argc) {
@@ -453,10 +458,10 @@ int main(int argc, char** argv) {
                 for (int cache_flag : cache_flags) {
                     for (int tls_flag : tls_flags) {
                         if (tls_flag == 0) {
-                            dispatch_search(ds, base_dir, algo, chain_max, root_policy, cache_flag != 0, false, 0.0, k, efs, enable_profiling, num_rounds, csv);
+                            dispatch_search(ds, base_dir, algo, chain_max, root_policy, cache_flag != 0, false, 0.0, k, efs, enable_profiling, num_rounds, stop_at_recall_99, csv);
                         } else {
                             for (double ratio : tls_ratios) {
-                                dispatch_search(ds, base_dir, algo, chain_max, root_policy, cache_flag != 0, true, ratio, k, efs, enable_profiling, num_rounds, csv);
+                                dispatch_search(ds, base_dir, algo, chain_max, root_policy, cache_flag != 0, true, ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, csv);
                             }
                         }
                     }
