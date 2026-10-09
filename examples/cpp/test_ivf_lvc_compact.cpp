@@ -102,9 +102,11 @@ int main(int argc, char** argv) {
             ivf_lvc::PayloadMode::DeXOR, ivf_lvc::PayloadMode::Gorilla,
             ivf_lvc::PayloadMode::Elf};
         for (auto mode : modes) {
+            const bool is_differential = mode == ivf_lvc::PayloadMode::DeXOR ||
+                mode == ivf_lvc::PayloadMode::Gorilla || mode == ivf_lvc::PayloadMode::Elf;
             auto index = ivf_lvc::clone_from_ivf_flat(baseline);
             index->nprobe = nlist;
-            index->compact(mode, &forest);
+            index->compact(mode, is_differential ? &forest : nullptr);
             index->set_decode_state_cache_ratio(0);
             std::vector<float> cached(dim);
             const size_t sampled = std::min<size_t>(nodes, 256);
@@ -113,8 +115,6 @@ int main(int argc, char** argv) {
                 index->compact_records()->decode_slot(slot, uncached_vectors[slot].data());
             index->set_decode_state_cache_ratio(cache_ratio);
             const auto* records = index->compact_records();
-            const bool is_differential = mode == ivf_lvc::PayloadMode::DeXOR ||
-                mode == ivf_lvc::PayloadMode::Gorilla || mode == ivf_lvc::PayloadMode::Elf;
             const size_t expected_cache_nodes = is_differential ? size_t(std::floor(nodes * cache_ratio)) : 0;
             if (records->state_cache_nodes() != expected_cache_nodes)
                 throw std::runtime_error("unexpected decode state cache node count");
@@ -209,10 +209,14 @@ int main(int argc, char** argv) {
                 std::filesystem::file_size(compact_prefix + ".records.bin") +
                 std::filesystem::file_size(compact_prefix + ".quantizer.faiss");
             const double serialized_ratio = double(baseline_file_bytes) / compact_file_bytes;
-            csv << ivf_lvc::mode_name(mode) << ',' << nodes << ',' << dim << ',' << nlist << ','
-                << forest.summary.roots << ',' << chain_max << ',' << forest.summary.max_depth << ','
-                << forest.summary.mean_depth << ',' << forest.summary.mean_reference_l2 << ','
-                << cache_ratio << ',' << records->state_cache_nodes() << ','
+            csv << ivf_lvc::mode_name(mode) << ',' << nodes << ',' << dim << ',' << nlist << ',';
+            if (is_differential)
+                csv << forest.summary.roots << ',' << chain_max << ',' << forest.summary.max_depth << ','
+                    << forest.summary.mean_depth << ',' << forest.summary.mean_reference_l2 << ','
+                    << cache_ratio;
+            else
+                csv << "n/a,n/a,n/a,n/a,n/a,n/a";
+            csv << ',' << records->state_cache_nodes() << ','
                 << records->state_cache_bytes() << ',' << exact_vectors << ',' << exact_coordinates << ','
                 << records->patch_count() << ',' << std::setprecision(9) << max_abs_error << ','
                 << raw_f32_bytes << ',' << memory.payload << ',' << memory.ids << ','
@@ -224,8 +228,9 @@ int main(int argc, char** argv) {
             std::cout << "PASS " << ivf_lvc::mode_name(mode) << " vectors=" << exact_vectors
                       << '/' << nodes << " coordinates=" << exact_coordinates << '/'
                       << nodes * dim << " max_abs_error=" << max_abs_error
-                      << " patches=" << records->patch_count()
-                      << " max_depth=" << forest.summary.max_depth
+                      << " patches=" << records->patch_count();
+            if (is_differential) std::cout << " max_depth=" << forest.summary.max_depth;
+            std::cout
                       << " cache_nodes=" << records->state_cache_nodes()
                       << " cache_estimated_bytes=" << records->state_cache_bytes()
                       << " payload_bytes=" << memory.payload
