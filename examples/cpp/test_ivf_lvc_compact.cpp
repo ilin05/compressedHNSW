@@ -11,6 +11,7 @@
 #include <fstream>
 #include <filesystem>
 #include <iomanip>
+#include <numeric>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -54,6 +55,8 @@ int main(int argc, char** argv) {
     try {
         std::string input, output = "ivf_lvc_compact_results.csv";
         size_t count = 2048, nlist = 8;
+        int chain_max = 2;
+        double cache_ratio = 0.01;
         uint64_t seed = 20261009;
         for (int i = 1; i < argc; ++i) {
             const std::string arg = argv[i];
@@ -63,6 +66,8 @@ int main(int argc, char** argv) {
             else if (arg == "--count") count = std::stoull(argv[++i]);
             else if (arg == "--nlist") nlist = std::stoull(argv[++i]);
             else if (arg == "--seed") seed = std::stoull(argv[++i]);
+            else if (arg == "--chain-max") chain_max = std::stoi(argv[++i]);
+            else if (arg == "--cache-ratio") cache_ratio = std::stod(argv[++i]);
             else throw std::invalid_argument("unknown argument: " + arg);
         }
         if (input.empty() || nlist == 0) throw std::invalid_argument("provide --input and --nlist");
@@ -77,7 +82,7 @@ int main(int argc, char** argv) {
         baseline.nprobe = nlist;
 
         auto initial = ivf_lvc::clone_from_ivf_flat(baseline);
-        const auto forest = ivf_lvc::build_forest(*initial, seed);
+        const auto forest = ivf_lvc::build_forest(*initial, seed, 0.01, chain_max);
         const size_t raw_f32_bytes = nodes * dim * sizeof(float);
         const size_t centroid_bytes = nlist * dim * sizeof(float);
         const size_t baseline_bytes = raw_f32_bytes + nodes * sizeof(faiss::idx_t) + centroid_bytes;
@@ -86,7 +91,8 @@ int main(int argc, char** argv) {
         const auto baseline_file_bytes = std::filesystem::file_size(baseline_file);
         std::ofstream csv(output);
         if (!csv) throw std::runtime_error("cannot write CSV: " + output);
-        csv << "mode,nodes,dim,nlist,roots,exact_vectors,exact_coordinates,patches,"
+        csv << "mode,nodes,dim,nlist,roots,chain_max,max_depth,mean_depth,mean_reference_l2,"
+               "state_cache_ratio,state_cache_nodes,state_cache_estimated_bytes,exact_vectors,exact_coordinates,patches,"
                "max_abs_error,raw_f32_bytes,payload_bytes,id_bytes,offset_bytes,"
                "parent_bytes,patch_bytes,total_compact_bytes,centroid_bytes,"
                "payload_ratio,full_index_ratio,baseline_file_bytes,"
@@ -99,7 +105,40 @@ int main(int argc, char** argv) {
             auto index = ivf_lvc::clone_from_ivf_flat(baseline);
             index->nprobe = nlist;
             index->compact(mode, &forest);
+            index->set_decode_state_cache_ratio(0);
+            std::vector<float> cached(dim);
+            const size_t sampled = std::min<size_t>(nodes, 256);
+            std::vector<std::vector<float>> uncached_vectors(sampled, std::vector<float>(dim));
+            for (size_t slot = 0; slot < sampled; ++slot)
+                index->compact_records()->decode_slot(slot, uncached_vectors[slot].data());
+            index->set_decode_state_cache_ratio(cache_ratio);
             const auto* records = index->compact_records();
+            const bool is_differential = mode == ivf_lvc::PayloadMode::DeXOR ||
+                mode == ivf_lvc::PayloadMode::Gorilla || mode == ivf_lvc::PayloadMode::Elf;
+            const size_t expected_cache_nodes = is_differential ? size_t(std::floor(nodes * cache_ratio)) : 0;
+            if (records->state_cache_nodes() != expected_cache_nodes)
+                throw std::runtime_error("unexpected decode state cache node count");
+            if (is_differential && expected_cache_nodes) {
+                std::vector<size_t> ranked(nodes);
+                std::iota(ranked.begin(), ranked.end(), 0);
+                std::sort(ranked.begin(), ranked.end(), [&](size_t a, size_t b) {
+                    const auto& left = forest.nodes[size_t(records->ids[a])];
+                    const auto& right = forest.nodes[size_t(records->ids[b])];
+                    return left.depth != right.depth ? left.depth < right.depth : left.id < right.id;
+                });
+                for (size_t i = 0; i < expected_cache_nodes; ++i) {
+                    const size_t slot = ranked[i];
+                    const bool found = mode == ivf_lvc::PayloadMode::DeXOR ? records->dexor_cache.count(slot) :
+                        mode == ivf_lvc::PayloadMode::Gorilla ? records->gorilla_cache.count(slot) :
+                        records->elf_cache.count(slot);
+                    if (!found) throw std::runtime_error("decode state cache did not prioritize shallow nodes");
+                }
+            }
+            for (size_t slot = 0; slot < sampled; ++slot) {
+                records->decode_slot(slot, cached.data());
+                if (std::memcmp(uncached_vectors[slot].data(), cached.data(), dim * sizeof(float)))
+                    throw std::runtime_error("state cache changed decoded F32 vector");
+            }
             if (!records || records->ids.size() != nodes)
                 throw std::runtime_error("compact record count mismatch");
             for (size_t list = 0; list < nlist; ++list) {
@@ -134,6 +173,7 @@ int main(int argc, char** argv) {
             const std::string compact_prefix = output + "." + ivf_lvc::mode_name(mode);
             index->save_compact(compact_prefix);
             auto reloaded = faiss::IndexIVFLVC::load_compact(compact_prefix);
+            reloaded->set_decode_state_cache_ratio(cache_ratio);
             std::vector<float> restored(dim);
             for (size_t list = 0; list < nlist; ++list) {
                 for (size_t pos = 0; pos < records->list_offsets[list + 1] - records->list_offsets[list]; ++pos) {
@@ -170,7 +210,10 @@ int main(int argc, char** argv) {
                 std::filesystem::file_size(compact_prefix + ".quantizer.faiss");
             const double serialized_ratio = double(baseline_file_bytes) / compact_file_bytes;
             csv << ivf_lvc::mode_name(mode) << ',' << nodes << ',' << dim << ',' << nlist << ','
-                << forest.summary.roots << ',' << exact_vectors << ',' << exact_coordinates << ','
+                << forest.summary.roots << ',' << chain_max << ',' << forest.summary.max_depth << ','
+                << forest.summary.mean_depth << ',' << forest.summary.mean_reference_l2 << ','
+                << cache_ratio << ',' << records->state_cache_nodes() << ','
+                << records->state_cache_bytes() << ',' << exact_vectors << ',' << exact_coordinates << ','
                 << records->patch_count() << ',' << std::setprecision(9) << max_abs_error << ','
                 << raw_f32_bytes << ',' << memory.payload << ',' << memory.ids << ','
                 << memory.offsets << ',' << memory.parents << ',' << memory.patches << ','
@@ -182,6 +225,9 @@ int main(int argc, char** argv) {
                       << '/' << nodes << " coordinates=" << exact_coordinates << '/'
                       << nodes * dim << " max_abs_error=" << max_abs_error
                       << " patches=" << records->patch_count()
+                      << " max_depth=" << forest.summary.max_depth
+                      << " cache_nodes=" << records->state_cache_nodes()
+                      << " cache_estimated_bytes=" << records->state_cache_bytes()
                       << " payload_bytes=" << memory.payload
                       << " metadata_bytes=" << memory.total() - memory.payload
                       << " payload_ratio=" << payload_ratio

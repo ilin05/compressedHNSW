@@ -8,6 +8,7 @@
 #include <cstring>
 #include <fstream>
 #include <limits>
+#include <numeric>
 #include <stdexcept>
 #include <type_traits>
 
@@ -60,18 +61,21 @@ uint32_t float_bits(float value) {
 }
 
 template <typename Policy>
-void encode_differential(const float* value, const float* parent, size_t dim,
+void encode_differential(const float* value, const std::vector<const float*>& ancestors, size_t dim,
                          std::vector<char>& output) {
     std::vector<typename Policy::StateType> states(dim);
     for (size_t j = 0; j < dim; ++j) {
-        if (!std::isfinite(value[j]) || (parent && !std::isfinite(parent[j])))
+        if (!std::isfinite(value[j]))
             throw std::runtime_error("differential codec requires finite F32 input");
     }
-    if (parent) {
+    for (const float* ancestor : ancestors) {
         std::vector<char> discarded;
         utils::MemoryStreamWriter discard_writer(&discarded);
-        for (size_t j = 0; j < dim; ++j)
-            Policy::encode(static_cast<double>(parent[j]), states[j], discard_writer);
+        for (size_t j = 0; j < dim; ++j) {
+            if (!std::isfinite(ancestor[j]))
+                throw std::runtime_error("differential codec requires finite F32 input");
+            Policy::encode(static_cast<double>(ancestor[j]), states[j], discard_writer);
+        }
     }
     utils::MemoryStreamWriter writer(&output);
     for (size_t j = 0; j < dim; ++j)
@@ -81,26 +85,42 @@ void encode_differential(const float* value, const float* parent, size_t dim,
 
 template <typename Policy>
 void decode_differential(const CompactRecords& records, size_t slot,
-                         float* result) {
+                         float* result, std::vector<typename Policy::StateType>* final_states = nullptr) {
     std::vector<typename Policy::StateType> states(records.dim);
-    auto decode_record = [&](size_t record_slot, bool copy_result) {
+    const auto& cache = [&]() -> const auto& {
+        if constexpr (std::is_same_v<Policy, hnswlib::codecs::DeXORCodecPolicy>) return records.dexor_cache;
+        else if constexpr (std::is_same_v<Policy, hnswlib::codecs::GorillaCodecPolicy>) return records.gorilla_cache;
+        else return records.elf_cache;
+    }();
+    std::vector<size_t> path;
+    size_t current = slot;
+    while (true) {
+        const auto hit = cache.find(current);
+        if (hit != cache.end()) {
+            states = hit->second.states;
+            if (current == slot) std::memcpy(result, hit->second.vector.data(), records.dim * sizeof(float));
+            break;
+        }
+        path.push_back(current);
+        const auto parent = records.parents[current];
+        if (parent < 0) break;
+        if (size_t(parent) >= records.slot_for_id.size() || path.size() > records.ids.size())
+            throw std::runtime_error("invalid differential predecessor chain");
+        current = records.slot_for_id[size_t(parent)];
+        if (current >= records.ids.size()) throw std::runtime_error("invalid differential parent slot");
+    }
+    for (auto it = path.rbegin(); it != path.rend(); ++it) {
+        const size_t record_slot = *it;
         const auto begin = records.record_offsets[record_slot];
         const auto end = records.record_offsets[record_slot + 1];
         utils::MemoryBlockStreamReader reader(records.payload.data());
         reader.resetBuffer(records.payload.data() + begin, end - begin);
         for (size_t j = 0; j < records.dim; ++j) {
             const double value = Policy::decode(states[j], reader);
-            if (copy_result) result[j] = static_cast<float>(value);
+            if (record_slot == slot) result[j] = static_cast<float>(value);
         }
-    };
-    const auto parent = records.parents[slot];
-    if (parent >= 0) {
-        const auto parent_slot = records.slot_for_id.at(static_cast<size_t>(parent));
-        if (parent_slot == UINT64_MAX || records.parents[parent_slot] != -1)
-            throw std::runtime_error("invalid differential root slot");
-        decode_record(parent_slot, false);
     }
-    decode_record(slot, true);
+    if (final_states) *final_states = std::move(states);
 }
 
 int bit_width(uint64_t value) {
@@ -231,15 +251,19 @@ std::unique_ptr<CompactRecords> CompactRecords::build(
         for (size_t pos = 0; pos < list_size; ++pos) {
             const auto* value = reinterpret_cast<const float*>(codes.get() + pos * index.code_size);
             const auto id = ids.get()[pos];
-            const auto parent_id = differential(mode) ? forest->nodes[id].parent : -1;
-            const float* parent = nullptr;
-            if (parent_id >= 0) {
-                const auto parent_slot = records->slot_for_id.at(size_t(parent_id));
-                if (parent_slot == UINT64_MAX || parent_slot < records->list_offsets[list] ||
-                    parent_slot >= records->list_offsets[list + 1])
-                    throw std::runtime_error("differential parent not in same list");
-                const auto parent_pos = parent_slot - records->list_offsets[list];
-                parent = reinterpret_cast<const float*>(codes.get() + parent_pos * index.code_size);
+            std::vector<const float*> ancestors;
+            if (differential(mode)) {
+                auto parent_id = forest->nodes[id].parent;
+                while (parent_id >= 0) {
+                    const auto parent_slot = records->slot_for_id.at(size_t(parent_id));
+                    if (parent_slot == UINT64_MAX || parent_slot < records->list_offsets[list] ||
+                        parent_slot >= records->list_offsets[list + 1])
+                        throw std::runtime_error("differential parent not in same list");
+                    const auto parent_pos = parent_slot - records->list_offsets[list];
+                    ancestors.push_back(reinterpret_cast<const float*>(codes.get() + parent_pos * index.code_size));
+                    parent_id = forest->nodes[size_t(parent_id)].parent;
+                }
+                std::reverse(ancestors.begin(), ancestors.end());
             }
             std::vector<char> encoded;
             switch (mode) {
@@ -249,13 +273,13 @@ std::unique_ptr<CompactRecords> CompactRecords::build(
                     break;
                 case PayloadMode::ALP: alp_encode(value, records->dim, encoded); break;
                 case PayloadMode::DeXOR:
-                    encode_differential<hnswlib::codecs::DeXORCodecPolicy>(value, parent, records->dim, encoded);
+                    encode_differential<hnswlib::codecs::DeXORCodecPolicy>(value, ancestors, records->dim, encoded);
                     break;
                 case PayloadMode::Gorilla:
-                    encode_differential<hnswlib::codecs::GorillaCodecPolicy>(value, parent, records->dim, encoded);
+                    encode_differential<hnswlib::codecs::GorillaCodecPolicy>(value, ancestors, records->dim, encoded);
                     break;
                 case PayloadMode::Elf:
-                    encode_differential<hnswlib::codecs::ElfCodecPolicy>(value, parent, records->dim, encoded);
+                    encode_differential<hnswlib::codecs::ElfCodecPolicy>(value, ancestors, records->dim, encoded);
                     break;
             }
             records->payload.insert(records->payload.end(), encoded.begin(), encoded.end());
@@ -323,6 +347,79 @@ void CompactRecords::decode_slot(size_t slot, float* result) const {
         for (size_t p = patch_offsets[slot]; p < patch_offsets[slot + 1]; ++p)
             std::memcpy(result + patch_coordinates[p], &patch_bits[p], sizeof(float));
     }
+}
+
+template <typename Policy, typename Cache>
+void populate_state_cache(CompactRecords& records, const std::vector<size_t>& selected,
+                          Cache& cache) {
+    cache.reserve(selected.size());
+    for (size_t slot : selected) {
+        typename Cache::mapped_type entry;
+        entry.vector.resize(records.dim);
+        decode_differential<Policy>(records, slot, entry.vector.data(), &entry.states);
+        for (size_t p = records.patch_offsets[slot]; p < records.patch_offsets[slot + 1]; ++p)
+            std::memcpy(entry.vector.data() + records.patch_coordinates[p],
+                        &records.patch_bits[p], sizeof(float));
+        cache.emplace(slot, std::move(entry));
+    }
+}
+
+void CompactRecords::set_state_cache_ratio(double ratio) {
+    if (!std::isfinite(ratio) || ratio < 0 || ratio > 1)
+        throw std::invalid_argument("IVF-LVC state cache ratio must be in [0,1]");
+    state_cache_ratio = ratio;
+    dexor_cache.clear();
+    gorilla_cache.clear();
+    elf_cache.clear();
+    if (!differential(mode) || ratio == 0) return;
+    const size_t count = ids.size();
+    const size_t target = std::min(count, size_t(std::floor(double(count) * ratio)));
+    if (!target) return;
+    std::vector<int64_t> depths(count, -1);
+    for (size_t slot = 0; slot < count; ++slot) {
+        if (depths[slot] >= 0) continue;
+        std::vector<size_t> path;
+        size_t current = slot;
+        while (depths[current] < 0) {
+            if (path.size() > count) throw std::runtime_error("cyclic IVF-LVC predecessor chain");
+            path.push_back(current);
+            const auto parent = parents[current];
+            if (parent < 0) { depths[current] = 0; break; }
+            if (size_t(parent) >= slot_for_id.size() || slot_for_id[size_t(parent)] >= count)
+                throw std::runtime_error("invalid IVF-LVC predecessor");
+            current = slot_for_id[size_t(parent)];
+        }
+        for (auto it = path.rbegin(); it != path.rend(); ++it) {
+            if (depths[*it] < 0) depths[*it] = depths[slot_for_id[size_t(parents[*it])]] + 1;
+        }
+    }
+    std::vector<size_t> selected(count);
+    std::iota(selected.begin(), selected.end(), 0);
+    std::sort(selected.begin(), selected.end(), [&](size_t a, size_t b) {
+        return depths[a] != depths[b] ? depths[a] < depths[b] : ids[a] < ids[b];
+    });
+    selected.resize(target);
+    if (mode == PayloadMode::DeXOR)
+        populate_state_cache<hnswlib::codecs::DeXORCodecPolicy>(*this, selected, dexor_cache);
+    else if (mode == PayloadMode::Gorilla)
+        populate_state_cache<hnswlib::codecs::GorillaCodecPolicy>(*this, selected, gorilla_cache);
+    else
+        populate_state_cache<hnswlib::codecs::ElfCodecPolicy>(*this, selected, elf_cache);
+}
+
+size_t CompactRecords::state_cache_nodes() const {
+    return dexor_cache.size() + gorilla_cache.size() + elf_cache.size();
+}
+
+size_t CompactRecords::state_cache_bytes() const {
+    size_t bytes = 0;
+    auto add = [&](const auto& cache) {
+        for (const auto& item : cache)
+            bytes += sizeof(item) + item.second.states.size() * sizeof(item.second.states[0]) +
+                     item.second.vector.size() * sizeof(float);
+    };
+    add(dexor_cache); add(gorilla_cache); add(elf_cache);
+    return bytes;
 }
 
 CompactBytes CompactRecords::bytes() const {

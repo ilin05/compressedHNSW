@@ -8,6 +8,8 @@ input=""
 count=2048
 nlist=8
 seed=20261009
+chain_max=2
+cache_ratio=0.01
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
 
 while (($#)); do
@@ -16,6 +18,8 @@ while (($#)); do
     --count) count="$2"; shift 2 ;;
     --nlist) nlist="$2"; shift 2 ;;
     --seed) seed="$2"; shift 2 ;;
+    --chain-max) chain_max="$2"; shift 2 ;;
+    --cache-ratio) cache_ratio="$2"; shift 2 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -44,4 +48,5 @@ cmake -S "$repo_dir" -B "$build_dir" -DHNSWLIB_EXAMPLES=ON
 cmake --build "$build_dir" --target test_ivf_lvc_compact -j "${BUILD_JOBS:-4}"
 "$build_dir/test_ivf_lvc_compact" \
   --input "$input" --count "$count" --nlist "$nlist" --seed "$seed" \
+  --chain-max "$chain_max" --cache-ratio "$cache_ratio" \
   --output "$result_dir/summary.csv"

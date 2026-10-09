@@ -223,8 +223,14 @@ void IndexIVFLVC::reconstruct_from_offset(
 void IndexIVFLVC::compact(ivf_lvc::PayloadMode mode, const ivf_lvc::Forest* forest) {
     if (compact_records_) FAISS_THROW_MSG("IVF-LVC index is already compacted");
     auto records = ivf_lvc::CompactRecords::build(*this, forest, mode);
+    records->set_state_cache_ratio(0.01);
     replace_invlists(new ArrayInvertedLists(nlist, code_size), true);
     compact_records_ = std::move(records);
+}
+
+void IndexIVFLVC::set_decode_state_cache_ratio(double ratio) {
+    if (!compact_records_) FAISS_THROW_MSG("IVF-LVC index is not compacted");
+    compact_records_->set_state_cache_ratio(ratio);
 }
 
 void IndexIVFLVC::save_compact(const std::string& prefix) const {
@@ -249,6 +255,7 @@ std::unique_ptr<IndexIVFLVC> IndexIVFLVC::load_compact(const std::string& prefix
     index->nprobe = records->nprobe;
     index->max_codes = records->max_codes;
     index->compact_records_ = std::move(records);
+    index->compact_records_->set_state_cache_ratio(0.01);
     return index;
 }
 

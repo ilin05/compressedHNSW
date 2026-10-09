@@ -24,18 +24,21 @@ struct ForestSummary {
     size_t nonempty_lists = 0;
     size_t roots = 0;
     double mean_reference_l2 = 0;
+    double mean_depth = 0;
+    uint32_t max_depth = 0;
 };
 
 struct Forest {
     std::vector<ForestNode> nodes;
     ForestSummary summary;
+    int chain_max = 2;
     void verify(const faiss::IndexIVFLVC& index) const;
     void write_csv(const std::string& path) const;
 };
 
 // Phase 1 assumes the default dense IDs assigned by Index::add.
 Forest build_forest(const faiss::IndexIVFLVC& index, uint64_t seed = 20261009,
-                    double root_fraction = 0.01);
+                    double root_fraction = 0.01, int chain_max = 2);
 
 // The baseline and fork must share both the coarse quantizer and every posting.
 void verify_shared_partition(const faiss::IndexIVFFlat& baseline,

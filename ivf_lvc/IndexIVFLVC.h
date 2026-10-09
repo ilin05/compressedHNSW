@@ -77,6 +77,7 @@ struct IndexIVFLVC : IndexIVF {
     void save_compact(const std::string& prefix) const;
     static std::unique_ptr<IndexIVFLVC> load_compact(const std::string& prefix);
     const ivf_lvc::CompactRecords* compact_records() const { return compact_records_.get(); }
+    void set_decode_state_cache_ratio(double ratio);
 
     void reconstruct_from_offset(int64_t list_no, int64_t offset, float* recons)
             const override;
