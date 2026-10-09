@@ -11,9 +11,17 @@
 #define FAISS_INDEX_IVF_LVC_H
 
 #include <stdint.h>
+#include <memory>
+#include <string>
 #include <unordered_map>
 
 #include <faiss/IndexIVF.h>
+
+namespace ivf_lvc {
+struct Forest;
+struct CompactRecords;
+enum class PayloadMode;
+}
 
 namespace faiss {
 
@@ -25,6 +33,8 @@ namespace faiss {
  * encoded, the code array just contains the raw float entries.
  */
 struct IndexIVFLVC : IndexIVF {
+    std::unique_ptr<ivf_lvc::CompactRecords> compact_records_;
+
     IndexIVFLVC(
             Index* quantizer,
             size_t d,
@@ -57,12 +67,24 @@ struct IndexIVFLVC : IndexIVF {
             const IDSelector* sel,
             const IVFSearchParameters* params) const override;
 
+    void search_preassigned(idx_t n, const float* x, idx_t k,
+                            const idx_t* assign, const float* centroid_dis,
+                            float* distances, idx_t* labels, bool store_pairs,
+                            const IVFSearchParameters* params = nullptr,
+                            IndexIVFStats* stats = nullptr) const override;
+
+    void compact(ivf_lvc::PayloadMode mode, const ivf_lvc::Forest* forest = nullptr);
+    void save_compact(const std::string& prefix) const;
+    static std::unique_ptr<IndexIVFLVC> load_compact(const std::string& prefix);
+    const ivf_lvc::CompactRecords* compact_records() const { return compact_records_.get(); }
+
     void reconstruct_from_offset(int64_t list_no, int64_t offset, float* recons)
             const override;
 
     void sa_decode(idx_t n, const uint8_t* bytes, float* x) const override;
 
     IndexIVFLVC();
+    ~IndexIVFLVC() override;
 };
 
 
