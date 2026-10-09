@@ -19,6 +19,7 @@ bigann/*
 script/*.bin
 script/*.log
 script/*.py
+!script/analyze_dynamic_update_batches.py
 script/compression_plots/*
 script/recall_latency_plots/*
 script/plots/*

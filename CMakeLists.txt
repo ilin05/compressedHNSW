@@ -80,6 +80,12 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_search_faiss_ivf examples/cpp/test_search_faiss_ivf.cpp)
     target_link_libraries(test_search_faiss_ivf faiss OpenMP::OpenMP_CXX)
 
+    add_executable(test_ivf_lvc_forest
+      examples/cpp/test_ivf_lvc_forest.cpp
+      ivf_lvc/IndexIVFLVC.cpp
+      ivf_lvc/forest.cpp)
+    target_link_libraries(test_ivf_lvc_forest faiss hnswlib OpenMP::OpenMP_CXX)
+
     add_executable(test_build_faiss_hnsw examples/cpp/test_build_faiss_hnsw.cpp)
     target_link_libraries(test_build_faiss_hnsw faiss OpenMP::OpenMP_CXX)
 
