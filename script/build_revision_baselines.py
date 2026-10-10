@@ -74,7 +74,7 @@ def main():
     parser.add_argument("--output-dir", type=Path,
                         default=repo / "script/revision_baseline_build_results")
     parser.add_argument("--build-dir", type=Path, default=repo / "build_lvc_ivf_pq")
-    parser.add_argument("--threads", type=int, default=32)
+    parser.add_argument("--threads", type=int, default=16)
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--skip-compile", action="store_true")
     args = parser.parse_args()
