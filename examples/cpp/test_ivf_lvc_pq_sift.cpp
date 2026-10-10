@@ -4,6 +4,8 @@
 
 #include <faiss/IndexFlat.h>
 #include <faiss/IndexIVFFlat.h>
+#include <faiss/IndexIVFPQ.h>
+#include <faiss/clone_index.h>
 
 #include <algorithm>
 #include <chrono>
@@ -71,6 +73,20 @@ std::vector<size_t> parse_probes(const std::string& text) {
     return result;
 }
 
+std::vector<double> parse_alphas(const std::string& text) {
+    std::vector<double> result;
+    std::stringstream stream(text);
+    std::string item;
+    while (std::getline(stream, item, ',')) {
+        const double value = std::stod(item);
+        if (!std::isfinite(value) || value <= 0 || value > 1)
+            throw std::invalid_argument("pq_alpha must be in (0,1]");
+        result.push_back(value);
+    }
+    if (result.empty()) throw std::invalid_argument("empty pq_alpha list");
+    return result;
+}
+
 struct SearchResult {
     std::vector<faiss::idx_t> ids;
     std::vector<float> distances;
@@ -102,9 +118,9 @@ SearchResult search(faiss::Index& index, const std::vector<float>& queries,
 int main(int argc, char** argv) {
     try {
         std::string train_file, query_file, truth_file, output_dir = "ivf_lvc_pq_results";
-        std::string probe_text = "1,2,3,4,5,6,8,10";
+        std::string probe_text = "3,5", alpha_text = "0.1,0.2,1.0";
         size_t train_limit = SIZE_MAX, query_limit = SIZE_MAX, nlist = 0, rounds = 1;
-        double pq_alpha = 0.2, cache_ratio = 0.01;
+        double cache_ratio = 0.01;
         bool use_pq_filter = false;
         for (int i = 1; i < argc; ++i) {
             const std::string arg = argv[i];
@@ -119,13 +135,13 @@ int main(int argc, char** argv) {
             else if (arg == "--nlist") nlist = std::stoull(argv[++i]);
             else if (arg == "--nprobes") probe_text = argv[++i];
             else if (arg == "--rounds") rounds = std::stoull(argv[++i]);
-            else if (arg == "--pq_alpha") pq_alpha = std::stod(argv[++i]);
+            else if (arg == "--pq_alpha" || arg == "--pq_alphas") alpha_text = argv[++i];
             else if (arg == "--cache-ratio") cache_ratio = std::stod(argv[++i]);
             else throw std::invalid_argument("unknown argument: " + arg);
         }
-        if (train_file.empty() || query_file.empty() || truth_file.empty() || !rounds ||
-            !std::isfinite(pq_alpha) || pq_alpha <= 0 || pq_alpha > 1)
-            throw std::invalid_argument("provide train/queries/truth and pq_alpha in (0,1]");
+        if (train_file.empty() || query_file.empty() || truth_file.empty() || !rounds)
+            throw std::invalid_argument("provide train/queries/truth and positive rounds");
+        const auto alphas = parse_alphas(alpha_text);
         size_t dim = 0, query_dim = 0;
         auto train = read_fvecs(train_file, train_limit, dim);
         auto queries = read_fvecs(query_file, query_limit, query_dim);
@@ -153,14 +169,41 @@ int main(int argc, char** argv) {
         auto pq = ivf_lvc::train_pq_codes(*initial, train.data());
         pq->save(output_dir + "/shared_pq.bin");
         pq = ivf_lvc::PQCodes::load(output_dir + "/shared_pq.bin");
+        faiss::IndexIVFPQ ivfpq(faiss::clone_index(baseline.quantizer), dim, nlist, dim / 8, 8);
+        ivfpq.own_fields = true;
+        ivfpq.pq.cp.max_points_per_centroid = 782; // ~200k training vectors, like shared PQ.
+        const auto ivfpq_start = std::chrono::steady_clock::now();
+        ivfpq.train(count, train.data());
+        const double ivfpq_training_seconds = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - ivfpq_start).count();
+        const auto ivfpq_add_start = std::chrono::steady_clock::now();
+        ivfpq.add(count, train.data());
+        const double ivfpq_encoding_seconds = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - ivfpq_add_start).count();
+        if (ivfpq.code_size != pq->m || ivfpq.ntotal != faiss::idx_t(count) ||
+            ivfpq.pq.M != pq->m)
+            throw std::runtime_error("IVFPQ does not use the same bytes per vector");
+        std::vector<float> left_centroid(dim), right_centroid(dim);
+        for (size_t list = 0; list < nlist; ++list) {
+            baseline.quantizer->reconstruct(list, left_centroid.data());
+            ivfpq.quantizer->reconstruct(list, right_centroid.data());
+            if (left_centroid != right_centroid)
+                throw std::runtime_error("IVFPQ coarse centroids differ from IVF-Flat");
+        }
         std::ofstream pq_csv(output_dir + "/pq_summary.csv");
-        pq_csv << "nodes,dim,nlist,chain_max,root_fraction,pq_m,pq_bits,pq_training_seconds,pq_encoding_seconds,"
-                  "pq_codebook_bytes,pq_code_bytes,pq_file_bytes,ivf_build_seconds,forest_seconds,roots\n";
-        pq_csv << count << ',' << dim << ',' << nlist << ",2,0.01," << pq->m << ",8,"
-               << pq->training_seconds << ','
-               << pq->encoding_seconds << ',' << pq->codebook_bytes() << ',' << pq->code_bytes() << ','
-               << std::filesystem::file_size(output_dir + "/shared_pq.bin") << ','
+        pq_csv << "variant,nodes,dim,nlist,pq_m,pq_bits,pq_training_seconds,pq_encoding_seconds,"
+                  "pq_codebook_bytes,pq_code_bytes,pq_file_bytes,pq_precomputed_table_bytes,"
+                  "ivf_build_seconds,forest_seconds,roots\n";
+        pq_csv << "lvc_shared," << count << ',' << dim << ',' << nlist << ',' << pq->m << ",8,"
+               << pq->training_seconds << ',' << pq->encoding_seconds << ','
+               << pq->codebook_bytes() << ',' << pq->code_bytes() << ','
+               << std::filesystem::file_size(output_dir + "/shared_pq.bin") << ",0,"
                << ivf_build_seconds << ',' << forest_seconds << ',' << forest.summary.roots << '\n';
+        pq_csv << "ivfpq," << count << ',' << dim << ',' << nlist << ',' << ivfpq.pq.M << ",8,"
+               << ivfpq_training_seconds << ',' << ivfpq_encoding_seconds << ','
+               << ivfpq.pq.centroids.size() * sizeof(float) << ',' << count * ivfpq.code_size
+               << ",0," << ivfpq.precomputed_table.nbytes() << ',' << ivf_build_seconds
+               << ",0,0\n";
         pq_csv.close();
         if (pq->code_bytes() != count * dim / 8)
             throw std::runtime_error("PQ code size is not N * dim/8");
@@ -168,30 +211,39 @@ int main(int argc, char** argv) {
         std::ofstream csv(output_dir + "/search.csv");
         csv << "mode,pq_filter,pq_alpha,nprobe,queries,rounds,recall_at_1,qps,mean_us,"
                "vector_payload_bytes,record_metadata_bytes,coarse_centroid_bytes,pq_codebook_bytes,pq_code_bytes,"
-               "state_cache_ratio,state_cache_nodes,state_cache_estimated_bytes,compression_seconds\n";
-        auto report = [&](const std::string& mode, bool filtered, size_t nprobe,
+               "state_cache_ratio,state_cache_nodes,state_cache_estimated_bytes,index_setup_seconds\n";
+        auto report = [&](const std::string& mode, bool filtered, double alpha, size_t nprobe,
                           const SearchResult& result, const ivf_lvc::CompactRecords* records,
                           double compression_seconds) {
             const auto bytes = records ? records->bytes() : ivf_lvc::CompactBytes{};
-            const size_t vector_bytes = records ? bytes.payload : count * dim * sizeof(float);
+            const size_t vector_bytes = records ? bytes.payload :
+                mode == "ivfpq" ? 0 : count * dim * sizeof(float);
             const size_t metadata_bytes = records ? bytes.total() - bytes.payload : count * sizeof(faiss::idx_t);
-            csv << mode << ',' << (filtered ? 1 : 0) << ',' << (filtered ? pq_alpha : 1.0) << ','
+            const size_t codebook_bytes = mode == "ivf_flat" ? 0 :
+                mode == "ivfpq" ? ivfpq.pq.centroids.size() * sizeof(float) : pq->codebook_bytes();
+            const size_t code_bytes = mode == "ivf_flat" ? 0 :
+                mode == "ivfpq" ? count * ivfpq.code_size : pq->code_bytes();
+            csv << mode << ',' << (filtered ? 1 : 0) << ',' << alpha << ','
                 << nprobe << ',' << truth.size() << ',' << rounds << ','
                 << std::setprecision(9) << result.recall << ',' << result.qps << ','
                 << result.mean_us << ',' << vector_bytes << ',' << metadata_bytes << ','
                 << nlist * dim * sizeof(float) << ','
-                << pq->codebook_bytes() << ',' << pq->code_bytes() << ',' << cache_ratio << ','
+                << codebook_bytes << ',' << code_bytes << ',' << (records ? cache_ratio : 0) << ','
                 << (records ? records->state_cache_nodes() : 0) << ','
                 << (records ? records->state_cache_bytes() : 0) << ',' << compression_seconds << '\n';
             csv.flush();
-            std::cout << mode << " filter=" << filtered << " alpha=" << (filtered ? pq_alpha : 1.0)
+            std::cout << mode << " filter=" << filtered << " alpha=" << alpha
                       << " nprobe=" << nprobe << " recall@1=" << result.recall
                       << " qps=" << result.qps << " mean_us=" << result.mean_us << '\n';
         };
         for (size_t nprobe : probes) {
             baseline.nprobe = nprobe;
-            report("ivf_flat", false, nprobe,
+            report("ivf_flat", false, 1.0, nprobe,
                    search(baseline, queries, dim, truth, rounds), nullptr, 0);
+            ivfpq.nprobe = nprobe;
+            report("ivfpq", false, 1.0, nprobe,
+                   search(ivfpq, queries, dim, truth, rounds), nullptr,
+                   ivfpq_training_seconds + ivfpq_encoding_seconds);
         }
         for (auto mode : {ivf_lvc::PayloadMode::ALP, ivf_lvc::PayloadMode::DeXOR,
                           ivf_lvc::PayloadMode::Gorilla, ivf_lvc::PayloadMode::Elf}) {
@@ -205,9 +257,9 @@ int main(int argc, char** argv) {
             index->set_pq_codes(pq);
             for (size_t nprobe : probes) {
                 index->nprobe = nprobe;
-                index->set_pq_filter(false, pq_alpha);
+                index->set_pq_filter(false);
                 const auto exact = search(*index, queries, dim, truth, rounds);
-                report(ivf_lvc::mode_name(mode), false, nprobe, exact,
+                report(ivf_lvc::mode_name(mode), false, 1.0, nprobe, exact,
                        index->compact_records(), compression_seconds);
                 if (!use_pq_filter) continue;
                 const size_t check_count = std::min<size_t>(16, truth.size());
@@ -219,12 +271,14 @@ int main(int argc, char** argv) {
                     if (alpha_one.ids[i] != exact.ids[i] ||
                         alpha_one.distances[i] != exact.distances[i])
                         throw std::runtime_error("pq_alpha=1 differs from exact IVF-LVC search");
-                index->set_pq_filter(true, pq_alpha);
-                const auto filtered = search(*index, queries, dim, truth, rounds);
-                if (pq_alpha == 1 && (exact.ids != filtered.ids || exact.distances != filtered.distances))
-                    throw std::runtime_error("pq_alpha=1 differs from exact IVF-LVC search");
-                report(ivf_lvc::mode_name(mode), true, nprobe, filtered,
-                       index->compact_records(), compression_seconds);
+                for (double alpha : alphas) {
+                    index->set_pq_filter(true, alpha);
+                    const auto filtered = search(*index, queries, dim, truth, rounds);
+                    if (alpha == 1 && (exact.ids != filtered.ids || exact.distances != filtered.distances))
+                        throw std::runtime_error("pq_alpha=1 differs from exact IVF-LVC search");
+                    report(ivf_lvc::mode_name(mode), true, alpha, nprobe, filtered,
+                           index->compact_records(), compression_seconds);
+                }
             }
         }
         std::cout << "Results: " << output_dir << "/search.csv\n";
