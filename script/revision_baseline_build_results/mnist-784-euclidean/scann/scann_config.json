@@ -1,0 +1,12 @@
+{
+  "distance": "squared_l2",
+  "nodes": 60000,
+  "dim": 784,
+  "num_leaves": 0,
+  "training_sample_size": 9000,
+  "dimensions_per_block": 2,
+  "hash_type": "lut16",
+  "reordering_num_neighbors": 100,
+  "reordering_precision": "float32",
+  "threads": 32
+}

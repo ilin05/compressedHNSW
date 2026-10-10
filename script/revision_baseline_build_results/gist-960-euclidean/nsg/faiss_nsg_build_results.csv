@@ -1,0 +1,2 @@
+Dataset,Vectors,Dim,BuildTime(s),IndexFile
+gist-960-euclidean,1000000,960,428.053391,gist-960-euclidean_NSG_R32.bin

@@ -1,0 +1,2 @@
+dataset,algorithm,nodes,dim,nlist,train_vectors,pq_m,pq_bits,by_residual,bbs,sample_seconds,train_seconds,add_seconds,serialize_seconds,build_seconds,index_file_bytes,index_path
+mnist-784-euclidean,ivf_flat,60000,784,244,9760,0,0,0,0,0.023619144,0.542679272,0.339656368,0.132311679,0.905954784,189407275,/home/zmy/compressedHNSW/script/revision_baseline_build_results/mnist-784-euclidean/ivf_flat/index.bin

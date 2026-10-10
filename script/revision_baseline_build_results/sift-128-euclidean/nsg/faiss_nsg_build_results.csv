@@ -1,0 +1,2 @@
+Dataset,Vectors,Dim,BuildTime(s),IndexFile
+sift-128-euclidean,1000000,128,75.283228,sift-128-euclidean_NSG_R32.bin

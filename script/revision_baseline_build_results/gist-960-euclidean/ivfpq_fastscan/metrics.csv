@@ -1,0 +1,2 @@
+dataset,algorithm,nodes,dim,nlist,train_vectors,pq_m,pq_bits,by_residual,bbs,sample_seconds,train_seconds,add_seconds,serialize_seconds,build_seconds,index_file_bytes,index_path
+gist-960-euclidean,ivfpq_fastscan,1000000,960,1000,150000,240,4,1,32,0.521865405,12.7827972,14.0781803,0.093783834,27.3828429,133822288,/home/zmy/compressedHNSW/script/revision_baseline_build_results/gist-960-euclidean/ivfpq_fastscan/index.bin

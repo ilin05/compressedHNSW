@@ -41,3 +41,4 @@ script/ivf_lvc_pq_sift_results/*.faiss
 script/revision_baseline_build_results/**/index.bin
 script/revision_baseline_build_results/**/index/
 script/revision_baseline_build_results/**/*.log
+script/**/*.bin

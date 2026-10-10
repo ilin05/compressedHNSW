@@ -1,0 +1,2 @@
+dataset,algorithm,nodes,dim,nlist,train_vectors,pq_m,pq_bits,by_residual,bbs,sample_seconds,train_seconds,add_seconds,serialize_seconds,build_seconds,index_file_bytes,index_path,source
+gist-960-euclidean,nsg,1000000,960,0,0,0,0,0,0,,,,,428.053391,3886508916,/home/zmy/compressedHNSW/script/revision_baseline_build_results/gist-960-euclidean/nsg/gist-960-euclidean_NSG_R32.bin,built

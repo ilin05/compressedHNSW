@@ -1,0 +1,2 @@
+Dataset,Vectors,Dim,BuildTime(s),IndexFile
+deep-image-96-angular,9990000,96,1140.774909,deep-image-96-angular_NSG_R32.bin

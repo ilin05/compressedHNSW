@@ -1,0 +1,2 @@
+dataset,algorithm,nodes,dim,nlist,train_vectors,pq_m,pq_bits,by_residual,bbs,sample_seconds,train_seconds,add_seconds,serialize_seconds,build_seconds,index_file_bytes,index_path
+sift-128-euclidean,ivf_flat,1000000,128,1000,150000,0,0,0,0,0.082292331,6.22117945,4.33827312,0.354926118,10.6417449,520520139,/home/zmy/compressedHNSW/script/revision_baseline_build_results/sift-128-euclidean/ivf_flat/index.bin

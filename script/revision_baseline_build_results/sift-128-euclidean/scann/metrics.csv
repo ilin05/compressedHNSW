@@ -1,0 +1,2 @@
+dataset,algorithm,nodes,dim,nlist,train_vectors,pq_m,pq_bits,by_residual,bbs,sample_seconds,train_seconds,add_seconds,serialize_seconds,build_seconds,index_file_bytes,index_path
+sift-128-euclidean,scann,1000000,128,1000,150000,0,0,0,0,,,,1.1630471237003803,12.825927376747131,581059852,/home/zmy/compressedHNSW/script/revision_baseline_build_results/sift-128-euclidean/scann/index

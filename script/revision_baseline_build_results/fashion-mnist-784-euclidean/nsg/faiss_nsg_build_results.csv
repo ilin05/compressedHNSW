@@ -1,0 +1,2 @@
+Dataset,Vectors,Dim,BuildTime(s),IndexFile
+fashion-mnist-784-euclidean,60000,784,7.224495,fashion-mnist-784-euclidean_NSG_R32.bin
