@@ -1,0 +1,4 @@
+variant,nodes,dim,nlist,pq_m,pq_bits,pq_training_seconds,pq_encoding_seconds,pq_codebook_bytes,pq_code_bytes,pq_file_bytes,pq_precomputed_table_bytes,ivf_build_seconds,forest_seconds,roots
+lvc_shared,1000000,128,1000,16,8,4.41705,28.7299,131072,16000000,16131128,0,16.1154,32.3307,9513
+ivfpq_m_div_8,1000000,128,1000,16,8,14.0627,33.1322,131072,16000000,0,16384000,16.1154,0,0
+ivfpq_m,1000000,128,1000,128,8,52.0382,187.064,131072,128000000,0,131072000,16.1154,0,0

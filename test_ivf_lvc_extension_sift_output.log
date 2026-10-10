@@ -1,0 +1,66 @@
+nohup: ignoring input
+-- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+-- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+-- Configuring done (0.1s)
+-- Generating done (0.4s)
+-- Build files have been written to: /home/zmy/HNSWCW/compressedhnsw/build_lvc_ivf_pq
+[ 88%] Built target faiss
+[ 88%] Building CXX object CMakeFiles/test_ivf_lvc_pq_sift.dir/examples/cpp/test_ivf_lvc_pq_sift.cpp.o
+[ 88%] Linking CXX executable test_ivf_lvc_pq_sift
+[100%] Built target test_ivf_lvc_pq_sift
+ivf_flat chain=0 filter=0 alpha=1 nprobe=1 recall@1=0.4282 mean_us=60.0704
+ivfpq_m_div_8 chain=0 filter=0 alpha=1 nprobe=1 recall@1=0.2765 mean_us=48.6943
+ivfpq_m chain=0 filter=0 alpha=1 nprobe=1 recall@1=0.4183 mean_us=344.271
+ivf_flat chain=0 filter=0 alpha=1 nprobe=2 recall@1=0.6019 mean_us=113.436
+ivfpq_m_div_8 chain=0 filter=0 alpha=1 nprobe=2 recall@1=0.3578 mean_us=71.3293
+ivfpq_m chain=0 filter=0 alpha=1 nprobe=2 recall@1=0.5862 mean_us=528.71
+ivf_flat chain=0 filter=0 alpha=1 nprobe=4 recall@1=0.7602 mean_us=224.543
+ivfpq_m_div_8 chain=0 filter=0 alpha=1 nprobe=4 recall@1=0.4148 mean_us=113.511
+ivfpq_m chain=0 filter=0 alpha=1 nprobe=4 recall@1=0.7353 mean_us=895.698
+ivf_flat chain=0 filter=0 alpha=1 nprobe=6 recall@1=0.8344 mean_us=333.973
+ivfpq_m_div_8 chain=0 filter=0 alpha=1 nprobe=6 recall@1=0.4379 mean_us=157.694
+ivfpq_m chain=0 filter=0 alpha=1 nprobe=6 recall@1=0.8039 mean_us=1257.35
+ivf_flat chain=0 filter=0 alpha=1 nprobe=8 recall@1=0.8773 mean_us=436.339
+ivfpq_m_div_8 chain=0 filter=0 alpha=1 nprobe=8 recall@1=0.4503 mean_us=193.556
+ivfpq_m chain=0 filter=0 alpha=1 nprobe=8 recall@1=0.8439 mean_us=1614.49
+ivf_flat chain=0 filter=0 alpha=1 nprobe=10 recall@1=0.9057 mean_us=543.112
+ivfpq_m_div_8 chain=0 filter=0 alpha=1 nprobe=10 recall@1=0.4585 mean_us=243.037
+ivfpq_m chain=0 filter=0 alpha=1 nprobe=10 recall@1=0.8703 mean_us=1992.11
+ivf_flat chain=0 filter=0 alpha=1 nprobe=15 recall@1=0.9468 mean_us=811.352
+ivfpq_m_div_8 chain=0 filter=0 alpha=1 nprobe=15 recall@1=0.4678 mean_us=346.118
+ivfpq_m chain=0 filter=0 alpha=1 nprobe=15 recall@1=0.9084 mean_us=2892.13
+ivf_flat chain=0 filter=0 alpha=1 nprobe=20 recall@1=0.9643 mean_us=1078.07
+ivfpq_m_div_8 chain=0 filter=0 alpha=1 nprobe=20 recall@1=0.4703 mean_us=449.171
+ivfpq_m chain=0 filter=0 alpha=1 nprobe=20 recall@1=0.924 mean_us=3768.79
+raw chain=0 filter=0 alpha=1 nprobe=1 recall@1=0.4282 mean_us=82.8585
+raw chain=0 filter=1 alpha=0.05 nprobe=1 recall@1=0.4281 mean_us=65.4659
+raw chain=0 filter=1 alpha=0.1 nprobe=1 recall@1=0.4282 mean_us=76.6569
+raw chain=0 filter=0 alpha=1 nprobe=2 recall@1=0.6019 mean_us=161.458
+raw chain=0 filter=1 alpha=0.05 nprobe=2 recall@1=0.6018 mean_us=111.343
+raw chain=0 filter=1 alpha=0.1 nprobe=2 recall@1=0.6019 mean_us=132.875
+raw chain=0 filter=0 alpha=1 nprobe=4 recall@1=0.7602 mean_us=308.418
+raw chain=0 filter=1 alpha=0.05 nprobe=4 recall@1=0.7601 mean_us=196.665
+raw chain=0 filter=1 alpha=0.1 nprobe=4 recall@1=0.7602 mean_us=246.461
+raw chain=0 filter=0 alpha=1 nprobe=6 recall@1=0.8344 mean_us=465.047
+raw chain=0 filter=1 alpha=0.05 nprobe=6 recall@1=0.8343 mean_us=274.552
+raw chain=0 filter=1 alpha=0.1 nprobe=6 recall@1=0.8344 mean_us=338.637
+raw chain=0 filter=0 alpha=1 nprobe=8 recall@1=0.8773 mean_us=584.614
+raw chain=0 filter=1 alpha=0.05 nprobe=8 recall@1=0.8772 mean_us=351.975
+raw chain=0 filter=1 alpha=0.1 nprobe=8 recall@1=0.8773 mean_us=440.363
+raw chain=0 filter=0 alpha=1 nprobe=10 recall@1=0.9057 mean_us=730.677
+raw chain=0 filter=1 alpha=0.05 nprobe=10 recall@1=0.9057 mean_us=434.881
+raw chain=0 filter=1 alpha=0.1 nprobe=10 recall@1=0.9057 mean_us=547.76
+raw chain=0 filter=0 alpha=1 nprobe=15 recall@1=0.9468 mean_us=1104.63
+raw chain=0 filter=1 alpha=0.05 nprobe=15 recall@1=0.9468 mean_us=650.351
+raw chain=0 filter=1 alpha=0.1 nprobe=15 recall@1=0.9468 mean_us=825.969
+raw chain=0 filter=0 alpha=1 nprobe=20 recall@1=0.9643 mean_us=1512.29
+raw chain=0 filter=1 alpha=0.05 nprobe=20 recall@1=0.9643 mean_us=873.966
+raw chain=0 filter=1 alpha=0.1 nprobe=20 recall@1=0.9643 mean_us=1069.59
+alp chain=0 filter=0 alpha=1 nprobe=1 recall@1=0.4282 mean_us=704.198
+alp chain=0 filter=1 alpha=0.05 nprobe=1 recall@1=0.4281 mean_us=91.3609
+alp chain=0 filter=1 alpha=0.1 nprobe=1 recall@1=0.4282 mean_us=132.881
+alp chain=0 filter=0 alpha=1 nprobe=2 recall@1=0.6019 mean_us=1487.9
+alp chain=0 filter=1 alpha=0.05 nprobe=2 recall@1=0.6018 mean_us=173.057
+alp chain=0 filter=1 alpha=0.1 nprobe=2 recall@1=0.6019 mean_us=257.635
+alp chain=0 filter=0 alpha=1 nprobe=4 recall@1=0.7602 mean_us=2944.35
+alp chain=0 filter=1 alpha=0.0
