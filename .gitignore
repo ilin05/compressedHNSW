@@ -22,6 +22,7 @@ script/*.py
 !script/analyze_dynamic_update_batches.py
 !script/build_revision_baselines.py
 !script/build_revision_scann_baseline.py
+!script/profile_revision_baseline_storage.py
 script/compression_plots/*
 script/recall_latency_plots/*
 script/plots/*
