@@ -1,2 +1,2 @@
 dataset,algorithm,nodes,dim,nlist,train_vectors,pq_m,pq_bits,by_residual,bbs,sample_seconds,train_seconds,add_seconds,serialize_seconds,build_seconds,index_file_bytes,index_path,source
-fashion-mnist-784-euclidean,nsg,60000,784,0,0,0,0,0,0,,,,,7.224495,190964320,/home/zmy/compressedHNSW/script/revision_baseline_build_results/fashion-mnist-784-euclidean/nsg/fashion-mnist-784-euclidean_NSG_R32.bin,built
+fashion-mnist-784-euclidean,nsg,60000,784,0,0,0,0,0,0,,,,,7.224495,190964320,/home/zmy/HNSWCW/compressedHNSW/script/revision_baseline_build_results/fashion-mnist-784-euclidean/nsg/fashion-mnist-784-euclidean_NSG_R32.bin,built

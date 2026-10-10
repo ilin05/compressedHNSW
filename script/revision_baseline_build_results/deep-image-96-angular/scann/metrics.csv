@@ -1,2 +1,2 @@
 dataset,algorithm,nodes,dim,nlist,train_vectors,pq_m,pq_bits,by_residual,bbs,sample_seconds,train_seconds,add_seconds,serialize_seconds,build_seconds,index_file_bytes,index_path
-deep-image-96-angular,scann,9990000,96,3160,1498500,0,0,0,0,,,,5.514903292059898,112.94309642165899,4358142317,/home/zmy/compressedHNSW/script/revision_baseline_build_results/deep-image-96-angular/scann/index
+deep-image-96-angular,scann,9990000,96,3160,1498500,0,0,0,0,,,,5.514903292059898,112.94309642165899,4358142317,/home/zmy/HNSWCW/compressedHNSW/script/revision_baseline_build_results/deep-image-96-angular/scann/index

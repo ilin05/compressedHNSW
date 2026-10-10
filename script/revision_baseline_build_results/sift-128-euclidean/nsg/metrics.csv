@@ -1,2 +1,2 @@
 dataset,algorithm,nodes,dim,nlist,train_vectors,pq_m,pq_bits,by_residual,bbs,sample_seconds,train_seconds,add_seconds,serialize_seconds,build_seconds,index_file_bytes,index_path,source
-sift-128-euclidean,nsg,1000000,128,0,0,0,0,0,0,,,,,75.283228,596227356,/home/zmy/compressedHNSW/script/revision_baseline_build_results/sift-128-euclidean/nsg/sift-128-euclidean_NSG_R32.bin,built
+sift-128-euclidean,nsg,1000000,128,0,0,0,0,0,0,,,,,75.283228,596227356,/home/zmy/HNSWCW/compressedHNSW/script/revision_baseline_build_results/sift-128-euclidean/nsg/sift-128-euclidean_NSG_R32.bin,built

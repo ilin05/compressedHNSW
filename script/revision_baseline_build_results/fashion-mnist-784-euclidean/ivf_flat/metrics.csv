@@ -1,2 +1,2 @@
 dataset,algorithm,nodes,dim,nlist,train_vectors,pq_m,pq_bits,by_residual,bbs,sample_seconds,train_seconds,add_seconds,serialize_seconds,build_seconds,index_file_bytes,index_path
-fashion-mnist-784-euclidean,ivf_flat,60000,784,244,9760,0,0,0,0,0.022629621,0.518500362,0.34069352,0.129771973,0.881823503,189407275,/home/zmy/compressedHNSW/script/revision_baseline_build_results/fashion-mnist-784-euclidean/ivf_flat/index.bin
+fashion-mnist-784-euclidean,ivf_flat,60000,784,244,9760,0,0,0,0,0.022629621,0.518500362,0.34069352,0.129771973,0.881823503,189407275,/home/zmy/HNSWCW/compressedHNSW/script/revision_baseline_build_results/fashion-mnist-784-euclidean/ivf_flat/index.bin

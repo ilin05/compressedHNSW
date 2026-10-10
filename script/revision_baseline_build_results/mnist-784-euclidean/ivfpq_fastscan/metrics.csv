@@ -1,2 +1,2 @@
 dataset,algorithm,nodes,dim,nlist,train_vectors,pq_m,pq_bits,by_residual,bbs,sample_seconds,train_seconds,add_seconds,serialize_seconds,build_seconds,index_file_bytes,index_path
-mnist-784-euclidean,ivfpq_fastscan,60000,784,244,9760,196,4,1,32,0.022572376,1.67327859,0.708421304,0.004936455,2.40427227,7549520,/home/zmy/compressedHNSW/script/revision_baseline_build_results/mnist-784-euclidean/ivfpq_fastscan/index.bin
+mnist-784-euclidean,ivfpq_fastscan,60000,784,244,9760,196,4,1,32,0.022572376,1.67327859,0.708421304,0.004936455,2.40427227,7549520,/home/zmy/HNSWCW/compressedHNSW/script/revision_baseline_build_results/mnist-784-euclidean/ivfpq_fastscan/index.bin
