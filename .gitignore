@@ -30,3 +30,5 @@ build_lvc_cross_graph/
 script/dynamic_update_batches_results/**/perf/
 script/ivf_lvc_compact_results/*.bin
 script/ivf_lvc_compact_results/*.faiss
+script/ivf_lvc_chain_results/*.bin
+script/ivf_lvc_chain_results/*.faiss
