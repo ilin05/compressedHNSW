@@ -1,2 +1,2 @@
 dataset,algorithm,nodes,dim,nlist,train_vectors,pq_m,pq_bits,by_residual,bbs,sample_seconds,train_seconds,add_seconds,serialize_seconds,build_seconds,index_file_bytes,index_path
-gist-960-euclidean,ivf_flat,1000000,960,1000,150000,0,0,0,0,0.584441424,10.899847,8.4428649,2.58953993,19.9271533,3851848139,/home/zmy/HNSWCW/compressedHNSW/script/revision_baseline_build_results/gist-960-euclidean/ivf_flat/index.bin
+gist-960-euclidean,ivf_flat,1000000,960,1000,150000,0,0,0,0,0.584441424,10.899847,8.4428649,2.58953993,19.9271533,3851848139,/home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_build_results/gist-960-euclidean/ivf_flat/index.bin

@@ -1,2 +1,2 @@
 dataset,algorithm,nodes,dim,nlist,train_vectors,pq_m,pq_bits,by_residual,bbs,sample_seconds,train_seconds,add_seconds,serialize_seconds,build_seconds,index_file_bytes,index_path,source
-mnist-784-euclidean,nsg,60000,784,0,0,0,0,0,0,,,,,6.852451,191883248,/home/zmy/HNSWCW/compressedHNSW/script/revision_baseline_build_results/mnist-784-euclidean/nsg/mnist-784-euclidean_NSG_R32.bin,built
+mnist-784-euclidean,nsg,60000,784,0,0,0,0,0,0,,,,,6.852451,191883248,/home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_build_results/mnist-784-euclidean/nsg/mnist-784-euclidean_NSG_R32.bin,built
