@@ -77,6 +77,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_build_faiss_ivf examples/cpp/test_build_faiss_ivf.cpp)
     target_link_libraries(test_build_faiss_ivf faiss OpenMP::OpenMP_CXX)
 
+    add_executable(build_revision_faiss_baseline examples/cpp/build_revision_faiss_baseline.cpp)
+    target_link_libraries(build_revision_faiss_baseline faiss OpenMP::OpenMP_CXX)
+
     add_executable(test_search_faiss_ivf examples/cpp/test_search_faiss_ivf.cpp)
     target_link_libraries(test_search_faiss_ivf faiss OpenMP::OpenMP_CXX)
 
