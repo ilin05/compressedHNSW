@@ -34,3 +34,4 @@ script/ivf_lvc_chain_results/*.bin
 script/ivf_lvc_chain_results/*.faiss
 build_lvc_ivf_pq/
 script/ivf_lvc_pq_sift_results/*.bin
+script/ivf_lvc_pq_sift_results/*.faiss
