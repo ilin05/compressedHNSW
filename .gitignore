@@ -23,6 +23,8 @@ script/*.py
 !script/build_revision_baselines.py
 !script/build_revision_scann_baseline.py
 !script/profile_revision_baseline_storage.py
+!script/test_revision_baseline_search.py
+!script/test_revision_scann_search.py
 script/compression_plots/*
 script/recall_latency_plots/*
 script/plots/*
@@ -41,5 +43,6 @@ script/ivf_lvc_pq_sift_results/*.faiss
 script/revision_baseline_build_results/**/index.bin
 script/revision_baseline_build_results/**/index/
 script/revision_baseline_build_results/**/*.log
+script/revision_baseline_search_results/**/*.log
 script/**/*.bin
 .venv-scann/

@@ -83,6 +83,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_revision_baseline_storage_breakdown examples/cpp/test_revision_baseline_storage_breakdown.cpp)
     target_link_libraries(test_revision_baseline_storage_breakdown faiss OpenMP::OpenMP_CXX)
 
+    add_executable(test_revision_faiss_search examples/cpp/test_revision_faiss_search.cpp)
+    target_link_libraries(test_revision_faiss_search faiss OpenMP::OpenMP_CXX)
+
     add_executable(test_search_faiss_ivf examples/cpp/test_search_faiss_ivf.cpp)
     target_link_libraries(test_search_faiss_ivf faiss OpenMP::OpenMP_CXX)
 
