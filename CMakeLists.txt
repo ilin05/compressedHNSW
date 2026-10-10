@@ -85,6 +85,7 @@ if(HNSWLIB_EXAMPLES)
       ivf_lvc/IndexIVFLVC.cpp
       ivf_lvc/forest.cpp
       ivf_lvc/compact_records.cpp
+      ivf_lvc/pq_codes.cpp
       ${ENCODING_ALGO_SRC})
     target_link_libraries(test_ivf_lvc_forest faiss hnswlib OpenMP::OpenMP_CXX)
 
@@ -93,8 +94,18 @@ if(HNSWLIB_EXAMPLES)
       ivf_lvc/IndexIVFLVC.cpp
       ivf_lvc/forest.cpp
       ivf_lvc/compact_records.cpp
+      ivf_lvc/pq_codes.cpp
       ${ENCODING_ALGO_SRC})
     target_link_libraries(test_ivf_lvc_compact faiss hnswlib OpenMP::OpenMP_CXX)
+
+    add_executable(test_ivf_lvc_pq_sift
+      examples/cpp/test_ivf_lvc_pq_sift.cpp
+      ivf_lvc/IndexIVFLVC.cpp
+      ivf_lvc/forest.cpp
+      ivf_lvc/compact_records.cpp
+      ivf_lvc/pq_codes.cpp
+      ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_ivf_lvc_pq_sift faiss hnswlib OpenMP::OpenMP_CXX)
 
     add_executable(test_build_faiss_hnsw examples/cpp/test_build_faiss_hnsw.cpp)
     target_link_libraries(test_build_faiss_hnsw faiss OpenMP::OpenMP_CXX)

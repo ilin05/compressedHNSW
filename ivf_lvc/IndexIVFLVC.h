@@ -20,6 +20,7 @@
 namespace ivf_lvc {
 struct Forest;
 struct CompactRecords;
+struct PQCodes;
 enum class PayloadMode;
 }
 
@@ -34,6 +35,9 @@ namespace faiss {
  */
 struct IndexIVFLVC : IndexIVF {
     std::unique_ptr<ivf_lvc::CompactRecords> compact_records_;
+    std::shared_ptr<const ivf_lvc::PQCodes> pq_codes_;
+    bool use_pq_filter_ = false;
+    double pq_alpha_ = 0.2;
 
     IndexIVFLVC(
             Index* quantizer,
@@ -78,6 +82,9 @@ struct IndexIVFLVC : IndexIVF {
     static std::unique_ptr<IndexIVFLVC> load_compact(const std::string& prefix);
     const ivf_lvc::CompactRecords* compact_records() const { return compact_records_.get(); }
     void set_decode_state_cache_ratio(double ratio);
+    void set_pq_codes(std::shared_ptr<const ivf_lvc::PQCodes> codes);
+    void set_pq_filter(bool enabled, double alpha = 0.2);
+    const ivf_lvc::PQCodes* pq_codes() const { return pq_codes_.get(); }
 
     void reconstruct_from_offset(int64_t list_no, int64_t offset, float* recons)
             const override;

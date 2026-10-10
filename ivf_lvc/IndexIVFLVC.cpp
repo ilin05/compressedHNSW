@@ -9,11 +9,15 @@
 
 #include "ivf_lvc/IndexIVFLVC.h"
 #include "ivf_lvc/compact_records.h"
+#include "ivf_lvc/pq_codes.h"
 
 #include <omp.h>
 
 #include <cinttypes>
 #include <cstdio>
+#include <cmath>
+#include <algorithm>
+#include <filesystem>
 #include <numeric>
 #include <queue>
 #include <vector>
@@ -233,10 +237,41 @@ void IndexIVFLVC::set_decode_state_cache_ratio(double ratio) {
     compact_records_->set_state_cache_ratio(ratio);
 }
 
+void IndexIVFLVC::set_pq_codes(std::shared_ptr<const ivf_lvc::PQCodes> codes) {
+    if (!codes) { pq_codes_.reset(); use_pq_filter_ = false; return; }
+    if (codes->dim != size_t(d) || codes->m != size_t(d) / 8 ||
+        codes->count != size_t(ntotal) || codes->codes.size() != codes->count * codes->m ||
+        codes->centroids.size() != codes->m * 256 * 8)
+        FAISS_THROW_MSG("IVF-LVC PQ dimensions or code bytes mismatch");
+    uint64_t hash = 14695981039346656037ULL;
+    if (compact_records_) {
+        for (auto id : compact_records_->ids)
+            hash = (hash ^ uint64_t(id)) * 1099511628211ULL;
+    } else {
+        for (size_t list = 0; list < nlist; ++list) {
+            InvertedLists::ScopedIds ids(invlists, list);
+            for (size_t pos = 0; pos < invlists->list_size(list); ++pos)
+                hash = (hash ^ uint64_t(ids.get()[pos])) * 1099511628211ULL;
+        }
+    }
+    if (hash != codes->posting_hash) FAISS_THROW_MSG("IVF-LVC PQ posting order mismatch");
+    pq_codes_ = std::move(codes);
+}
+
+void IndexIVFLVC::set_pq_filter(bool enabled, double alpha) {
+    if (!std::isfinite(alpha) || alpha <= 0 || alpha > 1)
+        FAISS_THROW_MSG("IVF-LVC pq_alpha must be in (0,1]");
+    if (enabled && !pq_codes_) FAISS_THROW_MSG("IVF-LVC PQ filter needs independent PQ codes");
+    use_pq_filter_ = enabled;
+    pq_alpha_ = alpha;
+}
+
 void IndexIVFLVC::save_compact(const std::string& prefix) const {
     if (!compact_records_) FAISS_THROW_MSG("IVF-LVC index is not compacted");
     write_index(quantizer, (prefix + ".quantizer.faiss").c_str());
     compact_records_->save(prefix + ".records.bin");
+    if (pq_codes_) pq_codes_->save(prefix + ".pq.bin");
+    else std::filesystem::remove(prefix + ".pq.bin");
 }
 
 std::unique_ptr<IndexIVFLVC> IndexIVFLVC::load_compact(const std::string& prefix) {
@@ -256,6 +291,8 @@ std::unique_ptr<IndexIVFLVC> IndexIVFLVC::load_compact(const std::string& prefix
     index->max_codes = records->max_codes;
     index->compact_records_ = std::move(records);
     index->compact_records_->set_state_cache_ratio(0.01);
+    if (std::filesystem::exists(prefix + ".pq.bin"))
+        index->set_pq_codes(ivf_lvc::PQCodes::load(prefix + ".pq.bin"));
     return index;
 }
 
@@ -277,6 +314,46 @@ void IndexIVFLVC::search_preassigned(
         std::priority_queue<std::pair<float, idx_t>> best;
         std::vector<float> decoded(d);
         size_t scanned = 0;
+        if (use_pq_filter_ && pq_alpha_ < 1) {
+            struct ApproxCandidate { float distance; size_t slot; };
+            std::vector<ApproxCandidate> candidates;
+            std::vector<float> table(pq_codes_->m * 256);
+            pq_codes_->distance_table(x + qi * d, table.data());
+            for (size_t pi = 0; pi < probes; ++pi) {
+                const idx_t list = assign[qi * probes + pi];
+                if (list < 0 || size_t(list) >= nlist) continue;
+                if (stats) ++stats->nlist;
+                for (size_t slot = records.list_offsets[list];
+                     slot < records.list_offsets[list + 1]; ++slot) {
+                    if (code_limit && scanned >= code_limit) break;
+                    const uint8_t* code = pq_codes_->codes.data() + slot * pq_codes_->m;
+                    float distance = 0;
+                    for (size_t sub = 0; sub < pq_codes_->m; ++sub)
+                        distance += table[sub * 256 + code[sub]];
+                    candidates.push_back({distance, slot});
+                    ++scanned;
+                }
+                if (code_limit && scanned >= code_limit) break;
+            }
+            const size_t exact_count = std::min(candidates.size(),
+                std::max<size_t>(size_t(k), size_t(std::ceil(pq_alpha_ * candidates.size()))));
+            auto closer = [&](const ApproxCandidate& a, const ApproxCandidate& b) {
+                return a.distance != b.distance ? a.distance < b.distance :
+                       records.ids[a.slot] < records.ids[b.slot];
+            };
+            if (exact_count < candidates.size())
+                std::nth_element(candidates.begin(), candidates.begin() + exact_count,
+                                 candidates.end(), closer);
+            for (size_t i = 0; i < exact_count; ++i) {
+                const size_t slot = candidates[i].slot;
+                records.decode_slot(slot, decoded.data());
+                const float distance = fvec_L2sqr(x + qi * d, decoded.data(), d);
+                const auto candidate = std::make_pair(distance, records.ids[slot]);
+                if (best.size() < size_t(k)) best.push(candidate);
+                else if (candidate < best.top()) { best.pop(); best.push(candidate); }
+            }
+            if (stats) stats->ndis += exact_count;
+        } else {
         for (size_t pi = 0; pi < probes; ++pi) {
             const idx_t list = assign[qi * probes + pi];
             if (list < 0 || size_t(list) >= nlist) continue;
@@ -294,6 +371,7 @@ void IndexIVFLVC::search_preassigned(
             if (code_limit && scanned >= code_limit) break;
         }
         if (stats) stats->ndis += scanned;
+        }
         for (idx_t rank = k; rank-- > 0;) {
             const size_t result = size_t(qi * k + rank);
             if (!best.empty()) {
