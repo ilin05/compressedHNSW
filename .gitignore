@@ -27,6 +27,7 @@ script/*.py
 !script/profile_revision_baseline_storage.py
 !script/test_revision_baseline_search.py
 !script/test_revision_scann_search.py
+!script/rebase_revision_scann_assets.py
 script/compression_plots/*
 script/recall_latency_plots/*
 script/plots/*

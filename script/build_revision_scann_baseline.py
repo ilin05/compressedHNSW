@@ -58,7 +58,9 @@ def main():
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
     start = time.perf_counter()
-    searcher.serialize(str(output))
+    # Store asset paths relative to the index directory so serialized indexes
+    # remain loadable when the repository is moved to another machine/path.
+    searcher.serialize(str(output), relative_path=True)
     serialize_seconds = time.perf_counter() - start
     index_bytes = sum(p.stat().st_size for p in output.rglob("*") if p.is_file())
     config = {
