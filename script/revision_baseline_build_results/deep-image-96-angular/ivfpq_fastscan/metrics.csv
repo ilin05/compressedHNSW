@@ -1,2 +1,2 @@
 dataset,algorithm,nodes,dim,nlist,train_vectors,pq_m,pq_bits,by_residual,bbs,sample_seconds,train_seconds,add_seconds,serialize_seconds,build_seconds,index_file_bytes,index_path
-deep-image-96-angular,ivfpq_fastscan,9990000,96,3160,1498500,24,4,1,32,1.55869229,74.7189312,119.532792,0.170198069,195.810416,201653840,/home/zmy/HNSWCW/compressedHNSW/script/revision_baseline_build_results/deep-image-96-angular/ivfpq_fastscan/index.bin
+deep-image-96-angular,ivfpq_fastscan,9990000,96,3160,1498500,24,4,1,32,1.55869229,74.7189312,119.532792,0.170198069,195.810416,201653840,/home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_build_results/deep-image-96-angular/ivfpq_fastscan/index.bin

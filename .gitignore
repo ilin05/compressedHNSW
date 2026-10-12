@@ -19,6 +19,8 @@ bigann/*
 script/*.bin
 script/*.log
 script/*.py
+!script/plot_ivf_lvc_extension_sift.py
+!script/plot_vq_recall_analysis_revision.py
 !script/analyze_dynamic_update_batches.py
 !script/build_revision_baselines.py
 !script/build_revision_scann_baseline.py

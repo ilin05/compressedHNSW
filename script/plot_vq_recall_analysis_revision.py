@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+"""Revision of the VQ/recall panels with exact LVC and new index baselines.
+
+The filtered curve follows the original greedy operating-point selection, but
+uses positive filtering ratios only. Exact LVC uses precisely HNSWALP0.000000.
+Missing dataset/index combinations are reported and never synthesized.
+"""
+
+import argparse
+import csv
+from collections import defaultdict
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+FONT_SIZE = 25
+AXIS_FONT_SIZE = 25
+DATASET_ORDER = (
+    "mnist-784-euclidean", "fashion-mnist-784-euclidean",
+    "sift-128-euclidean", "gist-960-euclidean", "deep-image-96-angular",
+)
+DATASET_NAMES = {
+    "mnist-784-euclidean": "MNIST",
+    "fashion-mnist-784-euclidean": "Fashion-MNIST",
+    "sift-128-euclidean": "SIFT",
+    "gist-960-euclidean": "GIST",
+    "deep-image-96-angular": "DEEP",
+}
+plt.rcParams.update({
+    "font.family": "serif", "font.serif": ["Linux Libertine O", "Times New Roman", "DejaVu Serif"],
+    "font.size": FONT_SIZE, "pdf.fonttype": 42, "ps.fonttype": 42,
+})
+NEW_BASELINES = ("IVF-Flat", "IVFPQ-FastScan", "NSG", "ScaNN")
+CURVE_ORDER = (
+    "HNSW-Filtered-LVC", "HNSW-Exact-LVC", "HNSW", "HNSW+PQ",
+    "HNSW+SQ", *NEW_BASELINES,
+)
+STYLES = {
+    "HNSW-Filtered-LVC": ("D", "-", "#C84A24"),
+    "HNSW-Exact-LVC": ("X", "-", "#174A7E"),
+    "HNSW": ("o", "--", "#626B73"),
+    "HNSW+PQ": ("s", "--", "#91B6D4"),
+    "HNSW+SQ": ("^", "-.", "#9FC9B4"),
+    "IVF-Flat": ("P", "--", "#9A568F"),
+    "IVFPQ-FastScan": ("h", ":", "#735AA6"),
+    "NSG": ("v", "-.", "#A58AC0"),
+    "ScaNN": ("*", "-", "#629E7A"),
+}
+DATA_KEYS = {
+    "HNSW": "HNSW", "HNSW+PQ": "HNSWPQ_1", "HNSW+SQ": "HNSWSQ_8",
+    **{name: name for name in NEW_BASELINES},
+}
+
+
+def load_data(vq_csv, baseline_csv):
+    data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    with open(vq_csv, newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            index_type = row["IndexType"].strip()
+            if index_type.startswith("HNSWALP"):
+                key = "HNSWALP"
+                ratio = float(index_type[len("HNSWALP"):])
+            else:
+                key = index_type
+                ratio = None
+            data[row["Dataset"].strip()][int(row["K"])][key].append({
+                "recall": float(row["Recall"]),
+                "latency_us": float(row["Latency(us)"]),
+                "vq": float(row["VQ"]),
+                "param": row["Param"],
+                "original_index_type": index_type,
+                "tls_ratio": ratio,
+            })
+    counts = {name: 0 for name in NEW_BASELINES}
+    with open(baseline_csv, newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            name = row["IndexType"].strip()
+            if name not in counts:
+                continue
+            dataset = row["Dataset"].strip()
+            k = int(row["K"])
+            data[dataset][k][name].append({
+                "recall": float(row["Recall"]),
+                "latency_us": float(row["Latency(us)"]),
+                "vq": float(row["VQ"]),
+                "param": row["Param"],
+            })
+            counts[name] += 1
+    print("New baseline rows:", ", ".join(f"{name}={counts[name]}" for name in NEW_BASELINES))
+    return data
+
+
+def sort_and_dedup(points, key):
+    result = []
+    seen = set()
+    for point in sorted(points, key=lambda point: point[key]):
+        signature = (round(point[key], 10), round(point["recall"], 10))
+        if signature not in seen:
+            result.append(point)
+            seen.add(signature)
+    return result
+
+
+def filtered_path(points):
+    """Original script's greedy slope path, restricted to positive filter ratios."""
+    by_ratio = defaultdict(list)
+    for point in points:
+        ratio = point["tls_ratio"]
+        if ratio is not None and ratio > 0:
+            by_ratio[ratio].append((point["recall"], point["latency_us"], point["vq"]))
+    for values in by_ratio.values():
+        values.sort(key=lambda point: point[0])
+    ratios = [ratio for ratio in (0.1, 0.2, 0.3, 0.5) if by_ratio[ratio]]
+    if not ratios:
+        return []
+    curve, index = 0, 0
+    visited = set()
+    result = []
+    while curve < len(ratios) and (curve, index) not in visited:
+        visited.add((curve, index))
+        current = by_ratio[ratios[curve]][index]
+        result.append({"recall": current[0], "latency_us": current[1], "vq": current[2]})
+        candidates = []
+        if index + 1 < len(by_ratio[ratios[curve]]):
+            candidates.append((curve, index + 1))
+        if curve + 1 < len(ratios):
+            candidates.extend((curve + 1, next_index)
+                              for next_index, point in enumerate(by_ratio[ratios[curve + 1]])
+                              if point[0] > current[0])
+        if not candidates:
+            break
+        def slope(target):
+            point = by_ratio[ratios[target[0]]][target[1]]
+            recall_gain = point[0] - current[0]
+            latency_gain = point[1] - current[1]
+            return (float("inf") if recall_gain > 0 else float("-inf")) if latency_gain == 0 else recall_gain / latency_gain
+        curve, index = max(candidates, key=slope)
+    return result
+
+
+def curves_for_dataset(data, dataset, k):
+    curves = {}
+    filtered = filtered_path(data[dataset][k].get("HNSWALP", []))
+    if filtered:
+        curves["HNSW-Filtered-LVC"] = filtered
+    exact = [
+        point for point in data[dataset][k].get("HNSWALP", [])
+        if point["original_index_type"] == "HNSWALP0.000000"
+    ]
+    if exact:
+        curves["HNSW-Exact-LVC"] = exact
+    for display, key in DATA_KEYS.items():
+        points = data[dataset][k].get(key, [])
+        if points:
+            curves[display] = points
+    return curves
+
+
+def plot_panel(ax, curves, dataset, k, metric):
+    handles = {}
+    all_recalls = []
+    for name in CURVE_ORDER:
+        points = curves.get(name, [])
+        if not points:
+            continue
+        x_key = "latency_us" if metric == "latency" else "vq"
+        points = sort_and_dedup(points, key=x_key)
+        x = [p[x_key] / 1000 if metric == "latency" else p[x_key] for p in points]
+        y = [p["recall"] for p in points]
+        marker, linestyle, color = STYLES[name]
+        (line,) = ax.plot(x, y, marker=marker, linestyle=linestyle, color=color,
+                          linewidth=2.3, markersize=8, markeredgecolor="white",
+                          markeredgewidth=0.5, label=name)
+        handles[name] = line
+        all_recalls.extend(y)
+    if all_recalls:
+        ax.set_ylim(max(0, min(all_recalls) - 0.04), 1.005)
+    ax.set_title(DATASET_NAMES.get(dataset, dataset), fontsize=FONT_SIZE - 2)
+    ax.set_xlabel("Latency (ms)" if metric == "latency" else "VQ Capacity")
+    ax.grid(True, linestyle="--", alpha=0.3)
+    ax.tick_params(labelsize=AXIS_FONT_SIZE - 7)
+    return handles
+
+
+def plot_combined(data, output, k):
+    datasets = [d for d in DATASET_ORDER if d in data and k in data[d]]
+    if not datasets:
+        raise ValueError(f"No Recall@{k} results in the input CSV files")
+    fig, axes = plt.subplots(2, len(datasets), figsize=(5.2 * len(datasets), 8.1),
+                             squeeze=False)
+    handles = {}
+    for col, dataset in enumerate(datasets):
+        curves = curves_for_dataset(data, dataset, k)
+        for row, metric in enumerate(("latency", "vq")):
+            handles.update(plot_panel(axes[row][col], curves, dataset, k, metric))
+            if col == 0:
+                axes[row][col].set_ylabel(f"Recall@{k}")
+    present = [name for name in CURVE_ORDER if name in handles]
+    fig.legend([handles[name] for name in present], present, loc="upper center",
+               ncol=5, frameon=False, fontsize=15, bbox_to_anchor=(0.5, 1.01),
+               columnspacing=1.0, handletextpad=0.4)
+    fig.subplots_adjust(left=0.055, right=0.995, top=0.80, bottom=0.09,
+                        wspace=0.25, hspace=0.48)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved: {output}")
+    for name in NEW_BASELINES:
+        missing = [DATASET_NAMES.get(d, d) for d in datasets
+                   if name not in data[d][k]]
+        if missing:
+            print(f"Recall@{k}: {name} missing for {', '.join(missing)}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--csv", type=Path, default=SCRIPT_DIR / "vq_recall_results.csv")
+    parser.add_argument("--baseline-csv", "--baseline_csv", type=Path,
+                        default=SCRIPT_DIR / "revision_baseline_search_results/all_results.csv")
+    parser.add_argument("--out-dir", "--out_dir", type=Path,
+                        default=SCRIPT_DIR / "vq_recall_revision_plots")
+    args = parser.parse_args()
+    data = load_data(args.csv, args.baseline_csv)
+    for k, filename in ((10, "in_memory_recall@10_combined_revision.pdf"),
+                        (1, "appendix_recall@1_combined_revision.pdf")):
+        plot_combined(data, args.out_dir / filename, k)
+
+
+if __name__ == "__main__":
+    main()
