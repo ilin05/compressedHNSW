@@ -112,6 +112,7 @@ struct SearchRoundMetrics {
     long decoding_calls = 0;
     long get_original_data_calls = 0;
     long backtrack_hops = 0;
+    long long decoding_time_ns = 0;
     double avg_decode_per_query = 0.0;
     double avg_backtrack_hops_per_call = 0.0;
 };
@@ -169,6 +170,7 @@ SearchRoundMetrics run_search_round(
     metrics.decoding_calls = index->getDecodingCallCount();
     metrics.get_original_data_calls = index->getOriginalDataCallCount();
     metrics.backtrack_hops = index->getOriginalDataBacktrackHops();
+    metrics.decoding_time_ns = index->getTotalTimeDecodingNs();
     metrics.avg_decode_per_query = qsize > 0
                                        ? static_cast<double>(metrics.decoding_calls) / static_cast<double>(qsize)
                                        : 0.0;
@@ -195,6 +197,7 @@ void search_one_config(const std::string& dataset,
                        bool enable_profiling,
                        int num_rounds,
                        bool stop_at_recall_99,
+                       const std::string& query_ids_file,
                        std::ofstream& csv) {
     const std::string query_file = base_dir + dataset + "_test.fvecs";
     const std::string gt_file = base_dir + dataset + "_neighbors.ivecs";
@@ -216,6 +219,26 @@ void search_one_config(const std::string& dataset,
         delete[] queries;
         delete[] gt;
         return;
+    }
+    if (!query_ids_file.empty()) {
+        std::ifstream ids(query_ids_file);
+        if (!ids) throw std::runtime_error("Cannot open query ID file: " + query_ids_file);
+        std::vector<double> selected_queries;
+        std::vector<unsigned int> selected_gt;
+        size_t id;
+        while (ids >> id) {
+            if (id >= qsize) throw std::runtime_error("Query ID out of range");
+            selected_queries.insert(selected_queries.end(), queries + id * qdim, queries + (id + 1) * qdim);
+            selected_gt.insert(selected_gt.end(), gt + id * gt_dim, gt + (id + 1) * gt_dim);
+        }
+        if (selected_queries.empty()) throw std::runtime_error("Empty query ID file");
+        delete[] queries;
+        delete[] gt;
+        qsize = selected_queries.size() / qdim;
+        queries = new double[selected_queries.size()];
+        gt = new unsigned int[selected_gt.size()];
+        std::copy(selected_queries.begin(), selected_queries.end(), queries);
+        std::copy(selected_gt.begin(), selected_gt.end(), gt);
     }
 
     size_t train_num = count_fvecs(train_file);
@@ -255,6 +278,7 @@ void search_one_config(const std::string& dataset,
             avg.decoding_calls += metrics.decoding_calls;
             avg.get_original_data_calls += metrics.get_original_data_calls;
             avg.backtrack_hops += metrics.backtrack_hops;
+            avg.decoding_time_ns += metrics.decoding_time_ns;
 
             std::cout << "  round " << (round + 1)
                       << " ef=" << ef
@@ -274,6 +298,7 @@ void search_one_config(const std::string& dataset,
         avg.decoding_calls /= num_rounds;
         avg.get_original_data_calls /= num_rounds;
         avg.backtrack_hops /= num_rounds;
+        avg.decoding_time_ns /= num_rounds;
         avg.avg_decode_per_query = qsize > 0
                                        ? static_cast<double>(avg.decoding_calls) / static_cast<double>(qsize)
                                        : 0.0;
@@ -296,6 +321,7 @@ void search_one_config(const std::string& dataset,
         csv << dataset << ','
             << algo << ','
             << chain_max_length << ','
+            << root_policy << ','
             << (use_cache ? 1 : 0) << ','
             << (use_tls ? 1 : 0) << ','
             << std::fixed << std::setprecision(4) << tls_ratio << ','
@@ -310,7 +336,9 @@ void search_one_config(const std::string& dataset,
             << avg.decoding_calls << ','
             << avg.get_original_data_calls << ','
             << std::setprecision(6) << avg.avg_decode_per_query << ','
-            << std::setprecision(6) << avg.avg_backtrack_hops_per_call << '\n';
+            << std::setprecision(6) << avg.avg_backtrack_hops_per_call << ','
+            << std::setprecision(6) << double(avg.decoding_time_ns) / (1000.0 * qsize) << ','
+            << std::setprecision(6) << (avg.decoding_calls ? double(avg.decoding_time_ns) / avg.decoding_calls : 0.0) << '\n';
 
         if (stop_at_recall_99 && avg.recall >= 0.99) {
             break;
@@ -335,12 +363,13 @@ void dispatch_search(const std::string& dataset,
                      bool enable_profiling,
                      int num_rounds,
                      bool stop_at_recall_99,
+                     const std::string& query_ids_file,
                      std::ofstream& csv) {
-    if (algo == "DeXOR") return search_one_config<codecs::DeXORCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, csv);
-    if (algo == "Gorilla") return search_one_config<codecs::GorillaCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, csv);
-    if (algo == "Elf") return search_one_config<codecs::ElfCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, csv);
-    if (algo == "Camel") return search_one_config<codecs::CamelCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, csv);
-    if (algo == "DeXORPlus") return search_one_config<codecs::DeXORPlusCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, csv);
+    if (algo == "DeXOR") return search_one_config<codecs::DeXORCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, query_ids_file, csv);
+    if (algo == "Gorilla") return search_one_config<codecs::GorillaCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, query_ids_file, csv);
+    if (algo == "Elf") return search_one_config<codecs::ElfCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, query_ids_file, csv);
+    if (algo == "Camel") return search_one_config<codecs::CamelCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, query_ids_file, csv);
+    if (algo == "DeXORPlus") return search_one_config<codecs::DeXORPlusCodecPolicy>(dataset, base_dir, algo, chain_max_length, root_policy, use_cache, use_tls, tls_ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, query_ids_file, csv);
     throw std::runtime_error("Unknown algorithm: " + algo);
 }
 
@@ -353,6 +382,7 @@ int main(int argc, char** argv) {
     bool stop_at_recall_99 = true;
     size_t k = 1;
     std::string root_policy = "level";
+    std::string query_ids_file;
 
     std::vector<std::string> datasets = {
         "fashion-mnist-784-euclidean",
@@ -393,8 +423,10 @@ int main(int argc, char** argv) {
             k = static_cast<size_t>(std::stoul(argv[++i]));
         } else if (arg == "--root_policy" && i + 1 < argc) {
             root_policy = argv[++i];
-            if (root_policy != "level" && root_policy != "degree" && root_policy != "random")
+            if (root_policy != "level" && root_policy != "degree" && root_policy != "random" && root_policy != "access")
                 throw std::runtime_error("Unknown root policy: " + root_policy);
+        } else if (arg == "--query_ids_file" && i + 1 < argc) {
+            query_ids_file = argv[++i];
         } else if (arg == "--dataset" && i + 1 < argc) {
             datasets.clear();
             while (i + 1 < argc && std::string(argv[i + 1]).rfind("--", 0) != 0) {
@@ -448,9 +480,9 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    csv << "Dataset,Algorithm,ChainMaxLength,UseCacheTop1Pct,UseTwoLevelSearch,TlsRatio,K,ef,"
+    csv << "Dataset,Algorithm,ChainMaxLength,RootPolicy,UseCacheTop1Pct,UseTwoLevelSearch,TlsRatio,K,ef,"
         << "Num_Rounds,Enable_Profiling,Recall,TimePerQuery(us),P99_Latency(us),QPS,"
-        << "Decoding_Calls,GetOriginalData_Calls,Avg_Decode_Per_Query,Avg_Backtrack_Hops_Per_Call\n";
+        << "Decoding_Calls,GetOriginalData_Calls,Avg_Decode_Per_Query,Avg_Backtrack_Hops_Per_Call,Decode_Us_Per_Query,Decode_Ns_Per_Record\n";
 
     for (const auto& ds : datasets) {
         for (const auto& algo : algorithms) {
@@ -458,10 +490,10 @@ int main(int argc, char** argv) {
                 for (int cache_flag : cache_flags) {
                     for (int tls_flag : tls_flags) {
                         if (tls_flag == 0) {
-                            dispatch_search(ds, base_dir, algo, chain_max, root_policy, cache_flag != 0, false, 0.0, k, efs, enable_profiling, num_rounds, stop_at_recall_99, csv);
+                            dispatch_search(ds, base_dir, algo, chain_max, root_policy, cache_flag != 0, false, 0.0, k, efs, enable_profiling, num_rounds, stop_at_recall_99, query_ids_file, csv);
                         } else {
                             for (double ratio : tls_ratios) {
-                                dispatch_search(ds, base_dir, algo, chain_max, root_policy, cache_flag != 0, true, ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, csv);
+                                dispatch_search(ds, base_dir, algo, chain_max, root_policy, cache_flag != 0, true, ratio, k, efs, enable_profiling, num_rounds, stop_at_recall_99, query_ids_file, csv);
                             }
                         }
                     }

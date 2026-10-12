@@ -7,6 +7,8 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <numeric>
+#include <random>
 #include <omp.h>
 
 #include "../../hnswlib/hnswlib.h"
@@ -14,6 +16,7 @@
 
 using namespace std;
 using namespace hnswlib;
+static size_t verify_sample_count = 0; // zero keeps --verify_vectors exhaustive
 
 class StopW {
     std::chrono::steady_clock::time_point begin_;
@@ -104,12 +107,14 @@ BuildResult build_one(const std::string& dataset,
                       int M,
                       int ef_construction,
                       CompressionRootPolicy root_policy, bool verify_vectors, bool f32_lossless,
-                      const std::string& shared_graph_file, double shared_graph_build_s) {
+                      const std::string& shared_graph_file, double shared_graph_build_s,
+                      const std::vector<uint64_t>& access_counts) {
     BuildResult r;
     r.dataset = dataset;
     r.algorithm = algo;
     r.chain_max_length = chain_max_length;
     r.root_policy = root_policy == CompressionRootPolicy::Level0Degree ? "degree" :
+                    root_policy == CompressionRootPolicy::AccessFrequency ? "access" :
                     root_policy == CompressionRootPolicy::Random ? "random" : "level";
     r.shared_graph_file = shared_graph_file;
     r.vectors = 0;
@@ -134,6 +139,8 @@ BuildResult build_one(const std::string& dataset,
         : new HierarchicalNSWCABFRAMEWORK<double, CodecPolicy>(
             &l2space, shared_graph_file, true, 0);
     index->setF32Lossless(f32_lossless);
+    if (root_policy == CompressionRootPolicy::AccessFrequency)
+        index->setRootAccessCounts(access_counts);
 
     std::cout << "\n=== Build dataset=" << dataset
               << " algo=" << algo
@@ -203,8 +210,16 @@ BuildResult build_one(const std::string& dataset,
     r.raw_f32_index_bytes = r.graph_metadata_bytes + r.vectors * r.dim * sizeof(float);
     r.full_index_ratio_f32 = r.compressed_index_bytes ?
         double(r.raw_f32_index_bytes) / r.compressed_index_bytes : 0;
+    std::vector<tableint> verify_ids;
     if (verify_vectors) {
-        for (tableint i = 0; i < r.vectors; ++i) {
+        verify_ids.resize(r.vectors);
+        std::iota(verify_ids.begin(), verify_ids.end(), 0);
+        if (verify_sample_count && verify_sample_count < r.vectors) {
+            std::mt19937 rng(20261012);
+            std::shuffle(verify_ids.begin(), verify_ids.end(), rng);
+            verify_ids.resize(verify_sample_count);
+        }
+        for (tableint i : verify_ids) {
             const auto decoded = index->getOriginalDataByInternalId(i);
             const auto label = index->getExternalLabel(i);
             size_t first = 0;
@@ -223,14 +238,14 @@ BuildResult build_one(const std::string& dataset,
                     " decoded=" + (first < decoded.size() ? std::to_string(decoded[first]) : "missing"));
             }
         }
-        std::cout << "PASS HNSW F32 bitwise vectors=" << r.vectors << '/' << r.vectors << '\n';
+        std::cout << "PASS HNSW F32 bitwise vectors=" << verify_ids.size() << '/' << r.vectors << '\n';
     }
     index->saveIndex(r.index_file);
     r.file_bytes = std::filesystem::file_size(r.index_file);
     if (verify_vectors) {
         HierarchicalNSWCABFRAMEWORK<double, CodecPolicy> reloaded(
             &l2space, r.index_file, true, cache_max_size);
-        for (tableint i = 0; i < r.vectors; ++i) {
+        for (tableint i : verify_ids) {
             const auto decoded = reloaded.getOriginalDataByInternalId(i);
             const auto label = reloaded.getExternalLabel(i);
             if (label >= r.vectors || decoded.size() != r.dim)
@@ -243,7 +258,7 @@ BuildResult build_one(const std::string& dataset,
                                              " coordinate=" + std::to_string(j));
             }
         }
-        std::cout << "PASS reloaded HNSW F32 bitwise vectors=" << r.vectors << '/' << r.vectors << '\n';
+        std::cout << "PASS reloaded HNSW F32 bitwise vectors=" << verify_ids.size() << '/' << r.vectors << '\n';
     }
 
     delete index;
@@ -257,12 +272,13 @@ BuildResult dispatch_build(const std::string& dataset,
                            int chain_max_length,
                            int M,
                            int ef_construction, CompressionRootPolicy root_policy, bool verify_vectors,
-                           bool f32_lossless, const std::string& shared_graph_file, double shared_graph_build_s) {
-    if (algo == "DeXOR") return build_one<codecs::DeXORCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction, root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s);
-    if (algo == "Gorilla") return build_one<codecs::GorillaCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction, root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s);
-    if (algo == "Elf") return build_one<codecs::ElfCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction, root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s);
-    if (algo == "Camel") return build_one<codecs::CamelCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction, root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s);
-    if (algo == "DeXORPlus") return build_one<codecs::DeXORPlusCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction, root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s);
+                           bool f32_lossless, const std::string& shared_graph_file, double shared_graph_build_s,
+                           const std::vector<uint64_t>& access_counts) {
+    if (algo == "DeXOR") return build_one<codecs::DeXORCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction, root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s, access_counts);
+    if (algo == "Gorilla") return build_one<codecs::GorillaCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction, root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s, access_counts);
+    if (algo == "Elf") return build_one<codecs::ElfCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction, root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s, access_counts);
+    if (algo == "Camel") return build_one<codecs::CamelCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction, root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s, access_counts);
+    if (algo == "DeXORPlus") return build_one<codecs::DeXORPlusCodecPolicy>(dataset, base_dir, algo, chain_max_length, M, ef_construction, root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s, access_counts);
     throw std::runtime_error("Unknown algorithm: " + algo);
 }
 
@@ -276,6 +292,8 @@ int main(int argc, char** argv) {
     bool verify_vectors = false;
     bool f32_lossless = false;
     bool reuse_graph = false;
+    std::string provided_graph_file;
+    std::string access_counts_file;
 
     std::vector<std::string> datasets = {
         "fashion-mnist-784-euclidean",
@@ -312,9 +330,18 @@ int main(int argc, char** argv) {
             if (policy == "degree") root_policy = CompressionRootPolicy::Level0Degree;
             else if (policy == "level") root_policy = CompressionRootPolicy::Level;
             else if (policy == "random") root_policy = CompressionRootPolicy::Random;
+            else if (policy == "access") root_policy = CompressionRootPolicy::AccessFrequency;
             else throw std::runtime_error("Unknown root policy: " + policy);
+        } else if (arg == "--shared_graph_file" && i + 1 < argc) {
+            provided_graph_file = argv[++i];
+        } else if (arg == "--access_counts" && i + 1 < argc) {
+            access_counts_file = argv[++i];
         } else if (arg == "--verify_vectors") {
             verify_vectors = true;
+        } else if (arg == "--verify_sample" && i + 1 < argc) {
+            verify_vectors = true;
+            verify_sample_count = std::stoull(argv[++i]);
+            if (!verify_sample_count) throw std::runtime_error("--verify_sample must be positive");
         } else if (arg == "--f32_lossless") {
             f32_lossless = true;
         } else if (arg == "--reuse_graph") {
@@ -345,6 +372,19 @@ int main(int argc, char** argv) {
     }
 
     omp_set_num_threads(threads);
+    if (reuse_graph && !provided_graph_file.empty())
+        throw std::runtime_error("Use either --reuse_graph or --shared_graph_file");
+    std::vector<uint64_t> access_counts;
+    if (root_policy == CompressionRootPolicy::AccessFrequency) {
+        std::ifstream counts_file(access_counts_file);
+        if (!counts_file) throw std::runtime_error("Missing --access_counts file");
+        size_t id;
+        uint64_t count;
+        while (counts_file >> id >> count) {
+            if (id != access_counts.size()) throw std::runtime_error("Access count IDs are not contiguous");
+            access_counts.push_back(count);
+        }
+    }
 
     std::ofstream csv(out_csv);
     if (!csv.is_open()) {
@@ -354,7 +394,7 @@ int main(int argc, char** argv) {
 
     csv << "Dataset,Algorithm,ChainMaxLength,Vectors,Dim,BuildTime(s),CompressTime(s),DataCompressionRatio,IndexCompressionRatio,IndexFile,RootPolicy,InitialRoots,Roots,MaxDepth,AverageDepth,AverageNonrootDepth,MeanReferenceL2,P50ReferenceL2,P95ReferenceL2,PayloadBytes,GraphMetadataBytes,IndexFileBytes,RawF32Bytes,RawF32IndexBytes,CompressedIndexBytes,PayloadRatioF32,FullIndexRatioF32,F32PatchBytes,CodecBytes,PQCodeBytes,PQCentroidBytes,StateCacheBytes,SharedGraphFile\n";
     for (const auto& ds : datasets) {
-        std::string shared_graph_file;
+        std::string shared_graph_file = provided_graph_file;
         double shared_graph_build_s = 0;
         if (reuse_graph) {
             size_t n = 0, dim = 0;
@@ -377,7 +417,7 @@ int main(int argc, char** argv) {
         for (const auto& algo : algorithms) {
             for (int chain_max : chain_max_list) {
                 BuildResult r = dispatch_build(ds, base_dir, algo, chain_max, M, ef_construction,
-                    root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s);
+                    root_policy, verify_vectors, f32_lossless, shared_graph_file, shared_graph_build_s, access_counts);
                 csv << r.dataset << ','
                     << r.algorithm << ','
                     << r.chain_max_length << ','

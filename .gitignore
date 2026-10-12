@@ -33,6 +33,9 @@ script/recall_latency_plots/*
 script/plots/*
 script/*.data*
 build_lvc_sift/
+build_lvc_root_score/
+script/root_selection_score_results/*.log
+script/root_selection_score_smoke_results/
 script/perf_breakdown_hnsw_sift/
 build_lvc_cross_graph/
 script/dynamic_update_batches_results/**/perf/

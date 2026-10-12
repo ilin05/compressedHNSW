@@ -23,7 +23,8 @@ typedef unsigned int linklistsizeint;
 enum class CompressionRootPolicy {
     Level,
     Random,
-    Level0Degree
+    Level0Degree,
+    AccessFrequency
 };
 
 template<typename dist_t, typename CodecPolicy>
@@ -92,6 +93,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
     // 记录decoding消耗的时间
     mutable std::atomic<long> decoding_time{0};
+    mutable std::atomic<long long> decoding_time_ns{0};
 
     // 记录decoding的次数
     mutable std::atomic<long> decoding_count{0};
@@ -100,6 +102,10 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     mutable std::atomic<long> getOriginalData_calls{0};
     mutable std::atomic<long> getOriginalData_backtrack_hops{0};
     mutable std::atomic<long> cache_hit_times{0};
+    // Single-thread query trace on an uncompressed graph; indexed by internal ID.
+    mutable bool access_trace_enabled_ = false;
+    mutable std::vector<uint64_t> access_trace_counts_;
+    std::vector<uint64_t> root_access_counts_;
 
     // data cache for getOriginalDataByInternalId
     size_t cache_max_size_ = 0;
@@ -128,6 +134,18 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     void setUseTls(bool use) { use_tls_ = use; }
     void setTlsRatio(double ratio) { tls_ratio_ = ratio; }
     void setProfilingMetrics(bool use) { enable_profiling_metrics_ = use; }
+    void startAccessTrace() {
+        if (is_compacted_) throw std::runtime_error("Access trace requires an uncompressed graph");
+        access_trace_counts_.assign(cur_element_count, 0);
+        access_trace_enabled_ = true;
+    }
+    void stopAccessTrace() { access_trace_enabled_ = false; }
+    const std::vector<uint64_t>& getAccessTraceCounts() const { return access_trace_counts_; }
+    void setRootAccessCounts(const std::vector<uint64_t>& counts) {
+        if (counts.size() != cur_element_count)
+            throw std::invalid_argument("Root access count length must match graph nodes");
+        root_access_counts_ = counts;
+    }
 
     // PQ Quantization Data
     size_t pq_m_ = 0;           // Number of sub-quantizers
@@ -700,6 +718,8 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                 decoding_time += std::chrono::duration_cast<std::chrono::microseconds>(
                                          decode_end - decode_start)
                                          .count();
+                decoding_time_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                        decode_end - decode_start).count();
             }
         };
 
@@ -1023,6 +1043,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         if (bare_bone_search || 
             (!isMarkedDeleted(ep_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(ep_id))))) {
             std::vector<double> ep_vec = getOriginalDataByInternalId(ep_id);
+            if (access_trace_enabled_) ++access_trace_counts_[ep_id];
             const void* ep_data = ep_vec.data();
             dist_t dist = fstdistfunc_(data_point, ep_data, dist_func_param_);
             lowerBound = dist;
@@ -1089,6 +1110,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
                     // char *currObj1 = (getDataByInternalId(candidate_id));
                     std::vector<double> currObjVec = getOriginalDataByInternalId(candidate_id);
+                    if (access_trace_enabled_) ++access_trace_counts_[candidate_id];
                     const void* currObj1 = currObjVec.data();
 
                     dist_t dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
@@ -1446,6 +1468,8 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                 return "random";
             case CompressionRootPolicy::Level0Degree:
                 return "level0_degree";
+            case CompressionRootPolicy::AccessFrequency:
+                return "access_frequency";
             default:
                 return "unknown";
         }
@@ -1492,6 +1516,15 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                     if (degree_a != degree_b) {
                         return degree_a > degree_b;
                     }
+                    return a < b;
+                });
+                break;
+            case CompressionRootPolicy::AccessFrequency:
+                if (root_access_counts_.size() != cur_element_count)
+                    throw std::runtime_error("Access-frequency roots require a query trace");
+                std::sort(candidates.begin(), candidates.end(), [&](tableint a, tableint b) {
+                    if (root_access_counts_[a] != root_access_counts_[b])
+                        return root_access_counts_[a] > root_access_counts_[b];
                     return a < b;
                 });
                 break;
@@ -2179,7 +2212,8 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                     input.clear();
                 if (compressed_root_policy_ != CompressionRootPolicy::Level &&
                     compressed_root_policy_ != CompressionRootPolicy::Random &&
-                    compressed_root_policy_ != CompressionRootPolicy::Level0Degree)
+                    compressed_root_policy_ != CompressionRootPolicy::Level0Degree &&
+                    compressed_root_policy_ != CompressionRootPolicy::AccessFrequency)
                     throw std::runtime_error("Invalid compression root policy");
             } else input.clear();
         } else {
@@ -2887,6 +2921,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         // currObj和curdist分别记录距离data point最近的点和距离
         tableint currObj = enterpoint_node_;
         std::vector<double> vec_ep = getOriginalDataByInternalId(enterpoint_node_);
+        if (access_trace_enabled_) ++access_trace_counts_[enterpoint_node_];
         dist_t curdist = fstdistfunc_(query_data, vec_ep.data(), dist_func_param_);
         // 在层L...1之间
         for (int level = maxlevel_; level > 0; level--) {
@@ -2910,6 +2945,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                         throw std::runtime_error("cand error");
                     // 根据id获取邻居并计算其到query的距离
                     std::vector<double> vec_cand = getOriginalDataByInternalId(cand);
+                    if (access_trace_enabled_) ++access_trace_counts_[cand];
                     dist_t d = fstdistfunc_(query_data, vec_cand.data(), dist_func_param_);
                     // 如果这个邻居与query的距离比curdist还小，更新curdist为这个邻居，changed改为true
                     if (d < curdist) {
@@ -3188,6 +3224,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
 
     void resetProfilingMetrics() {
         decoding_time = 0;
+        decoding_time_ns = 0;
         decoding_count = 0;
         getOriginalData_time = 0;
         getOriginalData_calls = 0;
@@ -3274,6 +3311,7 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     long getTotalTimeDecoding() const {
         return decoding_time;
     }
+    long long getTotalTimeDecodingNs() const { return decoding_time_ns; }
 
     // 获取decoding调用次数
     int getDecodingCallCount() const {
