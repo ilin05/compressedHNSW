@@ -109,11 +109,15 @@ def main():
                   "ground_truth": [str(truth_path), truth_path.stat().st_size,
                                    truth_path.stat().st_mtime_ns],
                   "rounds": args.rounds, "k": args.k, "params": list(params),
-                  "scann_candidates": args.scann_candidates if algorithm == "scann" else None,
-                  "fastscan_query_batch": 64 if algorithm == "ivfpq_fastscan" else None}
+                  "scann_candidates": args.scann_candidates if algorithm == "scann" else None}
+        if algorithm == "ivfpq_fastscan":
+            config["fastscan_query_batch"] = 64
         config_path = directory / "config.json"
         if final.exists() and config_path.exists() and not args.force:
-            if json.loads(config_path.read_text()) == config:
+            saved_config = json.loads(config_path.read_text())
+            if algorithm != "ivfpq_fastscan":
+                saved_config.pop("fastscan_query_batch", None)
+            if saved_config == config:
                 print(f"Reuse {dataset} {algorithm}: {final}", flush=True)
                 continue
         common = ["--dataset", dataset, "--index", str(index_path),
