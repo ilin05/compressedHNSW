@@ -2,23 +2,34 @@ nohup: ignoring input
 Reuse deep-image-96-angular ivf_flat: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/deep-image-96-angular/ivf_flat/results.csv
 Reuse deep-image-96-angular ivfpq_fastscan: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/deep-image-96-angular/ivfpq_fastscan/results.csv
 Reuse deep-image-96-angular nsg: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/deep-image-96-angular/nsg/results.csv
-Running deep-image-96-angular scann
-PASS deep-image-96-angular scann: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/deep-image-96-angular/scann/results.csv
-Running fashion-mnist-784-euclidean ivf_flat
-PASS fashion-mnist-784-euclidean ivf_flat: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/fashion-mnist-784-euclidean/ivf_flat/results.csv
-Running fashion-mnist-784-euclidean ivfpq_fastscan
-Traceback (most recent call last):
-  File "/home/zmy/HNSWCW/compressedhnsw/script/test_revision_baseline_search.py", line 136, in main
-    subprocess.run(command, cwd=repo, env=environment, stdout=log,
-  File "/usr/lib/python3.12/subprocess.py", line 571, in run
-    raise CalledProcessError(retcode, process.args,
-subprocess.CalledProcessError: Command '['/home/zmy/HNSWCW/compressedhnsw/build_lvc_ivf_pq/test_revision_faiss_search', '--dataset', 'fashion-mnist-784-euclidean', '--index', '/home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_build_results/fashion-mnist-784-euclidean/ivfpq_fastscan/index.bin', '--queries', '/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/fashion-mnist-784-euclidean_test.fvecs', '--ground-truth', '/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/fashion-mnist-784-euclidean_neighbors.ivecs', '--output', '/home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/fashion-mnist-784-euclidean/ivfpq_fastscan/results.tmp.csv', '--rounds', '3', '--k', '1', '10', '--algorithm', 'ivfpq_fastscan', '--params', '1', '2', '4', '6', '8', '10', '15', '20', '25', '30', '40', '50', '60', '80', '100']' died with <Signals.SIGSEGV: 11>.
-
-The above exception was the direct cause of the following exception:
-
-Traceback (most recent call last):
-  File "/home/zmy/HNSWCW/compressedhnsw/script/test_revision_baseline_search.py", line 148, in <module>
-    main()
-  File "/home/zmy/HNSWCW/compressedhnsw/script/test_revision_baseline_search.py", line 139, in main
-    raise RuntimeError(f"{dataset} {algorithm} failed; see {log_path}") from error
-RuntimeError: fashion-mnist-784-euclidean ivfpq_fastscan failed; see /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/fashion-mnist-784-euclidean/ivfpq_fastscan/search.log
+Reuse deep-image-96-angular scann: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/deep-image-96-angular/scann/results.csv
+Reuse fashion-mnist-784-euclidean ivf_flat: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/fashion-mnist-784-euclidean/ivf_flat/results.csv
+Reuse fashion-mnist-784-euclidean ivfpq_fastscan: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/fashion-mnist-784-euclidean/ivfpq_fastscan/results.csv
+Reuse fashion-mnist-784-euclidean nsg: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/fashion-mnist-784-euclidean/nsg/results.csv
+Running fashion-mnist-784-euclidean scann
+PASS fashion-mnist-784-euclidean scann: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/fashion-mnist-784-euclidean/scann/results.csv
+Running gist-960-euclidean ivf_flat
+PASS gist-960-euclidean ivf_flat: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/gist-960-euclidean/ivf_flat/results.csv
+Running gist-960-euclidean ivfpq_fastscan
+PASS gist-960-euclidean ivfpq_fastscan: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/gist-960-euclidean/ivfpq_fastscan/results.csv
+Running gist-960-euclidean nsg
+PASS gist-960-euclidean nsg: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/gist-960-euclidean/nsg/results.csv
+Running gist-960-euclidean scann
+PASS gist-960-euclidean scann: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/gist-960-euclidean/scann/results.csv
+Running mnist-784-euclidean ivf_flat
+PASS mnist-784-euclidean ivf_flat: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/mnist-784-euclidean/ivf_flat/results.csv
+Running mnist-784-euclidean ivfpq_fastscan
+PASS mnist-784-euclidean ivfpq_fastscan: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/mnist-784-euclidean/ivfpq_fastscan/results.csv
+Running mnist-784-euclidean nsg
+PASS mnist-784-euclidean nsg: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/mnist-784-euclidean/nsg/results.csv
+Running mnist-784-euclidean scann
+PASS mnist-784-euclidean scann: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/mnist-784-euclidean/scann/results.csv
+Running sift-128-euclidean ivf_flat
+PASS sift-128-euclidean ivf_flat: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/sift-128-euclidean/ivf_flat/results.csv
+Running sift-128-euclidean ivfpq_fastscan
+PASS sift-128-euclidean ivfpq_fastscan: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/sift-128-euclidean/ivfpq_fastscan/results.csv
+Running sift-128-euclidean nsg
+PASS sift-128-euclidean nsg: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/sift-128-euclidean/nsg/results.csv
+Running sift-128-euclidean scann
+PASS sift-128-euclidean scann: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/sift-128-euclidean/scann/results.csv
+Results: /home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_search_results/all_results.csv

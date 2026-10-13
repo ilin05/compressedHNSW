@@ -1,0 +1,31 @@
+{
+  "index_path": "/home/zmy/HNSWCW/compressedhnsw/script/revision_baseline_build_results/fashion-mnist-784-euclidean/scann/index",
+  "index_bytes": "211769872",
+  "index_mtime_ns": 1791792787838604836,
+  "queries": [
+    "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/fashion-mnist-784-euclidean_test.fvecs",
+    31400000,
+    1775801641119132546
+  ],
+  "ground_truth": [
+    "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/fashion-mnist-784-euclidean_neighbors.ivecs",
+    4040000,
+    1775801641190131941
+  ],
+  "rounds": 3,
+  "k": [
+    1,
+    10
+  ],
+  "params": [
+    10,
+    20,
+    30,
+    50,
+    80,
+    100,
+    150,
+    200
+  ],
+  "scann_candidates": 100
+}
