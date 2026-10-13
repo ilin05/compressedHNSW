@@ -109,7 +109,8 @@ def main():
                   "ground_truth": [str(truth_path), truth_path.stat().st_size,
                                    truth_path.stat().st_mtime_ns],
                   "rounds": args.rounds, "k": args.k, "params": list(params),
-                  "scann_candidates": args.scann_candidates if algorithm == "scann" else None}
+                  "scann_candidates": args.scann_candidates if algorithm == "scann" else None,
+                  "fastscan_query_batch": 64 if algorithm == "ivfpq_fastscan" else None}
         config_path = directory / "config.json"
         if final.exists() and config_path.exists() and not args.force:
             if json.loads(config_path.read_text()) == config:

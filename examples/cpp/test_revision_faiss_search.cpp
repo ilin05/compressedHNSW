@@ -133,6 +133,18 @@ int main(int argc, char** argv) {
         const float* query_data = query_values.data();
         const std::string type = algorithm == "ivf_flat" ? "IVF-Flat" :
                                  algorithm == "ivfpq_fastscan" ? "IVFPQ-FastScan" : "NSG";
+        // With one OpenMP thread, Faiss FastScan does not slice its 3D PQ LUT.
+        // Bound its temporary memory without changing the query set or timing scope.
+        constexpr size_t fastscan_query_batch = 64;
+        auto search_queries = [&](size_t count, int k, float* out_distances,
+                                  faiss::idx_t* out_ids) {
+            const size_t batch = algorithm == "ivfpq_fastscan" ? fastscan_query_batch : count;
+            for (size_t offset = 0; offset < count; offset += batch) {
+                const size_t take = std::min(batch, count - offset);
+                index->search(take, query_data + offset * queries.dim, k,
+                              out_distances + offset * k, out_ids + offset * k);
+            }
+        };
         for (int k : ks) {
             if (size_t(k) > truth.dim) throw std::runtime_error("K exceeds ground-truth width");
             std::vector<float> distances(queries.rows * k);
@@ -145,14 +157,17 @@ int main(int argc, char** argv) {
                     if (param < k) continue;
                     nsg->setSearchL(param);
                 }
-                index->search(std::min<size_t>(queries.rows, 64), query_data, k,
-                              distances.data(), ids.data()); // warmup outside timing
+                std::cerr << "Searching " << dataset << ' ' << type << " K=" << k
+                          << ' ' << (ivf ? "nprobe=" : "search_L=") << param
+                          << " batch=" << (algorithm == "ivfpq_fastscan" ? fastscan_query_batch : queries.rows)
+                          << '\n';
+                search_queries(std::min<size_t>(queries.rows, 64), k,
+                               distances.data(), ids.data()); // warmup outside timing
                 double elapsed_us = 0;
                 double recall = 0;
                 for (int round = 0; round < rounds; ++round) {
                     const auto start = std::chrono::steady_clock::now();
-                    index->search(queries.rows, query_data, k,
-                                  distances.data(), ids.data());
+                    search_queries(queries.rows, k, distances.data(), ids.data());
                     elapsed_us += std::chrono::duration<double, std::micro>(
                                       std::chrono::steady_clock::now() - start).count();
                     if (round == 0) recall = recall_at_k(truth, ids, k);
