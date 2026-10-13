@@ -1,0 +1,70 @@
+nohup: ignoring input
+-- The CXX compiler identification is GNU 13.3.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+-- Found OpenMP: TRUE (found version "4.5")  
+-- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE  
+-- Looking for sgemm_
+-- Looking for sgemm_ - found
+-- Found MKL: /usr/lib/x86_64-linux-gnu/libmkl_intel_lp64.so;/usr/lib/x86_64-linux-gnu/libmkl_gnu_thread.so;/usr/lib/x86_64-linux-gnu/libmkl_core.so;/usr/lib/gcc/x86_64-linux-gnu/13/libgomp.so;-lm;-ldl  
+-- Looking for sgemm_
+-- Looking for sgemm_ - not found
+-- Looking for sgemm_
+-- Looking for sgemm_ - found
+-- Found BLAS: /usr/lib/x86_64-linux-gnu/libmkl_intel_lp64.so;/usr/lib/x86_64-linux-gnu/libmkl_intel_thread.so;/usr/lib/x86_64-linux-gnu/libmkl_core.so;/usr/lib/x86_64-linux-gnu/libiomp5.so;-lm;-ldl  
+-- Looking for cheev_
+-- Looking for cheev_ - found
+-- Found LAPACK: /usr/lib/x86_64-linux-gnu/libmkl_intel_lp64.so;/usr/lib/x86_64-linux-gnu/libmkl_intel_thread.so;/usr/lib/x86_64-linux-gnu/libmkl_core.so;/usr/lib/x86_64-linux-gnu/libiomp5.so;-lm;-ldl;-lm;-ldl  
+-- Configuring done (2.5s)
+-- Generating done (0.5s)
+-- Build files have been written to: /home/zmy/HNSWCW/compressedhnsw/build_lvc_root_score
+[  0%] Building CXX object CMakeFiles/test_root_access_trace.dir/encoding_algorithms/camel/camel_tools.cpp.o
+[  0%] Building CXX object CMakeFiles/test_root_access_trace.dir/encoding_algorithms/camel/encoder/double_camel_encoder.cpp.o
+[  0%] Building CXX object CMakeFiles/test_root_access_trace.dir/examples/cpp/test_root_access_trace.cpp.o
+[  0%] Building CXX object CMakeFiles/test_root_access_trace.dir/encoding_algorithms/camel/decoder/double_camel_decoder.cpp.o
+[  0%] Building CXX object CMakeFiles/test_root_access_trace.dir/encoding_algorithms/dexor/decoder/double_dexor_decoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_root_access_trace.dir/encoding_algorithms/dexor/encoder/double_dexor_encoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_root_access_trace.dir/encoding_algorithms/elf/decoder/double_elf_decoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_root_access_trace.dir/encoding_algorithms/elf/elf64_utils.cpp.o
+[100%] Building CXX object CMakeFiles/test_root_access_trace.dir/encoding_algorithms/elf/encoder/double_elf_encoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_root_access_trace.dir/encoding_algorithms/gorilla/decoder/double_gorilla_decoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_root_access_trace.dir/encoding_algorithms/gorilla/encoder/double_gorilla_encoder.cpp.o
+[100%] Linking CXX executable test_root_access_trace
+[100%] Built target test_root_access_trace
+Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/examples/cpp/test_build_compressed_hnsw_ablation.cpp.o
+Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/camel/decoder/double_camel_decoder.cpp.o
+Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/camel/camel_tools.cpp.o
+Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/camel/encoder/double_camel_encoder.cpp.o
+Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/dexor/decoder/double_dexor_decoder.cpp.o
+Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/dexor/encoder/double_dexor_encoder.cpp.o
+Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/elf/decoder/double_elf_decoder.cpp.o
+Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/elf/elf64_utils.cpp.o
+Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/elf/encoder/double_elf_encoder.cpp.o
+Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/gorilla/decoder/double_gorilla_decoder.cpp.o
+Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/gorilla/encoder/double_gorilla_encoder.cpp.o
+Linking CXX executable test_build_compressed_hnsw_ablation
+Built target test_build_compressed_hnsw_ablation
+[  0%] Building CXX object CMakeFiles/test_search_compressed_hnsw_ablation.dir/examples/cpp/test_search_compressed_hnsw_ablation.cpp.o
+[  0%] Building CXX object CMakeFiles/test_search_compressed_hnsw_ablation.dir/encoding_algorithms/camel/encoder/double_camel_encoder.cpp.o
+[  0%] Building CXX object CMakeFiles/test_search_compressed_hnsw_ablation.dir/encoding_algorithms/camel/decoder/double_camel_decoder.cpp.o
+[  0%] Building CXX object CMakeFiles/test_search_compressed_hnsw_ablation.dir/encoding_algorithms/camel/camel_tools.cpp.o
+[  0%] Building CXX object CMakeFiles/test_search_compressed_hnsw_ablation.dir/encoding_algorithms/dexor/decoder/double_dexor_decoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_search_compressed_hnsw_ablation.dir/encoding_algorithms/dexor/encoder/double_dexor_encoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_search_compressed_hnsw_ablation.dir/encoding_algorithms/elf/decoder/double_elf_decoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_search_compressed_hnsw_ablation.dir/encoding_algorithms/elf/elf64_utils.cpp.o
+[100%] Building CXX object CMakeFiles/test_search_compressed_hnsw_ablation.dir/encoding_algorithms/elf/encoder/double_elf_encoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_search_compressed_hnsw_ablation.dir/encoding_algorithms/gorilla/decoder/double_gorilla_decoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_search_compressed_hnsw_ablation.dir/encoding_algorithms/gorilla/encoder/double_gorilla_encoder.cpp.o
+[100%] Linking CXX executable test_search_compressed_hnsw_ablation
+[100%] Built target test_search_compressed_hnsw_ablation
+build: 24 configurations -> /home/zmy/HNSWCW/compressedhnsw/script/root_selection_score_results/build_summary.csv
+search: 24 configurations -> /home/zmy/HNSWCW/compressedhnsw/script/root_selection_score_results/search_summary.csv
+PASS: all 24 forests have consistent roots, valid parent depths, and chain bounds
+PASS: access-frequency roots are the highest-scoring traced nodes
