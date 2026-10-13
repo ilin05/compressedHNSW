@@ -110,8 +110,13 @@ def main():
                                    truth_path.stat().st_mtime_ns],
                   "rounds": args.rounds, "k": args.k, "params": list(params),
                   "scann_candidates": args.scann_candidates if algorithm == "scann" else None}
-        if algorithm == "ivfpq_fastscan":
-            config["fastscan_query_batch"] = 64
+        if algorithm == "ivfpq_fastscan" and int(item["by_residual"]):
+            query_count = query_path.stat().st_size // (4 + 4 * int(item["dim"]))
+            max_probe = max((p for p in params if p <= int(item["nlist"])), default=0)
+            lut_bytes = (query_count * max_probe * int(item["pq_m"]) *
+                         (1 << int(item["pq_bits"])) * 5)
+            if lut_bytes > (1 << 31):
+                config["fastscan_large_lut_batch"] = 64
         config_path = directory / "config.json"
         if final.exists() and config_path.exists() and not args.force:
             saved_config = json.loads(config_path.read_text())

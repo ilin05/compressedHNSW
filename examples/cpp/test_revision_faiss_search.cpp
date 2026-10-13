@@ -133,12 +133,12 @@ int main(int argc, char** argv) {
         const float* query_data = query_values.data();
         const std::string type = algorithm == "ivf_flat" ? "IVF-Flat" :
                                  algorithm == "ivfpq_fastscan" ? "IVFPQ-FastScan" : "NSG";
-        // With one OpenMP thread, Faiss FastScan does not slice its 3D PQ LUT.
-        // Bound its temporary memory without changing the query set or timing scope.
-        constexpr size_t fastscan_query_batch = 64;
-        auto search_queries = [&](size_t count, int k, float* out_distances,
+        // With one OpenMP thread, Faiss does not slice a 3D FastScan LUT.
+        // Preserve the original full-query path when the estimated LUT is small.
+        constexpr uint64_t fastscan_lut_limit_bytes = uint64_t{1} << 31;
+        constexpr size_t fastscan_large_lut_batch = 64;
+        auto search_queries = [&](size_t count, size_t batch, int k, float* out_distances,
                                   faiss::idx_t* out_ids) {
-            const size_t batch = algorithm == "ivfpq_fastscan" ? fastscan_query_batch : count;
             for (size_t offset = 0; offset < count; offset += batch) {
                 const size_t take = std::min(batch, count - offset);
                 index->search(take, query_data + offset * queries.dim, k,
@@ -157,17 +157,25 @@ int main(int argc, char** argv) {
                     if (param < k) continue;
                     nsg->setSearchL(param);
                 }
+                size_t query_batch = queries.rows;
+                if (auto* fast = dynamic_cast<faiss::IndexIVFPQFastScan*>(ivf);
+                    fast && fast->by_residual && fast->metric_type == faiss::METRIC_L2) {
+                    const uint64_t lut_bytes = uint64_t(queries.rows) * uint64_t(param) *
+                                               uint64_t(fast->pq.M) * uint64_t(fast->pq.ksub) * 5;
+                    if (lut_bytes > fastscan_lut_limit_bytes)
+                        query_batch = fastscan_large_lut_batch;
+                }
                 std::cerr << "Searching " << dataset << ' ' << type << " K=" << k
                           << ' ' << (ivf ? "nprobe=" : "search_L=") << param
-                          << " batch=" << (algorithm == "ivfpq_fastscan" ? fastscan_query_batch : queries.rows)
+                          << " batch=" << query_batch
                           << '\n';
-                search_queries(std::min<size_t>(queries.rows, 64), k,
+                search_queries(std::min<size_t>(queries.rows, 64), query_batch, k,
                                distances.data(), ids.data()); // warmup outside timing
                 double elapsed_us = 0;
                 double recall = 0;
                 for (int round = 0; round < rounds; ++round) {
                     const auto start = std::chrono::steady_clock::now();
-                    search_queries(queries.rows, k, distances.data(), ids.data());
+                    search_queries(queries.rows, query_batch, k, distances.data(), ids.data());
                     elapsed_us += std::chrono::duration<double, std::micro>(
                                       std::chrono::steady_clock::now() - start).count();
                     if (round == 0) recall = recall_at_k(truth, ids, k);
