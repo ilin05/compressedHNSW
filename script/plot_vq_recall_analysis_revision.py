@@ -12,11 +12,15 @@ from collections import defaultdict
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 FONT_SIZE = 25
 AXIS_FONT_SIZE = 25
+LEGEND_FONT_SIZE = 25
+HIGH_RECALL_DATASETS = {"mnist-784-euclidean", "fashion-mnist-784-euclidean"}
+RECALL10_MIN_FOR_HIGH_RECALL_DATASETS = 0.90
 DATASET_ORDER = (
     "mnist-784-euclidean", "fashion-mnist-784-euclidean",
     "sift-128-euclidean", "gist-960-euclidean", "deep-image-96-angular",
@@ -29,24 +33,32 @@ DATASET_NAMES = {
     "deep-image-96-angular": "DEEP",
 }
 plt.rcParams.update({
-    "font.family": "serif", "font.serif": ["Linux Libertine O", "Times New Roman", "DejaVu Serif"],
-    "font.size": FONT_SIZE, "pdf.fonttype": 42, "ps.fonttype": 42,
+    "font.family": "serif",
+    "font.serif": ["Linux Libertine O", "Libertinus Serif", "Times New Roman",
+                   "Times", "Nimbus Roman No9 L", "DejaVu Serif"],
+    "font.size": FONT_SIZE,
+    "axes.labelsize": AXIS_FONT_SIZE,
+    "xtick.labelsize": AXIS_FONT_SIZE,
+    "ytick.labelsize": AXIS_FONT_SIZE,
+    "legend.fontsize": LEGEND_FONT_SIZE,
+    "pdf.fonttype": 42, "ps.fonttype": 42,
 })
-NEW_BASELINES = ("IVF-Flat", "IVFPQ-FastScan", "NSG", "ScaNN")
+# NEW_BASELINES = ("IVF-Flat", "IVFPQ-FastScan", "NSG", "ScaNN")
+NEW_BASELINES = ("IVF-Flat", "NSG", "ScaNN")
 CURVE_ORDER = (
     "HNSW-Filtered-LVC", "HNSW-Exact-LVC", "HNSW", "HNSW+PQ",
     "HNSW+SQ", *NEW_BASELINES,
 )
 STYLES = {
-    "HNSW-Filtered-LVC": ("D", "-", "#C84A24"),
-    "HNSW-Exact-LVC": ("X", "-", "#174A7E"),
-    "HNSW": ("o", "--", "#626B73"),
-    "HNSW+PQ": ("s", "--", "#91B6D4"),
-    "HNSW+SQ": ("^", "-.", "#9FC9B4"),
-    "IVF-Flat": ("P", "--", "#9A568F"),
-    "IVFPQ-FastScan": ("h", ":", "#735AA6"),
-    "NSG": ("v", "-.", "#A58AC0"),
-    "ScaNN": ("*", "-", "#629E7A"),
+    "HNSW-Filtered-LVC": ("D", "-", "#C84A24", 2.8),
+    "HNSW-Exact-LVC": ("X", "-", "#174A7E", 2.8),
+    "HNSW": ("o", "--", "#626B73", 2.5),
+    "HNSW+PQ": ("s", "--", "#91B6D4", 2.3),
+    "HNSW+SQ": ("^", "-.", "#9FC9B4", 2.3),
+    "IVF-Flat": ("P", "--", "#9A568F", 2.2),
+    "IVFPQ-FastScan": ("h", ":", "#735AA6", 2.2),
+    "NSG": ("v", "-.", "#A58AC0", 2.2),
+    "ScaNN": ("*", "-", "#629E7A", 2.2),
 }
 DATA_KEYS = {
     "HNSW": "HNSW", "HNSW+PQ": "HNSWPQ_1", "HNSW+SQ": "HNSWSQ_8",
@@ -160,27 +172,42 @@ def curves_for_dataset(data, dataset, k):
 
 def plot_panel(ax, curves, dataset, k, metric):
     handles = {}
-    all_recalls = []
+    filtered = curves.get("HNSW-Filtered-LVC", [])
+    if k == 10 and dataset in HIGH_RECALL_DATASETS:
+        filtered = [point for point in filtered
+                    if point["recall"] >= RECALL10_MIN_FOR_HIGH_RECALL_DATASETS]
+    min_recall = min((point["recall"] for point in filtered), default=0.0)
+    max_recall = max((point["recall"] for point in filtered), default=1.0)
     for name in CURVE_ORDER:
-        points = curves.get(name, [])
+        points = filtered if name == "HNSW-Filtered-LVC" else [
+            point for point in curves.get(name, [])
+            if min_recall <= point["recall"] <= max_recall
+        ]
         if not points:
             continue
         x_key = "latency_us" if metric == "latency" else "vq"
         points = sort_and_dedup(points, key=x_key)
         x = [p[x_key] / 1000 if metric == "latency" else p[x_key] for p in points]
         y = [p["recall"] for p in points]
-        marker, linestyle, color = STYLES[name]
+        marker, linestyle, color, linewidth = STYLES[name]
         (line,) = ax.plot(x, y, marker=marker, linestyle=linestyle, color=color,
-                          linewidth=2.3, markersize=8, markeredgecolor="white",
-                          markeredgewidth=0.5, label=name)
+                          linewidth=linewidth, markersize=15.0,
+                          markerfacecolor=color, markeredgecolor="white",
+                          markeredgewidth=0.8, alpha=0.98, label=name)
         handles[name] = line
-        all_recalls.extend(y)
-    if all_recalls:
-        ax.set_ylim(max(0, min(all_recalls) - 0.04), 1.005)
-    ax.set_title(DATASET_NAMES.get(dataset, dataset), fontsize=FONT_SIZE - 2)
-    ax.set_xlabel("Latency (ms)" if metric == "latency" else "VQ Capacity")
+    y_min = min_recall - 0.02
+    if k == 10 and dataset in HIGH_RECALL_DATASETS:
+        y_min = max(RECALL10_MIN_FOR_HIGH_RECALL_DATASETS, y_min)
+    ax.set_ylim(y_min, 1.005)
+    if metric == "latency":
+        ax.set_title(DATASET_NAMES.get(dataset, dataset), fontsize=FONT_SIZE - 1)
+    ax.set_xlabel("Latency (ms)" if metric == "latency" else "VQ Capacity",
+                  fontsize=AXIS_FONT_SIZE - 1)
     ax.grid(True, linestyle="--", alpha=0.3)
-    ax.tick_params(labelsize=AXIS_FONT_SIZE - 7)
+    ax.tick_params(labelsize=AXIS_FONT_SIZE - 2)
+    if dataset in HIGH_RECALL_DATASETS:
+        ax.set_yticks([y_min, (y_min + 1.0) / 2, 1.0])
+        ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.2f"))
     return handles
 
 
@@ -188,7 +215,7 @@ def plot_combined(data, output, k):
     datasets = [d for d in DATASET_ORDER if d in data and k in data[d]]
     if not datasets:
         raise ValueError(f"No Recall@{k} results in the input CSV files")
-    fig, axes = plt.subplots(2, len(datasets), figsize=(5.2 * len(datasets), 8.1),
+    fig, axes = plt.subplots(2, len(datasets), figsize=(5.7 * len(datasets), 8.1),
                              squeeze=False)
     handles = {}
     for col, dataset in enumerate(datasets):
@@ -196,13 +223,14 @@ def plot_combined(data, output, k):
         for row, metric in enumerate(("latency", "vq")):
             handles.update(plot_panel(axes[row][col], curves, dataset, k, metric))
             if col == 0:
-                axes[row][col].set_ylabel(f"Recall@{k}")
+                axes[row][col].set_ylabel(f"Recall@{k}", fontsize=AXIS_FONT_SIZE - 1)
     present = [name for name in CURVE_ORDER if name in handles]
     fig.legend([handles[name] for name in present], present, loc="upper center",
-               ncol=5, frameon=False, fontsize=15, bbox_to_anchor=(0.5, 1.01),
+               ncol=5, frameon=False, fontsize=LEGEND_FONT_SIZE,
+               bbox_to_anchor=(0.5, 1.01),
                columnspacing=1.0, handletextpad=0.4)
     fig.subplots_adjust(left=0.055, right=0.995, top=0.80, bottom=0.09,
-                        wspace=0.25, hspace=0.48)
+                        wspace=0.32, hspace=0.52)
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output, bbox_inches="tight")
     plt.close(fig)

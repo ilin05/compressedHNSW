@@ -64,6 +64,27 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
     double dynamic_graph_us_ = 0;
     double dynamic_encoding_us_ = 0;
 
+    // Construction filtering is independent of query-time TLS.
+    bool insert_use_pq_filter_ = true;
+    float insert_pq_alpha_ = 0.2f;
+    struct InsertFilterStats {
+        uint64_t searches = 0;
+        uint64_t pq_candidates = 0;
+        uint64_t exact_candidates = 0;
+        uint64_t fallback_searches = 0;
+        uint64_t payload_decodes = 0;
+    };
+    mutable InsertFilterStats insert_filter_stats_;
+
+    void setInsertUsePQFilter(bool enabled) { insert_use_pq_filter_ = enabled; }
+    void setInsertPQAlpha(float alpha) {
+        if (!std::isfinite(alpha) || alpha <= 0.0f || alpha > 1.0f)
+            throw std::invalid_argument("Insertion PQ alpha must be in (0, 1]");
+        insert_pq_alpha_ = alpha;
+    }
+    InsertFilterStats getInsertFilterStats() const { return insert_filter_stats_; }
+    void resetInsertFilterStats() { insert_filter_stats_ = InsertFilterStats{}; }
+
     char **linkLists_{nullptr};
     std::vector<int> element_levels_;  // keeps level of each element
     std::vector<uint8_t> uncompressed_mask_;
@@ -608,6 +629,10 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                 get_original_data_call_count++;
              }
         } else {
+            // Count actual ALP decodes during insertion, including link pruning,
+            // without introducing a per-decode timer.
+            if (pending_insert_id_ != static_cast<tableint>(-1))
+                ++insert_filter_stats_.payload_decodes;
             utils::MemoryStreamReader reader((const unsigned char*)(data_level0_memory_.data() + start + offset));
             
             if ((collect_metrics || enable_profiling_metrics_) && !suppress_metrics) {
@@ -656,7 +681,10 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
 
     // 这里是论文中的alg.2---找出layer中距离data point(也就是论文中的q)最近的前ef个元素，返回动态列表top_candidates
     std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst>
-    searchBaseLayer(tableint ep_id, const void *data_point, int layer) {
+    searchBaseLayer(tableint ep_id, const void *data_point, int layer,
+                    const std::vector<dist_t>* insert_adc = nullptr) {
+        const bool count_insert = is_compacted_ && pending_insert_id_ != static_cast<tableint>(-1);
+
         // visitedList 包括数组和数，visited_array 是数组，tag 是数
         VisitedList *vl = visited_list_pool_->getFreeVisitedList();
         // visited_array 存储已访问的元素
@@ -731,9 +759,29 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             }
 #endif
 
-            // 对于layer层中的当前元素的每一个邻居candidate
-            for (size_t j = 0; j < size; j++) {
-                tableint candidate_id = *(datal + j);
+            // Preserve the exact path and traversal order when filtering is disabled
+            // or alpha == 1. Deleted nodes may route the search but cannot be results.
+            std::vector<std::pair<dist_t, tableint>> shortlist;
+            if (insert_adc != nullptr) {
+                for (size_t j = 0; j < size; ++j) {
+                    const tableint id = datal[j];
+                    if (visited_array[id] == visited_array_tag) continue;
+                    visited_array[id] = visited_array_tag;
+                    shortlist.emplace_back(get_pq_dist(id, *insert_adc), id);
+                }
+                insert_filter_stats_.pq_candidates += shortlist.size();
+                // First fill a usable connection pool, then apply the requested ratio.
+                size_t keep = shortlist.size();
+                if (top_candidates.size() >= M_) {
+                    keep = std::min(shortlist.size(), std::max<size_t>(2,
+                        static_cast<size_t>(shortlist.size() * insert_pq_alpha_)));
+                }
+                std::partial_sort(shortlist.begin(), shortlist.begin() + keep, shortlist.end());
+                shortlist.resize(keep);
+            }
+            const size_t candidate_count = insert_adc ? shortlist.size() : size;
+            for (size_t j = 0; j < candidate_count; j++) {
+                tableint candidate_id = insert_adc ? shortlist[j].second : datal[j];
 //                    if (candidate_id == 0) continue;
 #ifdef USE_SSE
                 if (!is_compacted_) {
@@ -743,9 +791,11 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                 }
 #endif
                 // 如果candidate已经访问过（对应论文中，如果e属于v，无操作，循环次数加1）
-                if (visited_array[candidate_id] == visited_array_tag) continue;
-                // 没有访问过，将已访问列表中并入candidate
-                visited_array[candidate_id] = visited_array_tag;
+                if (insert_adc == nullptr) {
+                    if (visited_array[candidate_id] == visited_array_tag) continue;
+                    visited_array[candidate_id] = visited_array_tag;
+                }
+                if (count_insert) ++insert_filter_stats_.exact_candidates;
                 
                 dist_t dist1;
                 if (is_compacted_) {
@@ -2160,6 +2210,10 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                 }
             }
 
+            std::vector<dist_t> insert_adc;
+            const bool filter_insert = is_compacted_ && insert_use_pq_filter_ &&
+                insert_pq_alpha_ < 1.0f && pq_m_ != 0;
+            if (filter_insert) compute_adc_table(data_point, insert_adc);
             bool epDeleted = isMarkedDeleted(enterpoint_copy);
             for (int level = std::min(curlevel, maxlevelcopy); level >= 0; level--) {
                 if (level > maxlevelcopy || level < 0)  // possible? 这不可能吧？
@@ -2167,7 +2221,15 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
 
                 // 在level层找到与data_point距离最近的ef个节点，存储在列表中
                 std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(
-                        currObj, data_point, level);
+                        currObj, data_point, level,
+                        filter_insert && level == 0 ? &insert_adc : nullptr);
+                if (filter_insert && level == 0) {
+                    ++insert_filter_stats_.searches;
+                    if (top_candidates.size() < M_) {
+                        ++insert_filter_stats_.fallback_searches;
+                        top_candidates = searchBaseLayer(currObj, data_point, level);
+                    }
+                }
                 if (epDeleted) {
                     top_candidates.emplace(distanceToStoredNode(data_point, enterpoint_copy), enterpoint_copy);
                     if (top_candidates.size() > ef_construction_)
