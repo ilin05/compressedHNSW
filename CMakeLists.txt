@@ -264,6 +264,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_dynamic_compressed_hnsw examples/cpp/test_dynamic_compressed_hnsw.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_dynamic_compressed_hnsw hnswlib)
 
+    add_executable(test_dynamic_update_workloads examples/cpp/test_dynamic_update_workloads.cpp)
+    target_link_libraries(test_dynamic_update_workloads hnswlib OpenMP::OpenMP_CXX)
+
     add_executable(test_alp_insert_filter examples/cpp/test_alp_insert_filter.cpp)
     target_link_libraries(test_alp_insert_filter hnswlib OpenMP::OpenMP_CXX)
 
@@ -384,6 +387,7 @@ if(HNSWLIB_EXAMPLES)
       test_dynamic_compressed_hnsw
       test_dynamic_update_batches
       test_alp_insert_filter
+      test_dynamic_update_workloads
       test_perf_breakdown_hnsw
       test_build_bigann_hnswalp_pq
       test_search_bigann_hnswalp_pq

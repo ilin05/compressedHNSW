@@ -24,6 +24,7 @@ script/*.py
 !script/analyze_dynamic_update_batches.py
 !script/compute_dynamic_prefix_gt.py
 !script/test_dynamic_prefix_gt.py
+!script/run_dynamic_update_workloads.py
 !script/build_revision_baselines.py
 !script/build_revision_scann_baseline.py
 !script/profile_revision_baseline_storage.py

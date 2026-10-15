@@ -1,5 +1,8 @@
 # ALP insertion filtering and prefix ground truth
 
+The complete five-dataset workloads are documented in
+[README_dynamic_update_workloads.md](README_dynamic_update_workloads.md).
+
 Run commands from the hnswlib repository root. Python tools require NumPy.
 
 ## Full SIFT 1M validation
