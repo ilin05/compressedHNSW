@@ -1,0 +1,15 @@
+PASS raw_f32 batch=0 nodes=1000000 deleted=0 bytes=660565344 insert_us=0 pq_candidates=0 exact_candidates=0 payload_decodes=0 verified_vectors=1000000 max_error=0
+PASS raw_f32 batch=1 nodes=1050000 deleted=50000 bytes=693593280 insert_us=765.751 pq_candidates=0 exact_candidates=0 payload_decodes=0 verified_vectors=1000000 max_error=0
+PASS raw_f32 batch=2 nodes=1100000 deleted=100000 bytes=726621216 insert_us=789.202 pq_candidates=0 exact_candidates=0 payload_decodes=0 verified_vectors=1000000 max_error=0
+Training PQ: dim=128, m=16, d_sub=8, K=256
+Encoding dataset with PQ...
+PASS alp_off batch=0 nodes=1000000 deleted=0 bytes=305342146 insert_us=0 pq_candidates=0 exact_candidates=0 payload_decodes=0 verified_vectors=1000000 max_error=0
+PASS alp_off batch=1 nodes=1050000 deleted=50000 bytes=319965122 insert_us=5882.74 pq_candidates=0 exact_candidates=157678045 payload_decodes=235969515 verified_vectors=1000000 max_error=0
+PASS alp_off batch=2 nodes=1100000 deleted=100000 bytes=334595914 insert_us=6086.07 pq_candidates=0 exact_candidates=163205986 payload_decodes=242369623 verified_vectors=1000000 max_error=0
+PASS alp_on batch=0 nodes=1000000 deleted=0 bytes=305342146 insert_us=0 pq_candidates=0 exact_candidates=0 payload_decodes=0 verified_vectors=1000000 max_error=0
+PASS alp_on batch=1 nodes=1050000 deleted=50000 bytes=319965122 insert_us=3155.07 pq_candidates=159182795 exact_candidates=36531347 payload_decodes=116158770 verified_vectors=1000000 max_error=0
+PASS alp_on batch=2 nodes=1100000 deleted=100000 bytes=334595914 insert_us=3432.38 pq_candidates=166560459 exact_candidates=38427103 payload_decodes=118897095 verified_vectors=1000000 max_error=0
+PASS alp_alpha1 batch=0 nodes=1000000 deleted=0 bytes=305342146 insert_us=0 pq_candidates=0 exact_candidates=0 payload_decodes=0 verified_vectors=1000000 max_error=0
+PASS alp_alpha1 batch=1 nodes=1050000 deleted=50000 bytes=319965122 insert_us=6309.68 pq_candidates=0 exact_candidates=157678045 payload_decodes=235969515 verified_vectors=1000000 max_error=0
+PASS alp_alpha1 batch=2 nodes=1100000 deleted=100000 bytes=334595914 insert_us=6497.14 pq_candidates=0 exact_candidates=163205986 payload_decodes=242369623 verified_vectors=1000000 max_error=0
+PASS repeated update invariants; compare alp_off/alpha1 result files using the wrapper

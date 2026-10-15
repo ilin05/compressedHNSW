@@ -1,0 +1,51 @@
+{
+  "arguments": [
+    "--input",
+    "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/sift-128-euclidean_train.fvecs",
+    "--queries",
+    "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/sift-128-euclidean_test.fvecs",
+    "--gt",
+    "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/sift-128-euclidean_neighbors.ivecs",
+    "--output",
+    "/home/zmy/HNSWCW/compressedhnsw/script/alp_insert_filter_sift_results",
+    "--rounds",
+    "2",
+    "--delete-ratio",
+    "0.05",
+    "--search-rounds",
+    "3",
+    "--seed",
+    "20261015",
+    "--insert-pq-alpha",
+    "0.2",
+    "--insert-use-pq-filter",
+    "1",
+    "--query-pq-alpha",
+    "0.2",
+    "--count",
+    "0",
+    "--query-count",
+    "0",
+    "--ef",
+    "20",
+    "40",
+    "80"
+  ],
+  "input_shapes": {
+    "--input": [
+      1000000,
+      128
+    ],
+    "--queries": [
+      10000,
+      128
+    ]
+  },
+  "modes": [
+    "raw_f32",
+    "alp_off",
+    "alp_on",
+    "alp_alpha1"
+  ],
+  "recall": "original source-ID GT; reject inactive version labels before mapping"
+}
