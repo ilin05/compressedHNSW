@@ -258,6 +258,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_search_compressed_hnsw_ablation examples/cpp/test_search_compressed_hnsw_ablation.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_search_compressed_hnsw_ablation hnswlib)
 
+    add_executable(test_codec_selection examples/cpp/test_codec_selection.cpp ${ENCODING_ALGO_SRC})
+    target_link_libraries(test_codec_selection hnswlib OpenMP::OpenMP_CXX)
+
     add_executable(test_root_access_trace examples/cpp/test_root_access_trace.cpp ${ENCODING_ALGO_SRC})
     target_link_libraries(test_root_access_trace hnswlib OpenMP::OpenMP_CXX)
 

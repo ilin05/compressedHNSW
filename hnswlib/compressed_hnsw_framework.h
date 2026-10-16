@@ -1542,28 +1542,19 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         return roots_found;
     }
 
-    void compress_dataset(
-        int compress_chain_max_length = 2,
-        double root_percentage = 0.01,
+    // Build the production forest without training PQ or compacting vectors.
+    // Profilers can reuse this exact plan across codec policies.
+    std::vector<tableint> prepareCompressionForest(
+        int compress_chain_max_length = 2, double root_percentage = 0.01,
         CompressionRootPolicy root_policy = CompressionRootPolicy::Level) {
-        if (is_compacted_) return;
-        if (!use_encoding_algorithm_) return;
-        compressed_chain_max_length_ = compress_chain_max_length;
-        compressed_root_policy_ = root_policy;
-
-        size_t dim = data_size_ / sizeof(double);
-        bool unlimited_chain = (compress_chain_max_length < 0);
-        if (!unlimited_chain && compress_chain_max_length < 2) {
-            compress_chain_max_length = 2;
-        }
-        const size_t max_hops = unlimited_chain
-                                    ? std::numeric_limits<size_t>::max()
-                                    : static_cast<size_t>(compress_chain_max_length - 1);
-
-        // --- PQ Training ---
-        train_pq(dim, cur_element_count);
-        // -------------------
-
+        if (is_compacted_) throw std::logic_error("Forest preparation requires a raw index");
+        if (!std::isfinite(root_percentage) || root_percentage <= 0 || root_percentage > 1)
+            throw std::invalid_argument("Root ratio must be in (0, 1]");
+        const size_t dim = data_size_ / sizeof(double);
+        const bool unlimited_chain = compress_chain_max_length < 0;
+        if (!unlimited_chain && compress_chain_max_length < 2) compress_chain_max_length = 2;
+        const size_t max_hops = unlimited_chain ? std::numeric_limits<size_t>::max()
+                                               : static_cast<size_t>(compress_chain_max_length - 1);
         // size_t target_root_count = std::max((size_t)1, cur_element_count / 100);
         size_t target_root_count = std::max((size_t)1, static_cast<size_t>(cur_element_count * root_percentage));
         
@@ -1787,6 +1778,30 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
             compression_reference_l2_export_[i] = std::sqrt(sum);
         }
 
+        return assigned_prenode;
+    }
+
+    void compress_dataset(
+        int compress_chain_max_length = 2,
+        double root_percentage = 0.01,
+        CompressionRootPolicy root_policy = CompressionRootPolicy::Level) {
+        if (is_compacted_) return;
+        if (!use_encoding_algorithm_) return;
+        compressed_chain_max_length_ = compress_chain_max_length;
+        compressed_root_policy_ = root_policy;
+
+        size_t dim = data_size_ / sizeof(double);
+        bool unlimited_chain = (compress_chain_max_length < 0);
+        if (!unlimited_chain && compress_chain_max_length < 2) {
+            compress_chain_max_length = 2;
+        }
+        // --- PQ Training ---
+        train_pq(dim, cur_element_count);
+        // -------------------
+
+        auto assigned_prenode = prepareCompressionForest(
+            compress_chain_max_length, root_percentage, root_policy);
+
         // 3. Compress and Rebuild Memory
         std::vector<char> new_memory;
         new_memory.reserve(data_level0_memory_.size() / 2); 
@@ -1801,7 +1816,6 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
         for (size_t i = 0; i < cur_element_count; ++i) {
             if (isMarkedDeleted(i)) {
                 assigned_prenode[i] = (tableint)-1;
-                chain_depth[i] = 0;
             }
             
             size_t new_start = new_memory.size();
