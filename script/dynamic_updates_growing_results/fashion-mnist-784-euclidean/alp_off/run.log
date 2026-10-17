@@ -1,0 +1,11 @@
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_off batch=0 prefix=50 active=30000 physical=30000 index_bytes=32991058 insert_s=0 decodes=0 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_off batch=1 prefix=55 active=33000 physical=33000 index_bytes=36140474 insert_s=26.1388 decodes=5700422 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_off batch=2 prefix=60 active=36000 physical=36000 index_bytes=39288122 insert_s=26.7923 decodes=5785443 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_off batch=3 prefix=65 active=39000 physical=39000 index_bytes=42437878 insert_s=27.3029 decodes=5927248 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_off batch=4 prefix=70 active=42000 physical=42000 index_bytes=45586750 insert_s=27.7079 decodes=5988138 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_off batch=5 prefix=75 active=45000 physical=45000 index_bytes=48735350 insert_s=28.0207 decodes=6061466 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_off batch=6 prefix=80 active=48000 physical=48000 index_bytes=51882386 insert_s=28.1042 decodes=6090635 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_off batch=7 prefix=85 active=51000 physical=51000 index_bytes=55030238 insert_s=28.6879 decodes=6144370 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_off batch=8 prefix=90 active=54000 physical=54000 index_bytes=58177410 insert_s=28.7801 decodes=6243301 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_off batch=9 prefix=95 active=57000 physical=57000 index_bytes=61325602 insert_s=28.8534 decodes=6265038 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_off batch=10 prefix=100 active=60000 physical=60000 index_bytes=64472706 insert_s=29.0678 decodes=6261391 max_error=0

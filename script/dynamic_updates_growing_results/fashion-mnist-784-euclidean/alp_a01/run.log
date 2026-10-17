@@ -1,0 +1,11 @@
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_a01 batch=0 prefix=50 active=30000 physical=30000 index_bytes=32991058 insert_s=0 decodes=0 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_a01 batch=1 prefix=55 active=33000 physical=33000 index_bytes=36140474 insert_s=17.9465 decodes=3685637 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_a01 batch=2 prefix=60 active=36000 physical=36000 index_bytes=39288122 insert_s=18.0382 decodes=3719879 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_a01 batch=3 prefix=65 active=39000 physical=39000 index_bytes=42437878 insert_s=18.7614 decodes=3818530 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_a01 batch=4 prefix=70 active=42000 physical=42000 index_bytes=45586750 insert_s=18.698 decodes=3809278 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_a01 batch=5 prefix=75 active=45000 physical=45000 index_bytes=48735350 insert_s=18.9642 decodes=3849971 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_a01 batch=6 prefix=80 active=48000 physical=48000 index_bytes=51882386 insert_s=18.9943 decodes=3833667 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_a01 batch=7 prefix=85 active=51000 physical=51000 index_bytes=55030238 insert_s=19.3273 decodes=3843656 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_a01 batch=8 prefix=90 active=54000 physical=54000 index_bytes=58177410 insert_s=19.3194 decodes=3866725 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_a01 batch=9 prefix=95 active=57000 physical=57000 index_bytes=61325602 insert_s=19.3684 decodes=3864910 max_error=0
+PASS dataset=fashion-mnist-784-euclidean experiment=growing mode=alp_a01 batch=10 prefix=100 active=60000 physical=60000 index_bytes=64472706 insert_s=19.2874 decodes=3860538 max_error=0

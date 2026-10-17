@@ -54,9 +54,13 @@ script/revision_baseline_build_results/**/index/
 script/revision_baseline_build_results/**/*.log
 script/revision_baseline_search_results/**/*.log
 script/**/*.bin
+script/**/*.ivecs
+script/**/*.fvecs
+script/**/*.npy
 .venv-scann/
 
 !script/test_codec_selection.py
 build_lvc_codec_selection/
 script/codec_selection_results/**/*.log
 !script/check_codec_selection.py
+script/**/*forest.csv

@@ -1,0 +1,11 @@
+PASS dataset=sift-128-euclidean experiment=growing mode=raw_f32 batch=0 prefix=50 active=500000 physical=500000 index_bytes=330281428 insert_s=0 decodes=0 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=raw_f32 batch=1 prefix=55 active=550000 physical=550000 index_bytes=363303652 insert_s=34.4224 decodes=0 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=raw_f32 batch=2 prefix=60 active=600000 physical=600000 index_bytes=396333492 insert_s=34.4378 decodes=0 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=raw_f32 batch=3 prefix=65 active=650000 physical=650000 index_bytes=429356464 insert_s=33.0213 decodes=0 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=raw_f32 batch=4 prefix=70 active=700000 physical=700000 index_bytes=462388412 insert_s=33.4023 decodes=0 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=raw_f32 batch=5 prefix=75 active=750000 physical=750000 index_bytes=495415192 insert_s=36.6654 decodes=0 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=raw_f32 batch=6 prefix=80 active=800000 physical=800000 index_bytes=528443740 insert_s=33.6878 decodes=0 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=raw_f32 batch=7 prefix=85 active=850000 physical=850000 index_bytes=561478408 insert_s=33.9755 decodes=0 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=raw_f32 batch=8 prefix=90 active=900000 physical=900000 index_bytes=594512192 insert_s=34.5578 decodes=0 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=raw_f32 batch=9 prefix=95 active=950000 physical=950000 index_bytes=627541692 insert_s=36.5737 decodes=0 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=raw_f32 batch=10 prefix=100 active=1000000 physical=1000000 index_bytes=660565344 insert_s=36.1866 decodes=0 max_error=0

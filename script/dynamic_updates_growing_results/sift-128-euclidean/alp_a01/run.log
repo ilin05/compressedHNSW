@@ -1,0 +1,11 @@
+PASS dataset=sift-128-euclidean experiment=growing mode=alp_a01 batch=0 prefix=50 active=500000 physical=500000 index_bytes=152044138 insert_s=0 decodes=0 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=alp_a01 batch=1 prefix=55 active=550000 physical=550000 index_bytes=167046378 insert_s=134.085 decodes=98341535 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=alp_a01 batch=2 prefix=60 active=600000 physical=600000 index_bytes=182085954 insert_s=131.013 decodes=96499703 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=alp_a01 batch=3 prefix=65 active=650000 physical=650000 index_bytes=197177826 insert_s=126.302 decodes=93911936 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=alp_a01 batch=4 prefix=70 active=700000 physical=700000 index_bytes=212236574 insert_s=131.194 decodes=97263420 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=alp_a01 batch=5 prefix=75 active=750000 physical=750000 index_bytes=227223722 insert_s=142.851 decodes=104474430 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=alp_a01 batch=6 prefix=80 active=800000 physical=800000 index_bytes=242323690 insert_s=130.39 decodes=96545223 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=alp_a01 batch=7 prefix=85 active=850000 physical=850000 index_bytes=257415162 insert_s=135.128 decodes=100905321 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=alp_a01 batch=8 prefix=90 active=900000 physical=900000 index_bytes=272517714 insert_s=137.259 decodes=101374735 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=alp_a01 batch=9 prefix=95 active=950000 physical=950000 index_bytes=287528818 insert_s=143.888 decodes=104395979 max_error=0
+PASS dataset=sift-128-euclidean experiment=growing mode=alp_a01 batch=10 prefix=100 active=1000000 physical=1000000 index_bytes=302594714 insert_s=142.577 decodes=103518769 max_error=0

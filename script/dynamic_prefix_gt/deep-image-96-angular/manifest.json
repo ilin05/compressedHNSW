@@ -1,0 +1,123 @@
+{
+  "config": {
+    "schema_version": 1,
+    "dataset": "deep-image-96-angular",
+    "train": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/deep-image-96-angular_train.fvecs",
+      "bytes": 3876120000,
+      "mtime_ns": 1775801637257165521
+    },
+    "queries": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/deep-image-96-angular_test.fvecs",
+      "bytes": 3880000,
+      "mtime_ns": 1775801604099446017
+    },
+    "vectors": 9990000,
+    "query_count": 10000,
+    "dimension": 96,
+    "prefix_percentages": [
+      50,
+      55,
+      60,
+      65,
+      70,
+      75,
+      80,
+      85,
+      90,
+      95,
+      100
+    ],
+    "id_space": "zero-based original train row ID",
+    "k": 1,
+    "distance": "squared L2; F64 exhaustive norm/dot evaluation",
+    "ties": "smallest row ID for exactly equal computed distances",
+    "train_block": 8192,
+    "query_block": 256,
+    "threads": 8
+  },
+  "checkpoints": [
+    {
+      "percent": 50,
+      "vectors": 4995000,
+      "elapsed_seconds": 257.1139067141339,
+      "ids": "gt_prefix050.ivecs",
+      "squared_l2": "gt_prefix050_squared_l2.npy"
+    },
+    {
+      "percent": 55,
+      "vectors": 5494500,
+      "elapsed_seconds": 282.7295908741653,
+      "ids": "gt_prefix055.ivecs",
+      "squared_l2": "gt_prefix055_squared_l2.npy"
+    },
+    {
+      "percent": 60,
+      "vectors": 5994000,
+      "elapsed_seconds": 308.1074366508983,
+      "ids": "gt_prefix060.ivecs",
+      "squared_l2": "gt_prefix060_squared_l2.npy"
+    },
+    {
+      "percent": 65,
+      "vectors": 6493500,
+      "elapsed_seconds": 333.8358395281248,
+      "ids": "gt_prefix065.ivecs",
+      "squared_l2": "gt_prefix065_squared_l2.npy"
+    },
+    {
+      "percent": 70,
+      "vectors": 6993000,
+      "elapsed_seconds": 359.5319027788937,
+      "ids": "gt_prefix070.ivecs",
+      "squared_l2": "gt_prefix070_squared_l2.npy"
+    },
+    {
+      "percent": 75,
+      "vectors": 7492500,
+      "elapsed_seconds": 385.1847989158705,
+      "ids": "gt_prefix075.ivecs",
+      "squared_l2": "gt_prefix075_squared_l2.npy"
+    },
+    {
+      "percent": 80,
+      "vectors": 7992000,
+      "elapsed_seconds": 410.6415648702532,
+      "ids": "gt_prefix080.ivecs",
+      "squared_l2": "gt_prefix080_squared_l2.npy"
+    },
+    {
+      "percent": 85,
+      "vectors": 8491500,
+      "elapsed_seconds": 436.4073851010762,
+      "ids": "gt_prefix085.ivecs",
+      "squared_l2": "gt_prefix085_squared_l2.npy"
+    },
+    {
+      "percent": 90,
+      "vectors": 8991000,
+      "elapsed_seconds": 462.4494024650194,
+      "ids": "gt_prefix090.ivecs",
+      "squared_l2": "gt_prefix090_squared_l2.npy"
+    },
+    {
+      "percent": 95,
+      "vectors": 9490500,
+      "elapsed_seconds": 488.5119673302397,
+      "ids": "gt_prefix095.ivecs",
+      "squared_l2": "gt_prefix095_squared_l2.npy"
+    },
+    {
+      "percent": 100,
+      "vectors": 9990000,
+      "elapsed_seconds": 514.2562980740331,
+      "ids": "gt_prefix100.ivecs",
+      "squared_l2": "gt_prefix100_squared_l2.npy"
+    }
+  ],
+  "numpy_version": "1.26.4",
+  "seconds": 514.2563419351354,
+  "train_block": 8192,
+  "query_block": 256,
+  "threads": 8
+}

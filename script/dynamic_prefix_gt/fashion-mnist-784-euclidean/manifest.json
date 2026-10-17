@@ -1,0 +1,123 @@
+{
+  "config": {
+    "schema_version": 1,
+    "dataset": "fashion-mnist-784-euclidean",
+    "train": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/fashion-mnist-784-euclidean_train.fvecs",
+      "bytes": 188400000,
+      "mtime_ns": 1775801638895151526
+    },
+    "queries": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/fashion-mnist-784-euclidean_test.fvecs",
+      "bytes": 31400000,
+      "mtime_ns": 1775801641119132546
+    },
+    "vectors": 60000,
+    "query_count": 10000,
+    "dimension": 784,
+    "prefix_percentages": [
+      50,
+      55,
+      60,
+      65,
+      70,
+      75,
+      80,
+      85,
+      90,
+      95,
+      100
+    ],
+    "id_space": "zero-based original train row ID",
+    "k": 1,
+    "distance": "squared L2; F64 exhaustive norm/dot evaluation",
+    "ties": "smallest row ID for exactly equal computed distances",
+    "train_block": 8192,
+    "query_block": 256,
+    "threads": 8
+  },
+  "checkpoints": [
+    {
+      "percent": 50,
+      "vectors": 30000,
+      "elapsed_seconds": 4.122155895922333,
+      "ids": "gt_prefix050.ivecs",
+      "squared_l2": "gt_prefix050_squared_l2.npy"
+    },
+    {
+      "percent": 55,
+      "vectors": 33000,
+      "elapsed_seconds": 4.55516664031893,
+      "ids": "gt_prefix055.ivecs",
+      "squared_l2": "gt_prefix055_squared_l2.npy"
+    },
+    {
+      "percent": 60,
+      "vectors": 36000,
+      "elapsed_seconds": 4.985595235135406,
+      "ids": "gt_prefix060.ivecs",
+      "squared_l2": "gt_prefix060_squared_l2.npy"
+    },
+    {
+      "percent": 65,
+      "vectors": 39000,
+      "elapsed_seconds": 5.418014958966523,
+      "ids": "gt_prefix065.ivecs",
+      "squared_l2": "gt_prefix065_squared_l2.npy"
+    },
+    {
+      "percent": 70,
+      "vectors": 42000,
+      "elapsed_seconds": 5.835858203936368,
+      "ids": "gt_prefix070.ivecs",
+      "squared_l2": "gt_prefix070_squared_l2.npy"
+    },
+    {
+      "percent": 75,
+      "vectors": 45000,
+      "elapsed_seconds": 6.2855953853577375,
+      "ids": "gt_prefix075.ivecs",
+      "squared_l2": "gt_prefix075_squared_l2.npy"
+    },
+    {
+      "percent": 80,
+      "vectors": 48000,
+      "elapsed_seconds": 6.7065285332500935,
+      "ids": "gt_prefix080.ivecs",
+      "squared_l2": "gt_prefix080_squared_l2.npy"
+    },
+    {
+      "percent": 85,
+      "vectors": 51000,
+      "elapsed_seconds": 7.130266021005809,
+      "ids": "gt_prefix085.ivecs",
+      "squared_l2": "gt_prefix085_squared_l2.npy"
+    },
+    {
+      "percent": 90,
+      "vectors": 54000,
+      "elapsed_seconds": 7.557514877989888,
+      "ids": "gt_prefix090.ivecs",
+      "squared_l2": "gt_prefix090_squared_l2.npy"
+    },
+    {
+      "percent": 95,
+      "vectors": 57000,
+      "elapsed_seconds": 7.976810520049185,
+      "ids": "gt_prefix095.ivecs",
+      "squared_l2": "gt_prefix095_squared_l2.npy"
+    },
+    {
+      "percent": 100,
+      "vectors": 60000,
+      "elapsed_seconds": 8.398706002160907,
+      "ids": "gt_prefix100.ivecs",
+      "squared_l2": "gt_prefix100_squared_l2.npy"
+    }
+  ],
+  "numpy_version": "1.26.4",
+  "seconds": 8.398736163042486,
+  "train_block": 8192,
+  "query_block": 256,
+  "threads": 8
+}

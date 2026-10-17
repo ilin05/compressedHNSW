@@ -1,0 +1,103 @@
+{
+  "schema": 1,
+  "dataset": "deep-image-96-angular",
+  "experiment": "growing",
+  "train": {
+    "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/deep-image-96-angular_train.fvecs",
+    "bytes": 3876120000,
+    "mtime_ns": 1775801637257165521
+  },
+  "queries": {
+    "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/deep-image-96-angular_test.fvecs",
+    "bytes": 3880000,
+    "mtime_ns": 1775801604099446017
+  },
+  "nodes": 9990000,
+  "query_count": 10000,
+  "dim": 96,
+  "batches": 10,
+  "step_percent": 5,
+  "initial_percent": 50,
+  "search_rounds": 3,
+  "ef_search": [
+    20,
+    40,
+    80
+  ],
+  "M": 16,
+  "ef_construction": 200,
+  "initial_seed": 100,
+  "update_seed": 20261015,
+  "insert_modes": [
+    "raw_f32",
+    "alp_a01",
+    "alp_a02",
+    "alp_off"
+  ],
+  "alp_query_modes": [
+    "tls_off",
+    "tls_0.2"
+  ],
+  "hub_ratio_initial": 0.01,
+  "alp_tolerance": 0.0001,
+  "capacity_policy": "initial count, then expand to required count at each batch",
+  "threads": 1,
+  "verify_size": false,
+  "ground_truth": [
+    {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/deep-image-96-angular/gt_prefix050.ivecs",
+      "bytes": 80000,
+      "mtime_ns": 1792059076518506552
+    },
+    {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/deep-image-96-angular/gt_prefix055.ivecs",
+      "bytes": 80000,
+      "mtime_ns": 1792059102133564780
+    },
+    {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/deep-image-96-angular/gt_prefix060.ivecs",
+      "bytes": 80000,
+      "mtime_ns": 1792059127511617611
+    },
+    {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/deep-image-96-angular/gt_prefix065.ivecs",
+      "bytes": 80000,
+      "mtime_ns": 1792059153239666479
+    },
+    {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/deep-image-96-angular/gt_prefix070.ivecs",
+      "bytes": 80000,
+      "mtime_ns": 1792059178935710800
+    },
+    {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/deep-image-96-angular/gt_prefix075.ivecs",
+      "bytes": 80000,
+      "mtime_ns": 1792059204588750793
+    },
+    {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/deep-image-96-angular/gt_prefix080.ivecs",
+      "bytes": 80000,
+      "mtime_ns": 1792059230045786486
+    },
+    {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/deep-image-96-angular/gt_prefix085.ivecs",
+      "bytes": 80000,
+      "mtime_ns": 1792059255811818755
+    },
+    {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/deep-image-96-angular/gt_prefix090.ivecs",
+      "bytes": 80000,
+      "mtime_ns": 1792059281853847624
+    },
+    {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/deep-image-96-angular/gt_prefix095.ivecs",
+      "bytes": 80000,
+      "mtime_ns": 1792059307915872929
+    },
+    {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/deep-image-96-angular/gt_prefix100.ivecs",
+      "bytes": 80000,
+      "mtime_ns": 1792059333660894579
+    }
+  ]
+}

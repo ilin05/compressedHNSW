@@ -1,0 +1,11 @@
+PASS dataset=gist-960-euclidean experiment=growing mode=alp_a01 batch=0 prefix=50 active=500000 physical=500000 index_bytes=864484970 insert_s=0 decodes=0 max_error=5.96046e-08
+PASS dataset=gist-960-euclidean experiment=growing mode=alp_a01 batch=1 prefix=55 active=550000 physical=550000 index_bytes=949565786 insert_s=1138.69 decodes=109177444 max_error=1.19209e-07
+PASS dataset=gist-960-euclidean experiment=growing mode=alp_a01 batch=2 prefix=60 active=600000 physical=600000 index_bytes=1034710634 insert_s=1167.39 decodes=111939749 max_error=1.19209e-07
+PASS dataset=gist-960-euclidean experiment=growing mode=alp_a01 batch=3 prefix=65 active=650000 physical=650000 index_bytes=1119855338 insert_s=1195.49 decodes=114505767 max_error=1.19209e-07
+PASS dataset=gist-960-euclidean experiment=growing mode=alp_a01 batch=4 prefix=70 active=700000 physical=700000 index_bytes=1204943478 insert_s=1207.2 decodes=116042289 max_error=1.19209e-07
+PASS dataset=gist-960-euclidean experiment=growing mode=alp_a01 batch=5 prefix=75 active=750000 physical=750000 index_bytes=1289960682 insert_s=1204.33 decodes=115685749 max_error=1.19209e-07
+PASS dataset=gist-960-euclidean experiment=growing mode=alp_a01 batch=6 prefix=80 active=800000 physical=800000 index_bytes=1375092570 insert_s=1209.06 decodes=116268273 max_error=1.19209e-07
+PASS dataset=gist-960-euclidean experiment=growing mode=alp_a01 batch=7 prefix=85 active=850000 physical=850000 index_bytes=1460192050 insert_s=1244.01 decodes=119325260 max_error=1.19209e-07
+PASS dataset=gist-960-euclidean experiment=growing mode=alp_a01 batch=8 prefix=90 active=900000 physical=900000 index_bytes=1545335970 insert_s=1260.1 decodes=120980602 max_error=1.19209e-07
+PASS dataset=gist-960-euclidean experiment=growing mode=alp_a01 batch=9 prefix=95 active=950000 physical=950000 index_bytes=1630453098 insert_s=1258.26 decodes=120673582 max_error=1.19209e-07
+PASS dataset=gist-960-euclidean experiment=growing mode=alp_a01 batch=10 prefix=100 active=1000000 physical=1000000 index_bytes=1715516122 insert_s=1238.46 decodes=118528608 max_error=1.19209e-07

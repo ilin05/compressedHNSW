@@ -1,0 +1,106 @@
+{
+  "config": {
+    "schema": 1,
+    "dataset": "sift-128-euclidean",
+    "experiment": "growing",
+    "train": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/sift-128-euclidean_train.fvecs",
+      "bytes": 516000000,
+      "mtime_ns": 1775801645723093339
+    },
+    "queries": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/sift-128-euclidean_test.fvecs",
+      "bytes": 5160000,
+      "mtime_ns": 1775801640545137443
+    },
+    "nodes": 1000000,
+    "query_count": 10000,
+    "dim": 128,
+    "batches": 10,
+    "step_percent": 5,
+    "initial_percent": 50,
+    "search_rounds": 3,
+    "ef_search": [
+      20,
+      40,
+      80
+    ],
+    "M": 16,
+    "ef_construction": 200,
+    "initial_seed": 100,
+    "update_seed": 20261015,
+    "insert_modes": [
+      "raw_f32",
+      "alp_a01",
+      "alp_a02",
+      "alp_off"
+    ],
+    "alp_query_modes": [
+      "tls_off",
+      "tls_0.2"
+    ],
+    "hub_ratio_initial": 0.01,
+    "alp_tolerance": 0.0001,
+    "capacity_policy": "initial count, then expand to required count at each batch",
+    "threads": 1,
+    "verify_size": false,
+    "ground_truth": [
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/sift-128-euclidean/gt_prefix050.ivecs",
+        "bytes": 80000,
+        "mtime_ns": 1792058755375237593
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/sift-128-euclidean/gt_prefix055.ivecs",
+        "bytes": 80000,
+        "mtime_ns": 1792058758023253157
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/sift-128-euclidean/gt_prefix060.ivecs",
+        "bytes": 80000,
+        "mtime_ns": 1792058760687268709
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/sift-128-euclidean/gt_prefix065.ivecs",
+        "bytes": 80000,
+        "mtime_ns": 1792058763331284042
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/sift-128-euclidean/gt_prefix070.ivecs",
+        "bytes": 80000,
+        "mtime_ns": 1792058766011299482
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/sift-128-euclidean/gt_prefix075.ivecs",
+        "bytes": 80000,
+        "mtime_ns": 1792058768690314809
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/sift-128-euclidean/gt_prefix080.ivecs",
+        "bytes": 80000,
+        "mtime_ns": 1792058771362329994
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/sift-128-euclidean/gt_prefix085.ivecs",
+        "bytes": 80000,
+        "mtime_ns": 1792058774060345225
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/sift-128-euclidean/gt_prefix090.ivecs",
+        "bytes": 80000,
+        "mtime_ns": 1792058776759360356
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/sift-128-euclidean/gt_prefix095.ivecs",
+        "bytes": 80000,
+        "mtime_ns": 1792058779450375339
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/sift-128-euclidean/gt_prefix100.ivecs",
+        "bytes": 80000,
+        "mtime_ns": 1792058782128390150
+      }
+    ]
+  },
+  "status": "PASS"
+}
