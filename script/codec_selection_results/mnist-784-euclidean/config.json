@@ -1,0 +1,20 @@
+{
+  "dataset": "mnist-784-euclidean",
+  "train": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/mnist-784-euclidean_train.fvecs",
+  "train_bytes": 188400000,
+  "train_mtime_ns": 1775801640500137827,
+  "graph": "/home/zmy/HNSWCW/compressedhnsw/script/codec_selection_results/mnist-784-euclidean/shared_raw_graph.bin",
+  "seed": 20261016,
+  "sample_ratio": 0.01,
+  "root_ratio": 0.01,
+  "root_policy": "level",
+  "rounds": 3,
+  "M": 16,
+  "ef_construction": 200,
+  "build_threads": 32,
+  "alp_hub_ratio": 0.01,
+  "alp_tolerance": 0.0001,
+  "graph_bytes": 385943180,
+  "graph_mtime_ns": 1792207048208383562,
+  "completed": true
+}

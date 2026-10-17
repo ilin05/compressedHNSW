@@ -1,0 +1,8 @@
+PASS dataset=deep-image-96-angular experiment=growing mode=alp_off batch=0 prefix=50 active=4995000 physical=4995000 index_bytes=1686703574 insert_s=0 decodes=0 max_error=5.00008e-05
+PASS dataset=deep-image-96-angular experiment=growing mode=alp_off batch=1 prefix=55 active=5494500 physical=5494500 index_bytes=1854272250 insert_s=3795.36 decodes=2655466044 max_error=5.00083e-05
+PASS dataset=deep-image-96-angular experiment=growing mode=alp_off batch=2 prefix=60 active=5994000 physical=5994000 index_bytes=2021816690 insert_s=3850.46 decodes=2687384651 max_error=5.00083e-05
+PASS dataset=deep-image-96-angular experiment=growing mode=alp_off batch=3 prefix=65 active=6493500 physical=6493500 index_bytes=2189384634 insert_s=3863.47 decodes=2714524899 max_error=5.00083e-05
+PASS dataset=deep-image-96-angular experiment=growing mode=alp_off batch=4 prefix=70 active=6993000 physical=6993000 index_bytes=2356929734 insert_s=3916.94 decodes=2743144888 max_error=5.00083e-05
+PASS dataset=deep-image-96-angular experiment=growing mode=alp_off batch=5 prefix=75 active=7492500 physical=7492500 index_bytes=2524483910 insert_s=3932.31 decodes=2770134834 max_error=5.00083e-05
+PASS dataset=deep-image-96-angular experiment=growing mode=alp_off batch=6 prefix=80 active=7992000 physical=7992000 index_bytes=2692039178 insert_s=3976.7 decodes=2793416271 max_error=5.00083e-05
+PASS dataset=deep-image-96-angular experiment=growing mode=alp_off batch=7 prefix=85 active=8491500 physical=8491500 index_bytes=2859590510 insert_s=3964.82 decodes=2817935110 max_error=5.00083e-05

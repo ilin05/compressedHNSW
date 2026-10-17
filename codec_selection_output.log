@@ -1,0 +1,106 @@
+nohup: ignoring input
+-- The CXX compiler identification is GNU 13.3.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+-- Found OpenMP: TRUE (found version "4.5")  
+-- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE  
+-- Looking for sgemm_
+-- Looking for sgemm_ - found
+-- Found MKL: /usr/lib/x86_64-linux-gnu/libmkl_intel_lp64.so;/usr/lib/x86_64-linux-gnu/libmkl_gnu_thread.so;/usr/lib/x86_64-linux-gnu/libmkl_core.so;/usr/lib/gcc/x86_64-linux-gnu/13/libgomp.so;-lm;-ldl  
+-- Looking for sgemm_
+-- Looking for sgemm_ - not found
+-- Looking for sgemm_
+-- Looking for sgemm_ - found
+-- Found BLAS: /usr/lib/x86_64-linux-gnu/libmkl_intel_lp64.so;/usr/lib/x86_64-linux-gnu/libmkl_intel_thread.so;/usr/lib/x86_64-linux-gnu/libmkl_core.so;/usr/lib/x86_64-linux-gnu/libiomp5.so;-lm;-ldl  
+-- Looking for cheev_
+-- Looking for cheev_ - found
+-- Found LAPACK: /usr/lib/x86_64-linux-gnu/libmkl_intel_lp64.so;/usr/lib/x86_64-linux-gnu/libmkl_intel_thread.so;/usr/lib/x86_64-linux-gnu/libmkl_core.so;/usr/lib/x86_64-linux-gnu/libiomp5.so;-lm;-ldl;-lm;-ldl  
+-- Configuring done (2.8s)
+-- Generating done (0.5s)
+-- Build files have been written to: /home/zmy/HNSWCW/compressedhnsw/build_lvc_codec_selection
+[100%] Building CXX object CMakeFiles/test_codec_selection.dir/encoding_algorithms/camel/camel_tools.cpp.o
+[100%] Building CXX object CMakeFiles/test_codec_selection.dir/examples/cpp/test_codec_selection.cpp.o
+[100%] Building CXX object CMakeFiles/test_codec_selection.dir/encoding_algorithms/camel/decoder/double_camel_decoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_codec_selection.dir/encoding_algorithms/camel/encoder/double_camel_encoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_codec_selection.dir/encoding_algorithms/dexor/decoder/double_dexor_decoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_codec_selection.dir/encoding_algorithms/dexor/encoder/double_dexor_encoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_codec_selection.dir/encoding_algorithms/elf/decoder/double_elf_decoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_codec_selection.dir/encoding_algorithms/elf/elf64_utils.cpp.o
+[100%] Building CXX object CMakeFiles/test_codec_selection.dir/encoding_algorithms/elf/encoder/double_elf_encoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_codec_selection.dir/encoding_algorithms/gorilla/decoder/double_gorilla_decoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_codec_selection.dir/encoding_algorithms/gorilla/encoder/double_gorilla_encoder.cpp.o
+[100%] Linking CXX executable test_codec_selection
+[100%] Built target test_codec_selection
+Profile full forest + sample: sift-128-euclidean
+sift-128-euclidean chain=2 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+sift-128-euclidean chain=2 pool=differential selected=Elf ranks=2/3 joint_top2=0 achievable=1
+sift-128-euclidean chain=-1 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+sift-128-euclidean chain=-1 pool=differential selected=Elf ranks=2/2 joint_top2=1 achievable=1
+Profile full forest + sample: mnist-784-euclidean
+sift-128-euclidean chain=2 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+sift-128-euclidean chain=2 pool=differential selected=Elf ranks=2/3 joint_top2=0 achievable=1
+sift-128-euclidean chain=-1 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+sift-128-euclidean chain=-1 pool=differential selected=Elf ranks=2/2 joint_top2=1 achievable=1
+mnist-784-euclidean chain=2 pool=all selected=DeXOR ranks=1/3 joint_top2=0 achievable=0
+mnist-784-euclidean chain=2 pool=differential selected=DeXOR ranks=1/2 joint_top2=1 achievable=1
+mnist-784-euclidean chain=-1 pool=all selected=Gorilla ranks=2/2 joint_top2=1 achievable=1
+mnist-784-euclidean chain=-1 pool=differential selected=Gorilla ranks=2/1 joint_top2=1 achievable=1
+Profile full forest + sample: fashion-mnist-784-euclidean
+sift-128-euclidean chain=2 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+sift-128-euclidean chain=2 pool=differential selected=Elf ranks=2/3 joint_top2=0 achievable=1
+sift-128-euclidean chain=-1 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+sift-128-euclidean chain=-1 pool=differential selected=Elf ranks=2/2 joint_top2=1 achievable=1
+mnist-784-euclidean chain=2 pool=all selected=DeXOR ranks=1/3 joint_top2=0 achievable=0
+mnist-784-euclidean chain=2 pool=differential selected=DeXOR ranks=1/2 joint_top2=1 achievable=1
+mnist-784-euclidean chain=-1 pool=all selected=Gorilla ranks=2/2 joint_top2=1 achievable=1
+mnist-784-euclidean chain=-1 pool=differential selected=Gorilla ranks=2/1 joint_top2=1 achievable=1
+fashion-mnist-784-euclidean chain=2 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+fashion-mnist-784-euclidean chain=2 pool=differential selected=Elf ranks=2/2 joint_top2=1 achievable=1
+fashion-mnist-784-euclidean chain=-1 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+fashion-mnist-784-euclidean chain=-1 pool=differential selected=Gorilla ranks=2/1 joint_top2=1 achievable=1
+Profile full forest + sample: gist-960-euclidean
+sift-128-euclidean chain=2 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+sift-128-euclidean chain=2 pool=differential selected=Elf ranks=2/3 joint_top2=0 achievable=1
+sift-128-euclidean chain=-1 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+sift-128-euclidean chain=-1 pool=differential selected=Elf ranks=2/2 joint_top2=1 achievable=1
+mnist-784-euclidean chain=2 pool=all selected=DeXOR ranks=1/3 joint_top2=0 achievable=0
+mnist-784-euclidean chain=2 pool=differential selected=DeXOR ranks=1/2 joint_top2=1 achievable=1
+mnist-784-euclidean chain=-1 pool=all selected=Gorilla ranks=2/2 joint_top2=1 achievable=1
+mnist-784-euclidean chain=-1 pool=differential selected=Gorilla ranks=2/1 joint_top2=1 achievable=1
+fashion-mnist-784-euclidean chain=2 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+fashion-mnist-784-euclidean chain=2 pool=differential selected=Elf ranks=2/2 joint_top2=1 achievable=1
+fashion-mnist-784-euclidean chain=-1 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+fashion-mnist-784-euclidean chain=-1 pool=differential selected=Gorilla ranks=2/1 joint_top2=1 achievable=1
+gist-960-euclidean chain=2 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+gist-960-euclidean chain=2 pool=differential selected=raw ranks=/ joint_top2=0 achievable=0
+gist-960-euclidean chain=-1 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+gist-960-euclidean chain=-1 pool=differential selected=raw ranks=/ joint_top2=0 achievable=0
+Profile full forest + sample: deep-image-96-angular
+sift-128-euclidean chain=2 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+sift-128-euclidean chain=2 pool=differential selected=Elf ranks=2/3 joint_top2=0 achievable=1
+sift-128-euclidean chain=-1 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+sift-128-euclidean chain=-1 pool=differential selected=Elf ranks=2/2 joint_top2=1 achievable=1
+mnist-784-euclidean chain=2 pool=all selected=DeXOR ranks=1/3 joint_top2=0 achievable=0
+mnist-784-euclidean chain=2 pool=differential selected=DeXOR ranks=1/2 joint_top2=1 achievable=1
+mnist-784-euclidean chain=-1 pool=all selected=Gorilla ranks=2/2 joint_top2=1 achievable=1
+mnist-784-euclidean chain=-1 pool=differential selected=Gorilla ranks=2/1 joint_top2=1 achievable=1
+fashion-mnist-784-euclidean chain=2 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+fashion-mnist-784-euclidean chain=2 pool=differential selected=Elf ranks=2/2 joint_top2=1 achievable=1
+fashion-mnist-784-euclidean chain=-1 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+fashion-mnist-784-euclidean chain=-1 pool=differential selected=Gorilla ranks=2/1 joint_top2=1 achievable=1
+gist-960-euclidean chain=2 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+gist-960-euclidean chain=2 pool=differential selected=raw ranks=/ joint_top2=0 achievable=0
+gist-960-euclidean chain=-1 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+gist-960-euclidean chain=-1 pool=differential selected=raw ranks=/ joint_top2=0 achievable=0
+deep-image-96-angular chain=2 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+deep-image-96-angular chain=2 pool=differential selected=raw ranks=/ joint_top2=0 achievable=0
+deep-image-96-angular chain=-1 pool=all selected=ALP ranks=1/1 joint_top2=1 achievable=1
+deep-image-96-angular chain=-1 pool=differential selected=raw ranks=/ joint_top2=0 achievable=0
+Results: /home/zmy/HNSWCW/compressedhnsw/script/codec_selection_results/selection_summary.csv
