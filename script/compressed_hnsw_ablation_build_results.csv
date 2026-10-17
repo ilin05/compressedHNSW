@@ -63,6 +63,10 @@ deep-image-96-angular,DeXOR,-1,9990000,96,791.694643,2938.785608,1.095395,1.1317
 deep-image-96-angular,Gorilla,-1,9990000,96,727.802118,244.942526,1.759615,1.677719,deep-image-96-angular_Gorilla_chunlim_pq.bin
 deep-image-96-angular,Elf,-1,9990000,96,693.315659,442.981092,1.739938,1.662769,deep-image-96-angular_Elf_chunlim_pq.bin
 deep-image-96-angular,Camel,-1,9990000,96,691.168163,280.362115,3.281775,2.658623,deep-image-96-angular_Camel_chunlim_pq.bin
+deep-image-96-angular,DeXOR,2,9990000,96,749.803506,1979.162883,1.094203,1.119739,deep-image-96-angular_DeXOR_ch2_pq.bin
+deep-image-96-angular,Gorilla,2,9990000,96,741.753267,1086.268955,0.970155,1.009522,deep-image-96-angular_Gorilla_ch2_pq.bin
+deep-image-96-angular,Elf,2,9990000,96,749.670304,1340.855392,1.411387,1.385583,deep-image-96-angular_Elf_ch2_pq.bin
+deep-image-96-angular,Camel,2,9990000,96,825.234967,1108.334602,3.281774,2.598613,deep-image-96-angular_Camel_ch2_pq.bin
 fashion-mnist-784-euclidean,DeXOR,3,60000,784,3.788064,76.999440,7.520189,7.037057,fashion-mnist-784-euclidean_DeXOR_ch3_pq.bin
 fashion-mnist-784-euclidean,DeXOR,4,60000,784,4.288526,82.078008,7.597279,7.102541,fashion-mnist-784-euclidean_DeXOR_ch4_pq.bin
 fashion-mnist-784-euclidean,DeXOR,6,60000,784,4.255246,45.936709,7.661120,7.156938,fashion-mnist-784-euclidean_DeXOR_ch6_pq.bin
