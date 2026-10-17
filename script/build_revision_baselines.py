@@ -182,7 +182,17 @@ def main():
                         writer.writeheader(); writer.writerow(row)
                 else:
                     index_path = directory / ("index" if algorithm == "scann" else "index.bin")
-                    if args.force or not metrics.exists() or not index_path.exists():
+                    compatible = metrics.exists() and index_path.exists()
+                    if compatible and algorithm == "ivfpq_fastscan":
+                        previous = read_one(metrics)
+                        compatible = (int(previous["pq_m"]) == dim and
+                                      int(previous["pq_bits"]) == 4 and
+                                      int(previous["dim"]) == dim and
+                                      int(previous["nodes"]) == n)
+                        if not compatible:
+                            print(f"Rebuild {dataset} FastScan: requires M=dim={dim}, 4 bit",
+                                  flush=True)
+                    if args.force or not compatible:
                         if algorithm == "scann":
                             command = [sys.executable, repo / "script/build_revision_scann_baseline.py",
                                        "--input", input_path, "--output", index_path,
@@ -195,6 +205,10 @@ def main():
                                        "--algorithm", algorithm, "--threads", args.threads]
                         run(command, repo, log)
                     row = read_one(metrics)
+                    if algorithm == "ivfpq_fastscan" and (
+                            int(row["pq_m"]) != dim or int(row["pq_bits"]) != 4):
+                        raise ValueError("FastScan builder must produce M=dim, 4 bit; "
+                                         "recompile build_revision_faiss_baseline")
                     row["source"] = "built"
                 results[(dataset, algorithm)] = row
                 write_summary(summary_path, results)

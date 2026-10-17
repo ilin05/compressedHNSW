@@ -84,8 +84,8 @@ int main(int argc, char** argv) {
         size_t n = 0, dim = 0;
         auto data = read_fvecs(input, n, dim);
         if (!nlist) nlist = size_t(std::floor(std::sqrt(double(n))));
-        if (!nlist || nlist >= n || (algorithm == "ivfpq_fastscan" && dim % 4))
-            throw std::invalid_argument("invalid nlist or FastScan dimension");
+        if (!nlist || nlist >= n)
+            throw std::invalid_argument("invalid nlist");
 
         const size_t train_count = std::min(n, std::max<size_t>(
             40 * nlist, std::min(train_cap, size_t(std::ceil(train_fraction * n)))));
@@ -102,7 +102,8 @@ int main(int argc, char** argv) {
         const double sample_s = seconds(sample_start);
 
         std::unique_ptr<faiss::IndexIVF> index;
-        const size_t pq_m = algorithm == "ivfpq_fastscan" ? dim / 4 : 0;
+        // One 4-bit subquantizer per F32 coordinate: dim/2 bytes (8x payload compression).
+        const size_t pq_m = algorithm == "ivfpq_fastscan" ? dim : 0;
         if (algorithm == "ivf_flat") {
             auto* flat = new faiss::IndexIVFFlat(new faiss::IndexFlatL2(dim), dim, nlist);
             flat->own_fields = true;
