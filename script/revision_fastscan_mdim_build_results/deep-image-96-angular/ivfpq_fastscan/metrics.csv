@@ -1,0 +1,2 @@
+dataset,algorithm,nodes,dim,nlist,train_vectors,pq_m,pq_bits,by_residual,bbs,sample_seconds,train_seconds,add_seconds,serialize_seconds,build_seconds,index_file_bytes,index_path
+deep-image-96-angular,ivfpq_fastscan,9990000,96,3160,1498500,96,4,1,32,1.52904568,25.06441,48.0096067,0.408363244,74.6030625,563044304,/home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_build_results/deep-image-96-angular/ivfpq_fastscan/index.bin

@@ -1,0 +1,2 @@
+dataset,algorithm,nodes,dim,nlist,train_vectors,pq_m,pq_bits,by_residual,bbs,sample_seconds,train_seconds,add_seconds,serialize_seconds,build_seconds,index_file_bytes,index_path
+sift-128-euclidean,ivfpq_fastscan,1000000,128,1000,150000,128,4,1,32,0.119615636,15.5616789,3.70278989,0.067937762,19.3840844,73529680,/home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_build_results/sift-128-euclidean/ivfpq_fastscan/index.bin

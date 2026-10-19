@@ -1,0 +1,1 @@
+ivfpq_fastscan deep-image-96-angular nodes=9990000 dim=96 nlist=3160 train=1498500 bytes=563044304 build_seconds=74.6031 serialize_seconds=0.408363

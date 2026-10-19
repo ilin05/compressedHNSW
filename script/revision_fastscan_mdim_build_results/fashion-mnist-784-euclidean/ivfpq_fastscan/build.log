@@ -1,0 +1,1 @@
+ivfpq_fastscan fashion-mnist-784-euclidean nodes=60000 dim=784 nlist=244 train=9760 bytes=26324752 build_seconds=8.21231 serialize_seconds=0.0180196

@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "dataset": "gist-960-euclidean",
+  "experiment": "repeated",
+  "train": {
+    "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/gist-960-euclidean_train.fvecs",
+    "bytes": 3844000000,
+    "mtime_ns": 1775801682640782836
+  },
+  "queries": {
+    "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/gist-960-euclidean_test.fvecs",
+    "bytes": 3844000,
+    "mtime_ns": 1775801637291165230
+  },
+  "nodes": 1000000,
+  "query_count": 1000,
+  "dim": 960,
+  "batches": 50,
+  "step_percent": 5,
+  "initial_percent": 100,
+  "search_rounds": 3,
+  "ef_search": [
+    20,
+    40,
+    80
+  ],
+  "M": 16,
+  "ef_construction": 200,
+  "initial_seed": 100,
+  "update_seed": 20261015,
+  "insert_modes": [
+    "raw_f32",
+    "alp_a01",
+    "alp_a02",
+    "alp_off"
+  ],
+  "alp_query_modes": [
+    "tls_off",
+    "tls_0.2"
+  ],
+  "hub_ratio_initial": 0.01,
+  "alp_tolerance": 0.0001,
+  "capacity_policy": "initial count, then expand to required count at each batch",
+  "threads": 1,
+  "verify_size": false,
+  "ground_truth": {
+    "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/gist-960-euclidean_neighbors.ivecs",
+    "bytes": 404000,
+    "mtime_ns": 1775801604064446204
+  }
+}

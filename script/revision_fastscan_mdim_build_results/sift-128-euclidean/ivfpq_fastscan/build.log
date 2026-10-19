@@ -1,0 +1,1 @@
+ivfpq_fastscan sift-128-euclidean nodes=1000000 dim=128 nlist=1000 train=150000 bytes=73529680 build_seconds=19.3841 serialize_seconds=0.0679378

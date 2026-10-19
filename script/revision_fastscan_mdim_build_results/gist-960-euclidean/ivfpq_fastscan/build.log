@@ -1,0 +1,1 @@
+ivfpq_fastscan gist-960-euclidean nodes=1000000 dim=960 nlist=1000 train=150000 bytes=499520848 build_seconds=33.5317 serialize_seconds=0.378316

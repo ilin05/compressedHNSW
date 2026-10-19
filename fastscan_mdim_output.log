@@ -1,0 +1,26 @@
+nohup: ignoring input
+Running: cmake -S /home/zmy/HNSWCW/compressedhnsw -B /home/zmy/HNSWCW/compressedhnsw/build_lvc_ivf_pq -DHNSWLIB_EXAMPLES=ON
+Running: cmake --build /home/zmy/HNSWCW/compressedhnsw/build_lvc_ivf_pq --target build_revision_faiss_baseline -j 16
+PASS sift-128-euclidean ivfpq_fastscan: 73529680 bytes
+Running: /home/zmy/HNSWCW/compressedhnsw/build_lvc_ivf_pq/build_revision_faiss_baseline --input /home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/mnist-784-euclidean_train.fvecs --output /home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_build_results/mnist-784-euclidean/ivfpq_fastscan/index.bin --metrics /home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_build_results/mnist-784-euclidean/ivfpq_fastscan/metrics.csv --dataset mnist-784-euclidean --algorithm ivfpq_fastscan --threads 16
+PASS mnist-784-euclidean ivfpq_fastscan: 26299664 bytes
+Running: /home/zmy/HNSWCW/compressedhnsw/build_lvc_ivf_pq/build_revision_faiss_baseline --input /home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/fashion-mnist-784-euclidean_train.fvecs --output /home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_build_results/fashion-mnist-784-euclidean/ivfpq_fastscan/index.bin --metrics /home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_build_results/fashion-mnist-784-euclidean/ivfpq_fastscan/metrics.csv --dataset fashion-mnist-784-euclidean --algorithm ivfpq_fastscan --threads 16
+PASS fashion-mnist-784-euclidean ivfpq_fastscan: 26324752 bytes
+Running: /home/zmy/HNSWCW/compressedhnsw/build_lvc_ivf_pq/build_revision_faiss_baseline --input /home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/gist-960-euclidean_train.fvecs --output /home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_build_results/gist-960-euclidean/ivfpq_fastscan/index.bin --metrics /home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_build_results/gist-960-euclidean/ivfpq_fastscan/metrics.csv --dataset gist-960-euclidean --algorithm ivfpq_fastscan --threads 16
+PASS gist-960-euclidean ivfpq_fastscan: 499520848 bytes
+Running: /home/zmy/HNSWCW/compressedhnsw/build_lvc_ivf_pq/build_revision_faiss_baseline --input /home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/deep-image-96-angular_train.fvecs --output /home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_build_results/deep-image-96-angular/ivfpq_fastscan/index.bin --metrics /home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_build_results/deep-image-96-angular/ivfpq_fastscan/metrics.csv --dataset deep-image-96-angular --algorithm ivfpq_fastscan --threads 16
+PASS deep-image-96-angular ivfpq_fastscan: 563044304 bytes
+Summary: /home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_build_results/summary.csv
+Running deep-image-96-angular ivfpq_fastscan
+PASS deep-image-96-angular ivfpq_fastscan: /home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_search_results/deep-image-96-angular/ivfpq_fastscan/results.csv
+Running fashion-mnist-784-euclidean ivfpq_fastscan
+PASS fashion-mnist-784-euclidean ivfpq_fastscan: /home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_search_results/fashion-mnist-784-euclidean/ivfpq_fastscan/results.csv
+Running gist-960-euclidean ivfpq_fastscan
+PASS gist-960-euclidean ivfpq_fastscan: /home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_search_results/gist-960-euclidean/ivfpq_fastscan/results.csv
+Running mnist-784-euclidean ivfpq_fastscan
+PASS mnist-784-euclidean ivfpq_fastscan: /home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_search_results/mnist-784-euclidean/ivfpq_fastscan/results.csv
+Running sift-128-euclidean ivfpq_fastscan
+PASS sift-128-euclidean ivfpq_fastscan: /home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_search_results/sift-128-euclidean/ivfpq_fastscan/results.csv
+Results: /home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_search_results/all_results.csv
+Build summary: /home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_build_results/summary.csv
+Search results: /home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_search_results/all_results.csv

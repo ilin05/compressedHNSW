@@ -1,0 +1,5 @@
+-- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+-- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+-- Configuring done (0.1s)
+-- Generating done (0.8s)
+-- Build files have been written to: /home/zmy/HNSWCW/compressedhnsw/build_lvc_ivf_pq

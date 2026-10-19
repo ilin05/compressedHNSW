@@ -1,0 +1,2 @@
+dataset,algorithm,nodes,dim,nlist,train_vectors,pq_m,pq_bits,by_residual,bbs,sample_seconds,train_seconds,add_seconds,serialize_seconds,build_seconds,index_file_bytes,index_path
+fashion-mnist-784-euclidean,ivfpq_fastscan,60000,784,244,9760,784,4,1,32,0.028554304,7.28704507,0.896709877,0.018019603,8.21230925,26324752,/home/zmy/HNSWCW/compressedhnsw/script/revision_fastscan_mdim_build_results/fashion-mnist-784-euclidean/ivfpq_fastscan/index.bin
