@@ -86,6 +86,9 @@ if(HNSWLIB_EXAMPLES)
     add_executable(test_revision_faiss_search examples/cpp/test_revision_faiss_search.cpp)
     target_link_libraries(test_revision_faiss_search faiss OpenMP::OpenMP_CXX)
 
+    add_executable(test_fastscan_exact_diagnostic examples/cpp/test_fastscan_exact_diagnostic.cpp)
+    target_link_libraries(test_fastscan_exact_diagnostic faiss OpenMP::OpenMP_CXX)
+
     add_executable(test_search_faiss_ivf examples/cpp/test_search_faiss_ivf.cpp)
     target_link_libraries(test_search_faiss_ivf faiss OpenMP::OpenMP_CXX)
 

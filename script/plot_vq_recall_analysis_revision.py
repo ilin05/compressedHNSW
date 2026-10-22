@@ -4,15 +4,19 @@
 The filtered curve follows the original greedy operating-point selection, but
 uses positive filtering ratios only. Exact LVC uses precisely HNSWALP0.000000.
 Missing dataset/index combinations are reported and never synthesized.
+FastScan uses the separate M=dim, 4-bit results, keeping only nprobe>=10;
+its minimum recall can extend each panel's original lower recall boundary.
 """
 
 import argparse
 import csv
+import re
 from collections import defaultdict
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+from matplotlib.transforms import nonsingular
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -43,8 +47,7 @@ plt.rcParams.update({
     "legend.fontsize": LEGEND_FONT_SIZE,
     "pdf.fonttype": 42, "ps.fonttype": 42,
 })
-# NEW_BASELINES = ("IVF-Flat", "IVFPQ-FastScan", "NSG", "ScaNN")
-NEW_BASELINES = ("IVF-Flat", "NSG", "ScaNN")
+NEW_BASELINES = ("IVF-Flat", "IVFPQ-FastScan", "NSG", "ScaNN")
 CURVE_ORDER = (
     "HNSW-Filtered-LVC", "HNSW-Exact-LVC", "HNSW", "HNSW+PQ",
     "HNSW+SQ", *NEW_BASELINES,
@@ -66,7 +69,7 @@ DATA_KEYS = {
 }
 
 
-def load_data(vq_csv, baseline_csv):
+def load_data(vq_csv, baseline_csv, fastscan_csv):
     data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     with open(vq_csv, newline="", encoding="utf-8") as handle:
         for row in csv.DictReader(handle):
@@ -89,7 +92,7 @@ def load_data(vq_csv, baseline_csv):
     with open(baseline_csv, newline="", encoding="utf-8") as handle:
         for row in csv.DictReader(handle):
             name = row["IndexType"].strip()
-            if name not in counts:
+            if name not in counts or name == "IVFPQ-FastScan":
                 continue
             dataset = row["Dataset"].strip()
             k = int(row["K"])
@@ -100,6 +103,23 @@ def load_data(vq_csv, baseline_csv):
                 "param": row["Param"],
             })
             counts[name] += 1
+    # Never mix the old M=dim/4 baseline with the rebuilt M=dim FastScan index.
+    with open(fastscan_csv, newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            if row["IndexType"].strip() != "IVFPQ-FastScan":
+                continue
+            match = re.fullmatch(r"nprobe\s*=\s*(\d+)", row["Param"].strip())
+            if match is None:
+                raise ValueError(f"Invalid FastScan nprobe parameter: {row['Param']}")
+            if int(match.group(1)) < 10:
+                continue
+            data[row["Dataset"].strip()][int(row["K"])]["IVFPQ-FastScan"].append({
+                "recall": float(row["Recall"]),
+                "latency_us": float(row["Latency(us)"]),
+                "vq": float(row["VQ"]),
+                "param": row["Param"],
+            })
+            counts["IVFPQ-FastScan"] += 1
     print("New baseline rows:", ", ".join(f"{name}={counts[name]}" for name in NEW_BASELINES))
     return data
 
@@ -178,6 +198,28 @@ def plot_panel(ax, curves, dataset, k, metric):
                     if point["recall"] >= RECALL10_MIN_FOR_HIGH_RECALL_DATASETS]
     min_recall = min((point["recall"] for point in filtered), default=0.0)
     max_recall = max((point["recall"] for point in filtered), default=1.0)
+    x_key = "latency_us" if metric == "latency" else "vq"
+    # Reproduce the pre-FastScan auto limits from the old curves and recall cut.
+    # Expanding the recall range for FastScan must not expand either x-axis.
+    reference_x = []
+    for name in CURVE_ORDER:
+        if name == "IVFPQ-FastScan":
+            continue
+        points = filtered if name == "HNSW-Filtered-LVC" else [
+            point for point in curves.get(name, [])
+            if min_recall <= point["recall"] <= max_recall
+        ]
+        reference_x.extend(point[x_key] / 1000 if metric == "latency" else point[x_key]
+                           for point in points)
+    # Preserve the old lower axis bound unless the new FastScan data needs more room.
+    y_min = min_recall - 0.02
+    if k == 10 and dataset in HIGH_RECALL_DATASETS:
+        y_min = max(RECALL10_MIN_FOR_HIGH_RECALL_DATASETS, y_min)
+    fastscan = curves.get("IVFPQ-FastScan", [])
+    if fastscan:
+        fastscan_min = min(point["recall"] for point in fastscan)
+        min_recall = min(min_recall, fastscan_min)
+        y_min = min(y_min, fastscan_min)
     for name in CURVE_ORDER:
         points = filtered if name == "HNSW-Filtered-LVC" else [
             point for point in curves.get(name, [])
@@ -185,7 +227,6 @@ def plot_panel(ax, curves, dataset, k, metric):
         ]
         if not points:
             continue
-        x_key = "latency_us" if metric == "latency" else "vq"
         points = sort_and_dedup(points, key=x_key)
         x = [p[x_key] / 1000 if metric == "latency" else p[x_key] for p in points]
         y = [p["recall"] for p in points]
@@ -195,9 +236,10 @@ def plot_panel(ax, curves, dataset, k, metric):
                           markerfacecolor=color, markeredgecolor="white",
                           markeredgewidth=0.8, alpha=0.98, label=name)
         handles[name] = line
-    y_min = min_recall - 0.02
-    if k == 10 and dataset in HIGH_RECALL_DATASETS:
-        y_min = max(RECALL10_MIN_FOR_HIGH_RECALL_DATASETS, y_min)
+    if reference_x:
+        x_low, x_high = nonsingular(min(reference_x), max(reference_x), expander=0.05)
+        margin = plt.rcParams["axes.xmargin"] * (x_high - x_low)
+        ax.set_xlim(x_low - margin, x_high + margin)
     ax.set_ylim(y_min, 1.005)
     if metric == "latency":
         ax.set_title(DATASET_NAMES.get(dataset, dataset), fontsize=FONT_SIZE - 1)
@@ -247,10 +289,12 @@ def main():
     parser.add_argument("--csv", type=Path, default=SCRIPT_DIR / "vq_recall_results.csv")
     parser.add_argument("--baseline-csv", "--baseline_csv", type=Path,
                         default=SCRIPT_DIR / "revision_baseline_search_results/all_results.csv")
+    parser.add_argument("--fastscan-csv", type=Path,
+                        default=SCRIPT_DIR / "revision_fastscan_mdim_search_results/all_results.csv")
     parser.add_argument("--out-dir", "--out_dir", type=Path,
                         default=SCRIPT_DIR / "vq_recall_revision_plots")
     args = parser.parse_args()
-    data = load_data(args.csv, args.baseline_csv)
+    data = load_data(args.csv, args.baseline_csv, args.fastscan_csv)
     for k, filename in ((10, "in_memory_recall@10_combined_revision.pdf"),
                         (1, "appendix_recall@1_combined_revision.pdf")):
         plot_combined(data, args.out_dir / filename, k)
