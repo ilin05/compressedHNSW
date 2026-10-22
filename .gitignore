@@ -63,4 +63,6 @@ script/**/*.npy
 build_lvc_codec_selection/
 script/codec_selection_results/**/*.log
 !script/check_codec_selection.py
+!script/prepare_alp_insert_sift_subset.py
+!script/summarize_alp_insert_optimizations.py
 script/**/*forest.csv

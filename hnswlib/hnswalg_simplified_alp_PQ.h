@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <unordered_set>
+#include <unordered_map>
+#include <type_traits>
 #include <list>
 #include <memory>
 #include <cmath>
@@ -67,16 +69,42 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
     // Construction filtering is independent of query-time TLS.
     bool insert_use_pq_filter_ = true;
     float insert_pq_alpha_ = 0.2f;
+    bool insert_upper_tls_ = false;
+    float insert_upper_alpha_ = 0.2f;
+    bool insert_decode_cache_enabled_ = false;
+    bool insert_decode_cache_active_ = false;
+    mutable std::unordered_map<tableint, std::vector<dist_t>> insert_decoded_vectors_;
+    mutable size_t insert_decoded_bytes_ = 0;
     struct InsertFilterStats {
         uint64_t searches = 0;
         uint64_t pq_candidates = 0;
         uint64_t exact_candidates = 0;
         uint64_t fallback_searches = 0;
         uint64_t payload_decodes = 0;
+        uint64_t decode_cache_hits = 0;
+        uint64_t decode_cache_peak_bytes = 0;
+        uint64_t decode_cache_peak_nodes = 0;
+        uint64_t upper_searches = 0;
+        uint64_t upper_pq_candidates = 0;
+        uint64_t upper_exact_candidates = 0;
     };
     mutable InsertFilterStats insert_filter_stats_;
 
+    // Existing API remains the level-0 construction filter switch.
     void setInsertUsePQFilter(bool enabled) { insert_use_pq_filter_ = enabled; }
+    void setInsertBaseTLS(bool enabled) { insert_use_pq_filter_ = enabled; }
+    void setInsertUpperTLS(bool enabled) { insert_upper_tls_ = enabled; }
+    void setInsertDecodeCache(bool enabled) { insert_decode_cache_enabled_ = enabled; }
+    void setInsertUpperAlpha(float alpha) {
+        if (!std::isfinite(alpha) || alpha <= 0.0f || alpha > 1.0f)
+            throw std::invalid_argument("Upper insertion PQ alpha must be in (0, 1]");
+        insert_upper_alpha_ = alpha;
+    }
+
+    // Same top-alpha rule for query and insertion upper-layer navigation.
+    static size_t upperTLSKeep(size_t count, float alpha) {
+        return std::min(count, std::max<size_t>(2, static_cast<size_t>(count * alpha)));
+    }
     void setInsertPQAlpha(float alpha) {
         if (!std::isfinite(alpha) || alpha <= 0.0f || alpha > 1.0f)
             throw std::invalid_argument("Insertion PQ alpha must be in (0, 1]");
@@ -699,13 +727,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         dist_t lowerBound;
         if (!isMarkedDeleted(ep_id)) {
             // 计算data_point(query) 到enterpoint的距离，结果保存在dist中。
-            dist_t dist;
-            if (is_compacted_) {
-                std::vector<dist_t> vec = getOriginalDataByInternalId(ep_id);
-                dist = fstdistfunc_(data_point, vec.data(), dist_func_param_);
-            } else {
-                dist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
-            }
+            dist_t dist = distanceToStoredNode(data_point, ep_id);
             // enterpoint加入到最近邻列表
             top_candidates.emplace(dist, ep_id);
             // lowerBound存储当前到datapoint的最近距离
@@ -797,14 +819,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                 }
                 if (count_insert) ++insert_filter_stats_.exact_candidates;
                 
-                dist_t dist1;
-                if (is_compacted_) {
-                    std::vector<dist_t> vec = getOriginalDataByInternalId(candidate_id);
-                    dist1 = fstdistfunc_(data_point, vec.data(), dist_func_param_);
-                } else {
-                    char *currObj1 = (getDataByInternalId(candidate_id));
-                    dist1 = fstdistfunc_(data_point, currObj1, dist_func_param_);
-                }
+                dist_t dist1 = distanceToStoredNode(data_point, candidate_id);
 
                 // 取出top_candidates中距离data point最远的元素并比较大小
                 // 对应于论文中，如果distance(e, q) < distance(f, 1) || |W| < ef
@@ -1846,19 +1861,50 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
     * Adds point. Updates the point if it is already in the index.
     * If replacement of deleted elements is enabled: replaces previously deleted point if any, updating it with new point
     */
+    // Used only by construction distances. Queries retain their existing path.
+    // unordered_map rehash preserves references to stored vectors.
+    const dist_t* insertionVector(tableint id, std::vector<dist_t>& scratch) const {
+        if (insert_decode_cache_active_) {
+            // Raw hubs and the pending input need neither allocation nor caching.
+            if constexpr (std::is_same<dist_t, float>::value) {
+                if (id == pending_insert_id_ || uncompressed_mask_[id]) {
+                    const size_t offset = level0_element_start_positions_[id] +
+                        sizeof(labeltype) + size_links_level0_;
+                    return reinterpret_cast<const float*>(data_level0_memory_.data() + offset);
+                }
+            }
+            auto found = insert_decoded_vectors_.find(id);
+            if (found != insert_decoded_vectors_.end()) {
+                ++insert_filter_stats_.decode_cache_hits;
+                return found->second.data();
+            }
+            auto decoded = getOriginalDataByInternalId(id);
+            insert_decoded_bytes_ += decoded.capacity() * sizeof(dist_t);
+            auto entry = insert_decoded_vectors_.emplace(id, std::move(decoded));
+            insert_filter_stats_.decode_cache_peak_bytes = std::max<uint64_t>(
+                insert_filter_stats_.decode_cache_peak_bytes, insert_decoded_bytes_);
+            insert_filter_stats_.decode_cache_peak_nodes = std::max<uint64_t>(
+                insert_filter_stats_.decode_cache_peak_nodes, insert_decoded_vectors_.size());
+            return entry.first->second.data();
+        }
+        scratch = getOriginalDataByInternalId(id);
+        return scratch.data();
+    }
+
     dist_t distanceToStoredNode(const void* point, tableint id) const {
         if (!is_compacted_)
             return fstdistfunc_(point, getDataByInternalId(id), dist_func_param_);
-        auto decoded = getOriginalDataByInternalId(id);
-        return fstdistfunc_(point, decoded.data(), dist_func_param_);
+        std::vector<dist_t> scratch;
+        return fstdistfunc_(point, insertionVector(id, scratch), dist_func_param_);
     }
 
     dist_t distanceBetweenStoredNodes(tableint a, tableint b) const {
         if (!is_compacted_)
             return fstdistfunc_(getDataByInternalId(a), getDataByInternalId(b), dist_func_param_);
-        auto va = getOriginalDataByInternalId(a);
-        auto vb = getOriginalDataByInternalId(b);
-        return fstdistfunc_(va.data(), vb.data(), dist_func_param_);
+        std::vector<dist_t> scratch_a, scratch_b;
+        const dist_t* va = insertionVector(a, scratch_a);
+        const dist_t* vb = insertionVector(b, scratch_b);
+        return fstdistfunc_(va, vb, dist_func_param_);
     }
 
     void finishDynamicInsert(tableint id, const float* point) {
@@ -2100,6 +2146,21 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
         if (is_compacted_ && !enable_dynamic_updates_)
             throw std::runtime_error("Cannot insert into static compressed index");
         const auto dynamic_started = std::chrono::steady_clock::now();
+        // Also clears on exceptions. The existing dynamic-update mutex serializes
+        // compressed addPoint calls; concurrent search/update is not supported.
+        struct DecodeCacheScope {
+            HierarchicalNSWALPSIMPLIFIEDPQ& index;
+            explicit DecodeCacheScope(HierarchicalNSWALPSIMPLIFIEDPQ& value) : index(value) {
+                if (index.is_compacted_)
+                    index.insert_decode_cache_active_ = index.insert_decode_cache_enabled_;
+            }
+            ~DecodeCacheScope() {
+                if (!index.is_compacted_) return;
+                index.insert_decoded_vectors_.clear();
+                index.insert_decoded_bytes_ = 0;
+                index.insert_decode_cache_active_ = false;
+            }
+        } decode_cache_scope(*this);
         tableint cur_c = 0;
         {
             // Checking if the element with the same label already exists
@@ -2181,6 +2242,12 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
             memset(linkLists_[cur_c], 0, size_links_per_element_ * curlevel + 1);
         }
 
+        std::vector<dist_t> insert_adc;
+        const bool filter_insert = is_compacted_ && insert_use_pq_filter_ &&
+            insert_pq_alpha_ < 1.0f && pq_m_ != 0;
+        const bool filter_upper = is_compacted_ && insert_upper_tls_ &&
+            insert_upper_alpha_ < 1.0f && pq_m_ != 0;
+        if (filter_insert || filter_upper) compute_adc_table(data_point, insert_adc);
         if ((signed)currObj != -1) {
             if (curlevel < maxlevelcopy) {
                 dist_t curdist = distanceToStoredNode(data_point, currObj);
@@ -2195,10 +2262,22 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                         int size = getListCount(data);
 
                         tableint *datal = (tableint *) (data + 1);
-                        for (int i = 0; i < size; i++) {
-                            tableint cand = datal[i];
+                        std::vector<std::pair<dist_t, tableint>> shortlist;
+                        if (filter_upper) {
+                            ++insert_filter_stats_.upper_searches;
+                            for (int i = 0; i < size; ++i)
+                                shortlist.emplace_back(get_pq_dist(datal[i], insert_adc), datal[i]);
+                            insert_filter_stats_.upper_pq_candidates += shortlist.size();
+                            const size_t keep = upperTLSKeep(shortlist.size(), insert_upper_alpha_);
+                            std::partial_sort(shortlist.begin(), shortlist.begin() + keep, shortlist.end());
+                            shortlist.resize(keep);
+                        }
+                        const size_t count = filter_upper ? shortlist.size() : static_cast<size_t>(size);
+                        for (size_t i = 0; i < count; i++) {
+                            tableint cand = filter_upper ? shortlist[i].second : datal[i];
                             if (cand < 0 || cand > max_elements_)
                                 throw std::runtime_error("cand error");
+                            if (is_compacted_) ++insert_filter_stats_.upper_exact_candidates;
                             dist_t d = distanceToStoredNode(data_point, cand);
                             if (d < curdist) {
                                 curdist = d;
@@ -2210,10 +2289,6 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
                 }
             }
 
-            std::vector<dist_t> insert_adc;
-            const bool filter_insert = is_compacted_ && insert_use_pq_filter_ &&
-                insert_pq_alpha_ < 1.0f && pq_m_ != 0;
-            if (filter_insert) compute_adc_table(data_point, insert_adc);
             bool epDeleted = isMarkedDeleted(enterpoint_copy);
             for (int level = std::min(curlevel, maxlevelcopy); level >= 0; level--) {
                 if (level > maxlevelcopy || level < 0)  // possible? 这不可能吧？
@@ -2306,8 +2381,7 @@ class HierarchicalNSWALPSIMPLIFIEDPQ : public AlgorithmInterface<dist_t> {
 
                     // Filter Top Alpha% (e.g., 20%)
                     if (!approx_candidates.empty()) {
-                        size_t candidates_to_check = (size_t)(approx_candidates.size() * tls_ratio_);
-                        if (candidates_to_check < 2) candidates_to_check = std::min(approx_candidates.size(), (size_t)2);
+                        size_t candidates_to_check = upperTLSKeep(approx_candidates.size(), tls_ratio_);
                         
                         std::partial_sort(approx_candidates.begin(), 
                                           approx_candidates.begin() + candidates_to_check, 
