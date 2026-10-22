@@ -1,0 +1,33 @@
+{
+  "arguments": [
+    "--input",
+    "/home/zmy/HNSWCW/compressedhnsw/script/alp_insert_optimizations_sift_results/subset/train.fvecs",
+    "--queries",
+    "/home/zmy/HNSWCW/compressedhnsw/script/alp_insert_optimizations_sift_results/subset/test.fvecs",
+    "--gt",
+    "/home/zmy/HNSWCW/compressedhnsw/script/alp_insert_optimizations_sift_results/subset/neighbors.ivecs",
+    "--output",
+    "/home/zmy/HNSWCW/compressedhnsw/script/alp_insert_optimizations_sift_results",
+    "--rounds",
+    "10",
+    "--delete-ratio",
+    "0.05",
+    "--search-rounds",
+    "3",
+    "--ef",
+    "40",
+    "--seed",
+    "20261022",
+    "--insert-pq-alpha",
+    "0.2",
+    "--upper-alpha",
+    "0.2",
+    "--insert-use-pq-filter",
+    "1",
+    "--query-pq-alpha",
+    "1"
+  ],
+  "threads": 1,
+  "query_tls": false,
+  "recall": "exact subset GT, current version labels mapped to subset IDs"
+}

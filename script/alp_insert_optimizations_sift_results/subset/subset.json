@@ -1,0 +1,18 @@
+{
+  "inputs": {
+    "train": [
+      "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/sift-128-euclidean_train.fvecs",
+      516000000,
+      1775801645723093339
+    ],
+    "queries": [
+      "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/sift-128-euclidean_test.fvecs",
+      5160000,
+      1775801640545137443
+    ]
+  },
+  "count": 100000,
+  "query_count": 0,
+  "seed": 20261022,
+  "gt": "float64 exhaustive squared L2; first subset ID breaks ties"
+}
