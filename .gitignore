@@ -66,3 +66,6 @@ script/codec_selection_results/**/*.log
 !script/prepare_alp_insert_sift_subset.py
 !script/summarize_alp_insert_optimizations.py
 script/**/*forest.csv
+script/alp_insert_optimizations_sift_results/*.labels
+script/alp_insert_optimizations_sift_results/*.distances
+script/alp_insert_optimizations_sift_results/*.index
