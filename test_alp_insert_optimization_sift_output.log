@@ -225,3 +225,23 @@ PASS alp_exact batch=7 nodes=135000 deleted=35000 bytes=41197150 insert_us=4393.
 PASS alp_exact batch=8 nodes=140000 deleted=40000 bytes=42660234 insert_us=4536 pq_candidates=0 exact_candidates=15153557 payload_decodes=15051574 verified_vectors=100000 max_error=0
 PASS alp_exact batch=9 nodes=145000 deleted=45000 bytes=44124662 insert_us=4724.72 pq_candidates=0 exact_candidates=15698500 payload_decodes=15589819 verified_vectors=100000 max_error=0
 PASS alp_exact batch=10 nodes=150000 deleted=50000 bytes=45587022 insert_us=4765.57 pq_candidates=0 exact_candidates=15876117 payload_decodes=15784629 verified_vectors=100000 max_error=0
+PASS alp_alpha1 batch=0 nodes=100000 deleted=0 bytes=30964718 insert_us=0 pq_candidates=0 exact_candidates=0 payload_decodes=0 verified_vectors=100000 max_error=0
+PASS alp_alpha1 batch=1 nodes=105000 deleted=5000 bytes=32426562 insert_us=3581.33 pq_candidates=0 exact_candidates=12416959 payload_decodes=12281466 verified_vectors=100000 max_error=0
+PASS alp_alpha1 batch=2 nodes=110000 deleted=10000 bytes=33890010 insert_us=3723.34 pq_candidates=0 exact_candidates=12780247 payload_decodes=12652822 verified_vectors=100000 max_error=0
+PASS alp_alpha1 batch=3 nodes=115000 deleted=15000 bytes=35353266 insert_us=3838.69 pq_candidates=0 exact_candidates=13175566 payload_decodes=13055068 verified_vectors=100000 max_error=0
+PASS alp_alpha1 batch=4 nodes=120000 deleted=20000 bytes=36813022 insert_us=4031 pq_candidates=0 exact_candidates=13603683 payload_decodes=13498476 verified_vectors=100000 max_error=0
+PASS alp_alpha1 batch=5 nodes=125000 deleted=25000 bytes=38274974 insert_us=4128.13 pq_candidates=0 exact_candidates=13998387 payload_decodes=13891963 verified_vectors=100000 max_error=0
+PASS alp_alpha1 batch=6 nodes=130000 deleted=30000 bytes=39735822 insert_us=4219.42 pq_candidates=0 exact_candidates=14331228 payload_decodes=14231135 verified_vectors=100000 max_error=0
+PASS alp_alpha1 batch=7 nodes=135000 deleted=35000 bytes=41197150 insert_us=4394.36 pq_candidates=0 exact_candidates=14812449 payload_decodes=14709572 verified_vectors=100000 max_error=0
+PASS alp_alpha1 batch=8 nodes=140000 deleted=40000 bytes=42660234 insert_us=4513.63 pq_candidates=0 exact_candidates=15153557 payload_decodes=15051574 verified_vectors=100000 max_error=0
+PASS alp_alpha1 batch=9 nodes=145000 deleted=45000 bytes=44124662 insert_us=4704.83 pq_candidates=0 exact_candidates=15698500 payload_decodes=15589819 verified_vectors=100000 max_error=0
+PASS alp_alpha1 batch=10 nodes=150000 deleted=50000 bytes=45587022 insert_us=4787.16 pq_candidates=0 exact_candidates=15876117 payload_decodes=15784629 verified_vectors=100000 max_error=0
+PASS payloads, deletion exclusion, complete-index cache/alpha1 equivalence
+alp_alpha1: insert=4192.188 us, speedup=0.628x, decodes=140746524, hits=60974420, recall@1=0.983650
+alp_base: insert=2630.905 us, speedup=1.000x, decodes=98599158, hits=0, recall@1=0.982220
+alp_cache: insert=1498.741 us, speedup=1.755x, decodes=37842817, hits=60756341, recall@1=0.982220
+alp_exact: insert=4196.826 us, speedup=0.627x, decodes=140746524, hits=60974420, recall@1=0.983650
+alp_joint: insert=1470.625 us, speedup=1.789x, decodes=36694834, hits=60509840, recall@1=0.982650
+alp_upper: insert=2516.447 us, speedup=1.045x, decodes=97204674, hits=0, recall@1=0.982650
+raw_f32: insert=548.759 us, speedup=4.794x, decodes=0, hits=0, recall@1=0.984450
+PASS index/query equivalence and update invariants; results: /home/zmy/HNSWCW/compressedhnsw/script/alp_insert_optimizations_sift_results
