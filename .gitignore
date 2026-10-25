@@ -69,3 +69,4 @@ script/**/*forest.csv
 script/alp_insert_optimizations_sift_results/*.labels
 script/alp_insert_optimizations_sift_results/*.distances
 script/alp_insert_optimizations_sift_results/*.index
+!script/test_dynamic_updates_optimized.py

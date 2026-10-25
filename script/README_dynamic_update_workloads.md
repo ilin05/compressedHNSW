@@ -1,5 +1,70 @@
 # Complete dynamic-update experiments
 
+## Optimized experiments: four independent launchers
+
+The following four scripts can be started together. Each has its own default
+OUT directory, executable, initial ALP checkpoint, case logs and resume markers:
+
+```bash
+nohup bash script/test_dynamic_updates_repeated_alpha01.sh > repeated_alpha01.log 2>&1 &
+nohup bash script/test_dynamic_updates_repeated_alpha02.sh > repeated_alpha02.log 2>&1 &
+nohup bash script/test_dynamic_updates_growing_alpha01.sh > growing_alpha01.log 2>&1 &
+nohup bash script/test_dynamic_updates_growing_alpha02.sh > growing_alpha02.log 2>&1 &
+```
+
+Each script runs its own `raw_f32` baseline plus one ALP insertion policy on all
+five full datasets. Per-insert decode caching is enabled; **both upper greedy
+TLS and Base TLS use the script's alpha (0.1 or 0.2)**. Query TLS remains
+independent: off and on(alpha=0.2) for ALP, off for raw. All processes, including
+construction/PQ training and measured updates/queries, use one thread. M=16,
+efConstruction=200, efSearch=40, K=1 and three query rounds remain fixed defaults.
+
+| Workload | Update batches | Query checkpoints |
+|---|---|---|
+| Repeated | 20 batches, each delete/reinsert floor(0.03N) | 0,2,4,6,8,10,12,14,16,18,20 |
+| Growing | Initial 50%, ten batches adding 5% through 100% | Every batch 0 through 10 |
+
+Growing reuses the existing eleven offline prefix GT files; the 3% setting is
+for Repeated only. Repeated keeps N active vectors and ends with
+N+20*floor(0.03N) physical records, approximately 1.6N. Its original full-dataset
+GT remains valid under the stable source-ID/version-label mapping.
+
+Default outputs are `script/dynamic_updates_{repeated,growing}_alpha{01,02}_results/`.
+Update/reconstruction statistics are flushed **every batch**, including batches
+without full query evaluation. Query CSVs contain only the specified checkpoints;
+`all_metrics.csv` therefore has no query rows for odd Repeated batches. Per-dataset
+default counts: Repeated has 42 update rows, 99 search rows and 33 summary rows;
+Growing has 22 update rows, 99 search rows and 33 summary rows. Each completed
+policy is immediately published to the dataset/central CSVs, with `progress.json`
+identifying a partially completed dataset; `complete.json` means all requested
+policies passed. The initial index is shared only inside that one script's run.
+
+New update fields record decode-cache hits, peak cached-vector bytes/nodes,
+and upper greedy PQ/exact candidates. Peak bytes count decoded vector capacities,
+excluding the temporary cache map's allocator overhead, and reset each batch.
+The dataset config records the modes, ratio, query checkpoints and optimization
+switches; this schema differs from the old runs, so use the new output directories.
+RESUME skips complete policies, not individual interrupted batches.
+
+The common shell implementation is `run_dynamic_updates_optimized.sh`. It
+accepts the usual DATA_DIR, GT_ROOT, DATASETS, OUT, BIN, SEARCH_ROUNDS, RESUME,
+SKIP_BUILD, KEEP_INITIAL_INDEX and VERIFY_SIZE overrides. Also supported are
+EF_SEARCH, BATCHES (Repeated only), REPEAT_RATIO (Repeated only), SEARCH_EVERY,
+M, EF_CONSTRUCTION, SEED, COUNT and QUERY_COUNT. SEARCH_EVERY always includes
+batch 0 and the final batch. Do not assign the same OUT or a concurrently rebuilt
+BIN to two scripts. Concurrent execution is supported, but CPU/memory-bandwidth
+contention can change measured latency/QPS; report the concurrency condition or
+repeat the final comparison sequentially if needed.
+
+End-to-end correctness check (compiles the driver once, generates tiny exact GT,
+and launches all four scripts concurrently):
+
+```bash
+python3 script/test_dynamic_updates_optimized.py
+```
+
+## Legacy experiment defaults
+
 Run from the HNSW repository root. All construction, PQ training, updates,
 warmup and measured searches in these benchmarks use one thread. The scripts
 compile their C++ driver directly; Faiss is not required. Python orchestration

@@ -69,6 +69,9 @@ struct Options {
     uint64_t seed = 20261015;
     std::vector<int> efs{20, 40, 80};
     bool verify_size = false;
+    double repeat_ratio = 0.05;
+    size_t search_every = 1;
+    bool insert_decode_cache = false, insert_upper_tls = false;
 };
 
 static std::vector<uint32_t> load_truth(const fs::path& path, size_t queries, size_t active) {
@@ -145,7 +148,7 @@ static void workload(Index& index, const Options& o, const Fvecs& train, const F
                      size_t initial, double build_seconds, double compression_seconds) {
     const bool repeated = o.experiment == "repeated";
     const size_t steps = repeated ? o.batches : 10;
-    const size_t repeat_batch = std::max<size_t>(1, train.count * 5 / 100);
+    const size_t repeat_batch = std::max<size_t>(1, size_t(train.count * o.repeat_ratio));
     std::vector<Label> current(initial);
     std::iota(current.begin(), current.end(), Label(0));
     std::vector<uint32_t> sources(initial);
@@ -164,6 +167,7 @@ static void workload(Index& index, const Options& o, const Fvecs& train, const F
         "capacity_nodes,inserted_nodes,marked_nodes,index_file_bytes,record_buffer_capacity_bytes,"
         "insert_seconds,delete_seconds,resize_seconds,insert_mean_us,delete_mean_us,graph_mean_us,"
         "encoding_mean_us,filter_searches,pq_candidates,exact_candidates,fallback_searches,payload_decodes,"
+        "decode_cache_hits,decode_cache_peak_bytes,decode_cache_peak_nodes,upper_searches,upper_pq_candidates,upper_exact_candidates,"
         "verified_vectors,max_abs_error,update_hash,current_process_rss_kib,peak_process_rss_kib,"
         "initial_build_seconds,initial_compression_seconds,threads\n";
     search << "dataset,experiment,insert_mode,batch,prefix_percent,query_mode,query_alpha,ef_search,"
@@ -190,6 +194,7 @@ static void workload(Index& index, const Options& o, const Fvecs& train, const F
         }
         uint64_t hash = 1469598103934665603ULL;
         for (uint32_t source : selected) { hash ^= source; hash *= 1099511628211ULL; }
+        if constexpr (std::is_same<Index, ALP>::value) index.resetInsertFilterStats();
         const auto before = counters(index);
         const auto stage_before = timers(index);
         double insert_s = 0, delete_s = 0, resize_s = 0;
@@ -267,10 +272,18 @@ static void workload(Index& index, const Options& o, const Fvecs& train, const F
             << after.searches - before.searches << ',' << after.pq_candidates - before.pq_candidates << ','
             << after.exact_candidates - before.exact_candidates << ','
             << after.fallback_searches - before.fallback_searches << ','
-            << after.payload_decodes - before.payload_decodes << ',' << selected.size() + old_samples << ','
+            << after.payload_decodes - before.payload_decodes << ','
+            << after.decode_cache_hits << ',' << after.decode_cache_peak_bytes << ','
+            << after.decode_cache_peak_nodes << ',' << after.upper_searches << ','
+            << after.upper_pq_candidates << ',' << after.upper_exact_candidates << ','
+            << selected.size() + old_samples << ','
             << max_error << ',' << hash << ',' << memory.first << ',' << memory.second << ','
             << build_seconds << ',' << compression_seconds << ",1\n";
         updates.flush();
+        std::cout << "PASS update dataset=" << o.dataset << " experiment=" << o.experiment
+                  << " mode=" << o.mode << " batch=" << batch << " active=" << active
+                  << " physical=" << sources.size() << " insert_s=" << insert_s << std::endl;
+        if (batch % o.search_every != 0 && batch != steps) continue;
         char gt_name[64];
         std::snprintf(gt_name, sizeof(gt_name), "gt_prefix%03d.ivecs", percent);
         const auto truth = repeated ? full_truth : load_truth(fs::path(o.gt_dir) / gt_name, queries.count, active);
@@ -335,6 +348,14 @@ int main(int argc, char** argv) {
             else if (arg == "--count") o.count = std::stoull(next());
             else if (arg == "--query-count") o.query_count = std::stoull(next());
             else if (arg == "--batches") o.batches = std::stoull(next());
+            else if (arg == "--repeat-ratio") o.repeat_ratio = std::stod(next());
+            else if (arg == "--search-every") o.search_every = std::stoull(next());
+            else if (arg == "--insert-decode-cache" || arg == "--insert-upper-tls") {
+                const auto value = next();
+                if (value != "0" && value != "1") throw std::runtime_error("Switch must be 0 or 1: " + arg);
+                if (arg == "--insert-decode-cache") o.insert_decode_cache = value == "1";
+                else o.insert_upper_tls = value == "1";
+            }
             else if (arg == "--search-rounds") o.search_rounds = std::stoull(next());
             else if (arg == "--seed") o.seed = std::stoull(next());
             else if (arg == "--M") o.M = std::stoull(next());
@@ -348,12 +369,13 @@ int main(int argc, char** argv) {
         if (o.dataset.empty() || o.output.empty() || o.input.empty() || o.queries.empty() ||
             (o.experiment != "repeated" && o.experiment != "growing") || !o.batches || !o.search_rounds ||
             o.M < 2 || o.ef_construction < o.M || o.efs.empty() ||
+            !o.search_every || !std::isfinite(o.repeat_ratio) || o.repeat_ratio <= 0 || o.repeat_ratio >= 1 ||
             *std::min_element(o.efs.begin(), o.efs.end()) < 1)
             throw std::runtime_error("Invalid workload arguments");
         Fvecs train(o.input, o.count), queries(o.queries, o.query_count);
         const size_t initial = o.experiment == "repeated" ? train.count : train.count / 2;
         const size_t max_records = o.experiment == "repeated" ?
-            train.count + o.batches * std::max<size_t>(1, train.count * 5 / 100) : train.count;
+            train.count + o.batches * std::max<size_t>(1, size_t(train.count * o.repeat_ratio)) : train.count;
         if (initial < 256 || !queries.count || train.dim != queries.dim ||
             max_records >= std::numeric_limits<hnswlib::tableint>::max())
             throw std::runtime_error("Invalid dimensions, too few PQ training rows, or ID overflow");
@@ -385,6 +407,9 @@ int main(int argc, char** argv) {
                 throw std::runtime_error("Wrong initial ALP checkpoint");
             index.setInsertUsePQFilter(o.mode != "alp_off");
             index.setInsertPQAlpha(o.mode == "alp_a01" ? 0.1f : 0.2f);
+            index.setInsertDecodeCache(o.insert_decode_cache);
+            index.setInsertUpperTLS(o.insert_upper_tls);
+            index.setInsertUpperAlpha(o.mode == "alp_a01" ? 0.1f : 0.2f);
             std::ifstream info(fs::path(o.initial_index).parent_path() / "initial.csv");
             std::string header, values;
             std::getline(info, header); std::getline(info, values);

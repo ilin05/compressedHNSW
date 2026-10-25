@@ -17,6 +17,7 @@ UPDATE_FIELDS = ("dataset,experiment,insert_mode,batch,prefix_percent,active_nod
     "capacity_nodes,inserted_nodes,marked_nodes,index_file_bytes,record_buffer_capacity_bytes,"
     "insert_seconds,delete_seconds,resize_seconds,insert_mean_us,delete_mean_us,graph_mean_us,"
     "encoding_mean_us,filter_searches,pq_candidates,exact_candidates,fallback_searches,payload_decodes,"
+    "decode_cache_hits,decode_cache_peak_bytes,decode_cache_peak_nodes,upper_searches,upper_pq_candidates,upper_exact_candidates,"
     "verified_vectors,max_abs_error,update_hash,current_process_rss_kib,peak_process_rss_kib,"
     "initial_build_seconds,initial_compression_seconds,threads").split(",")
 SEARCH_FIELDS = ("dataset,experiment,insert_mode,batch,prefix_percent,query_mode,query_alpha,ef_search,"
@@ -71,13 +72,19 @@ def preflight(args, dataset):
         raise ValueError(f"Invalid full/subset shapes for {dataset}")
     gt_dir = args.gt_root / dataset
     gt = args.data_dir / f"{dataset}_neighbors.ivecs"
-    config = {"schema": 1, "dataset": dataset, "experiment": args.experiment,
+    steps = args.batches if args.experiment == "repeated" else 10
+    checkpoints = sorted(set(range(0, steps + 1, args.search_every)) | {steps})
+    config = {"schema": 2, "dataset": dataset, "experiment": args.experiment,
               "train": file_info(train), "queries": file_info(query), "nodes": n,
               "query_count": q, "dim": dim, "batches": args.batches if args.experiment == "repeated" else 10,
-              "step_percent": 5, "initial_percent": 100 if args.experiment == "repeated" else 50,
+              "step_percent": args.repeat_ratio * 100 if args.experiment == "repeated" else 5,
+              "repeat_ratio": args.repeat_ratio, "search_checkpoints": checkpoints,
+              "search_every": args.search_every,
+              "insert_decode_cache": bool(args.insert_decode_cache), "insert_upper_tls": bool(args.insert_upper_tls),
+              "initial_percent": 100 if args.experiment == "repeated" else 50,
               "search_rounds": args.search_rounds, "ef_search": args.ef, "M": args.M,
               "ef_construction": args.ef_construction, "initial_seed": 100, "update_seed": args.seed,
-              "insert_modes": MODES, "alp_query_modes": ["tls_off", "tls_0.2"],
+              "insert_modes": args.modes, "alp_query_modes": ["tls_off", "tls_0.2"],
               "hub_ratio_initial": 0.01, "alp_tolerance": 1e-4,
               "capacity_policy": "initial count, then expand to required count at each batch",
               "threads": 1, "verify_size": args.verify_size}
@@ -114,7 +121,7 @@ def verify_case(directory, config, mode):
     search = rows(directory / "search.csv")
     checkpoints = config["batches"] + 1
     query_modes = ["tls_off"] if mode == "raw_f32" else ["tls_off", "tls_0.2"]
-    expected = {(b, tls, ef, r) for b in range(checkpoints) for tls in query_modes
+    expected = {(b, tls, ef, r) for b in config["search_checkpoints"] for tls in query_modes
                 for ef in config["ef_search"] for r in range(config["search_rounds"])}
     actual = {(int(r["batch"]), r["query_mode"], int(r["ef_search"]), int(r["search_round"])) for r in search}
     if actual != expected or len(actual) != len(search) or len(update) != checkpoints:
@@ -122,7 +129,7 @@ def verify_case(directory, config, mode):
     for batch, row in enumerate(update):
         prefix = 100 if config["experiment"] == "repeated" else 50 + batch * 5
         active = config["nodes"] * prefix // 100
-        deleted = batch * max(1, config["nodes"] * 5 // 100) if config["experiment"] == "repeated" else 0
+        deleted = batch * max(1, int(config["nodes"] * config["repeat_ratio"])) if config["experiment"] == "repeated" else 0
         if (int(row["batch"]) != batch or int(row["active_nodes"]) != active or
                 int(row["deleted_nodes"]) != deleted or int(row["physical_nodes"]) != active + deleted or
                 int(row["threads"]) != 1):
@@ -131,6 +138,10 @@ def verify_case(directory, config, mode):
             raise ValueError("Disabled insertion filtering was unexpectedly exercised")
         if batch and mode in ["alp_a01", "alp_a02"] and int(row["filter_searches"]) == 0:
             raise ValueError("Insertion filtering was never exercised")
+        if mode != "raw_f32" and batch and config["insert_decode_cache"] and int(row["decode_cache_hits"]) == 0:
+            raise ValueError("Insertion decode cache was never exercised")
+        if mode != "raw_f32" and not config["insert_upper_tls"] and int(row["upper_pq_candidates"]) != 0:
+            raise ValueError("Disabled upper TLS was exercised")
     for row in search:
         if row["dataset"] != config["dataset"] or row["insert_mode"] != mode or int(row["threads"]) != 1:
             raise ValueError("Search identity/thread mismatch")
@@ -155,10 +166,13 @@ def summarize(update, search):
     return summary
 
 
-def publish_dataset(directory, config):
+def publish_dataset(directory, config, partial=False):
     update, search = [], []
     reference = None
-    for mode in MODES:
+    completed = []
+    for mode in config["insert_modes"]:
+        if partial and not (directory / mode / "complete.json").exists():
+            continue
         u, s = verify_case(directory / mode, config, mode)
         signature = [(r["batch"], r["update_hash"], r["active_nodes"], r["physical_nodes"]) for r in u]
         if reference is not None and signature != reference:
@@ -166,16 +180,21 @@ def publish_dataset(directory, config):
         reference = signature
         update.extend(u)
         search.extend(s)
+        completed.append(mode)
     atomic_csv(directory / "updates.csv", UPDATE_FIELDS, update)
     atomic_csv(directory / "search.csv", SEARCH_FIELDS, search)
     atomic_csv(directory / "summary.csv", SUMMARY_FIELDS, summarize(update, search))
-    atomic_json(directory / "complete.json", {"config": config, "status": "PASS"})
+    if completed == config["insert_modes"]:
+        atomic_json(directory / "complete.json", {"config": config, "status": "PASS"})
+        (directory / "progress.json").unlink(missing_ok=True)
+    else:
+        atomic_json(directory / "progress.json", {"status": "partial", "completed_modes": completed})
 
 
 def publish_all(out):
     datasets, updates, search, summaries = [], [], [], []
     for directory in sorted(out.iterdir()):
-        if not directory.is_dir() or not (directory / "complete.json").is_file():
+        if not directory.is_dir() or not any((directory / name).is_file() for name in ("complete.json", "progress.json")):
             continue
         updates.extend(rows(directory / "updates.csv"))
         search.extend(rows(directory / "search.csv"))
@@ -207,6 +226,11 @@ def main():
     parser.add_argument("--ef", nargs="+", type=int, default=[20, 40, 80])
     parser.add_argument("--search-rounds", type=int, default=3)
     parser.add_argument("--batches", type=int, default=50, help="Repeated workload only; growing always has 10 batches")
+    parser.add_argument("--repeat-ratio", type=float, default=.05)
+    parser.add_argument("--search-every", type=int, default=1)
+    parser.add_argument("--modes", nargs="+", choices=MODES, default=MODES)
+    parser.add_argument("--insert-decode-cache", type=int, choices=[0, 1], default=0)
+    parser.add_argument("--insert-upper-tls", type=int, choices=[0, 1], default=0)
     parser.add_argument("--M", type=int, default=16)
     parser.add_argument("--ef-construction", type=int, default=200)
     parser.add_argument("--seed", type=int, default=20261015)
@@ -217,7 +241,9 @@ def main():
     parser.add_argument("--keep-initial-index", action="store_true")
     parser.add_argument("--verify-size", action="store_true", help="Save initial/final indexes to verify size counters")
     args = parser.parse_args()
-    if (args.batches < 1 or args.search_rounds < 1 or args.count < 0 or args.query_count < 0 or
+    if (args.batches < 1 or args.search_rounds < 1 or args.search_every < 1 or
+            not 0 < args.repeat_ratio < 1 or len(set(args.modes)) != len(args.modes) or
+            args.count < 0 or args.query_count < 0 or
             args.M < 2 or args.ef_construction < args.M or min(args.ef) < 1 or len(set(args.ef)) != len(args.ef)):
         parser.error("Invalid counts/construction/search parameters")
     for name in ["data_dir", "gt_root", "out", "binary"]:
@@ -245,13 +271,16 @@ def main():
                   "--input", str(train), "--queries", str(query), "--gt", str(gt), "--gt-dir", str(gt_dir),
                   "--count", str(args.count), "--query-count", str(args.query_count),
                   "--batches", str(args.batches), "--search-rounds", str(args.search_rounds),
+                  "--repeat-ratio", str(args.repeat_ratio), "--search-every", str(args.search_every),
+                  "--insert-decode-cache", str(args.insert_decode_cache),
+                  "--insert-upper-tls", str(args.insert_upper_tls),
                   "--M", str(args.M), "--ef-construction", str(args.ef_construction), "--seed", str(args.seed),
                   "--ef", *map(str, args.ef)]
         initial_dir = directory / "initial"
         initial_dir.mkdir(exist_ok=True)
         initial_index = initial_dir / "alp_initial.bin"
         try:
-            for mode in MODES:
+            for mode in args.modes:
                 case = directory / mode
                 case.mkdir(exist_ok=True)
                 marker = case / "complete.json"
@@ -272,6 +301,8 @@ def main():
                 execute(command, case / "run.log", environment)
                 verify_case(case, config, mode)
                 atomic_json(marker, {"status": "PASS"})
+                publish_dataset(directory, config, partial=True)
+                publish_all(args.out)
             publish_dataset(directory, config)
             (directory / "failure.json").unlink(missing_ok=True)
             publish_all(args.out)
