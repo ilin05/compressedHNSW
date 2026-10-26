@@ -1,0 +1,32 @@
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=0 active=60000 physical=60000 insert_s=0
+PASS dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=0 prefix=100 active=60000 physical=60000 index_bytes=65181290 insert_s=0 decodes=0 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=1 active=60000 physical=61800 insert_s=6.21628
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=2 active=60000 physical=63600 insert_s=6.36544
+PASS dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=2 prefix=100 active=60000 physical=63600 index_bytes=68960494 insert_s=6.36544 decodes=935567 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=3 active=60000 physical=65400 insert_s=6.46896
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=4 active=60000 physical=67200 insert_s=6.69182
+PASS dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=4 prefix=100 active=60000 physical=67200 index_bytes=72737998 insert_s=6.69182 decodes=981581 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=5 active=60000 physical=69000 insert_s=6.93763
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=6 active=60000 physical=70800 insert_s=7.01025
+PASS dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=6 prefix=100 active=60000 physical=70800 index_bytes=76516998 insert_s=7.01025 decodes=1033257 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=7 active=60000 physical=72600 insert_s=7.21187
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=8 active=60000 physical=74400 insert_s=7.44867
+PASS dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=8 prefix=100 active=60000 physical=74400 index_bytes=80296202 insert_s=7.44867 decodes=1097216 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=9 active=60000 physical=76200 insert_s=7.38895
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=10 active=60000 physical=78000 insert_s=7.60356
+PASS dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=10 prefix=100 active=60000 physical=78000 index_bytes=84072618 insert_s=7.60356 decodes=1132974 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=11 active=60000 physical=79800 insert_s=8.24764
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=12 active=60000 physical=81600 insert_s=8.58318
+PASS dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=12 prefix=100 active=60000 physical=81600 index_bytes=87849442 insert_s=8.58318 decodes=1197589 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=13 active=60000 physical=83400 insert_s=8.64744
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=14 active=60000 physical=85200 insert_s=8.82312
+PASS dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=14 prefix=100 active=60000 physical=85200 index_bytes=91627490 insert_s=8.82312 decodes=1241424 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=15 active=60000 physical=87000 insert_s=8.98048
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=16 active=60000 physical=88800 insert_s=9.22091
+PASS dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=16 prefix=100 active=60000 physical=88800 index_bytes=95404382 insert_s=9.22091 decodes=1292240 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=17 active=60000 physical=90600 insert_s=9.30938
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=18 active=60000 physical=92400 insert_s=9.57814
+PASS dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=18 prefix=100 active=60000 physical=92400 index_bytes=99181410 insert_s=9.57814 decodes=1357992 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=19 active=60000 physical=94200 insert_s=10.1299
+PASS update dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=20 active=60000 physical=96000 insert_s=10.4754
+PASS dataset=mnist-784-euclidean experiment=repeated mode=alp_a02 batch=20 prefix=100 active=60000 physical=96000 index_bytes=102959458 insert_s=10.4754 decodes=1399420 max_error=0

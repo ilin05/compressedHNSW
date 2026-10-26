@@ -1,0 +1,22 @@
+PASS update dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=0 active=30000 physical=30000 insert_s=0
+PASS dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=0 prefix=50 active=30000 physical=30000 index_bytes=32991058 insert_s=0 decodes=0 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=1 active=33000 physical=33000 insert_s=9.30104
+PASS dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=1 prefix=55 active=33000 physical=33000 index_bytes=36140474 insert_s=9.30104 decodes=1348690 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=2 active=36000 physical=36000 insert_s=9.48064
+PASS dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=2 prefix=60 active=36000 physical=36000 index_bytes=39288122 insert_s=9.48064 decodes=1352686 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=3 active=39000 physical=39000 insert_s=9.61239
+PASS dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=3 prefix=65 active=39000 physical=39000 index_bytes=42437878 insert_s=9.61239 decodes=1381747 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=4 active=42000 physical=42000 insert_s=9.58631
+PASS dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=4 prefix=70 active=42000 physical=42000 index_bytes=45586750 insert_s=9.58631 decodes=1380890 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=5 active=45000 physical=45000 insert_s=9.74409
+PASS dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=5 prefix=75 active=45000 physical=45000 index_bytes=48735350 insert_s=9.74409 decodes=1392430 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=6 active=48000 physical=48000 insert_s=9.55987
+PASS dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=6 prefix=80 active=48000 physical=48000 index_bytes=51882386 insert_s=9.55987 decodes=1379383 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=7 active=51000 physical=51000 insert_s=9.71541
+PASS dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=7 prefix=85 active=51000 physical=51000 index_bytes=55030238 insert_s=9.71541 decodes=1397505 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=8 active=54000 physical=54000 insert_s=9.66258
+PASS dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=8 prefix=90 active=54000 physical=54000 index_bytes=58177410 insert_s=9.66258 decodes=1386526 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=9 active=57000 physical=57000 insert_s=9.77982
+PASS dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=9 prefix=95 active=57000 physical=57000 index_bytes=61325602 insert_s=9.77982 decodes=1407573 max_error=0
+PASS update dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=10 active=60000 physical=60000 insert_s=9.77868
+PASS dataset=mnist-784-euclidean experiment=growing mode=alp_a01 batch=10 prefix=100 active=60000 physical=60000 index_bytes=64472706 insert_s=9.77868 decodes=1402971 max_error=0

@@ -1,0 +1,32 @@
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=0 active=9990000 physical=9990000 insert_s=0
+PASS dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=0 prefix=100 active=9990000 physical=9990000 index_bytes=5320011632 insert_s=0 decodes=0 max_error=0
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=1 active=9990000 physical=10289700 insert_s=241.132
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=2 active=9990000 physical=10589400 insert_s=245.755
+PASS dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=2 prefix=100 active=9990000 physical=10589400 index_bytes=5639210140 insert_s=245.755 decodes=0 max_error=0
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=3 active=9990000 physical=10889100 insert_s=248.87
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=4 active=9990000 physical=11188800 insert_s=253.51
+PASS dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=4 prefix=100 active=9990000 physical=11188800 index_bytes=5958423948 insert_s=253.51 decodes=0 max_error=0
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=5 active=9990000 physical=11488500 insert_s=257.473
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=6 active=9990000 physical=11788200 insert_s=262.71
+PASS dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=6 prefix=100 active=9990000 physical=11788200 index_bytes=6277614976 insert_s=262.71 decodes=0 max_error=0
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=7 active=9990000 physical=12087900 insert_s=268.498
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=8 active=9990000 physical=12387600 insert_s=273.511
+PASS dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=8 prefix=100 active=9990000 physical=12387600 index_bytes=6596833884 insert_s=273.511 decodes=0 max_error=0
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=9 active=9990000 physical=12687300 insert_s=279.366
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=10 active=9990000 physical=12987000 insert_s=284.057
+PASS dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=10 prefix=100 active=9990000 physical=12987000 index_bytes=6916045652 insert_s=284.057 decodes=0 max_error=0
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=11 active=9990000 physical=13286700 insert_s=288.055
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=12 active=9990000 physical=13586400 insert_s=292.124
+PASS dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=12 prefix=100 active=9990000 physical=13586400 index_bytes=7235256740 insert_s=292.124 decodes=0 max_error=0
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=13 active=9990000 physical=13886100 insert_s=296.493
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=14 active=9990000 physical=14185800 insert_s=300.025
+PASS dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=14 prefix=100 active=9990000 physical=14185800 index_bytes=7554454228 insert_s=300.025 decodes=0 max_error=0
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=15 active=9990000 physical=14485500 insert_s=303.976
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=16 active=9990000 physical=14785200 insert_s=307.151
+PASS dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=16 prefix=100 active=9990000 physical=14785200 index_bytes=7873625944 insert_s=307.151 decodes=0 max_error=0
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=17 active=9990000 physical=15084900 insert_s=311.368
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=18 active=9990000 physical=15384600 insert_s=314.857
+PASS dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=18 prefix=100 active=9990000 physical=15384600 index_bytes=8192806228 insert_s=314.857 decodes=0 max_error=0
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=19 active=9990000 physical=15684300 insert_s=319.668
+PASS update dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=20 active=9990000 physical=15984000 insert_s=323.867
+PASS dataset=deep-image-96-angular experiment=repeated mode=raw_f32 batch=20 prefix=100 active=9990000 physical=15984000 index_bytes=8511998276 insert_s=323.867 decodes=0 max_error=0

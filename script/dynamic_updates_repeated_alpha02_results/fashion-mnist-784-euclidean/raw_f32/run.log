@@ -1,0 +1,32 @@
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=0 active=60000 physical=60000 insert_s=0
+PASS dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=0 prefix=100 active=60000 physical=60000 index_bytes=197063120 insert_s=0 decodes=0 max_error=0
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=1 active=60000 physical=61800 insert_s=1.87118
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=2 active=60000 physical=63600 insert_s=1.91586
+PASS dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=2 prefix=100 active=60000 physical=63600 index_bytes=208889820 insert_s=1.91586 decodes=0 max_error=0
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=3 active=60000 physical=65400 insert_s=1.95058
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=4 active=60000 physical=67200 insert_s=1.9839
+PASS dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=4 prefix=100 active=60000 physical=67200 index_bytes=220714140 insert_s=1.9839 decodes=0 max_error=0
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=5 active=60000 physical=69000 insert_s=1.9402
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=6 active=60000 physical=70800 insert_s=2.01655
+PASS dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=6 prefix=100 active=60000 physical=70800 index_bytes=232536420 insert_s=2.01655 decodes=0 max_error=0
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=7 active=60000 physical=72600 insert_s=2.03235
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=8 active=60000 physical=74400 insert_s=2.09305
+PASS dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=8 prefix=100 active=60000 physical=74400 index_bytes=244361488 insert_s=2.09305 decodes=0 max_error=0
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=9 active=60000 physical=76200 insert_s=2.13755
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=10 active=60000 physical=78000 insert_s=2.17266
+PASS dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=10 prefix=100 active=60000 physical=78000 index_bytes=256185128 insert_s=2.17266 decodes=0 max_error=0
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=11 active=60000 physical=79800 insert_s=2.18679
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=12 active=60000 physical=81600 insert_s=2.25719
+PASS dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=12 prefix=100 active=60000 physical=81600 index_bytes=268009380 insert_s=2.25719 decodes=0 max_error=0
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=13 active=60000 physical=83400 insert_s=2.27791
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=14 active=60000 physical=85200 insert_s=2.35302
+PASS dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=14 prefix=100 active=60000 physical=85200 index_bytes=279833700 insert_s=2.35302 decodes=0 max_error=0
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=15 active=60000 physical=87000 insert_s=2.34471
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=16 active=60000 physical=88800 insert_s=2.36302
+PASS dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=16 prefix=100 active=60000 physical=88800 index_bytes=291657476 insert_s=2.36302 decodes=0 max_error=0
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=17 active=60000 physical=90600 insert_s=2.42966
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=18 active=60000 physical=92400 insert_s=2.44139
+PASS dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=18 prefix=100 active=60000 physical=92400 index_bytes=303481184 insert_s=2.44139 decodes=0 max_error=0
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=19 active=60000 physical=94200 insert_s=2.47822
+PASS update dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=20 active=60000 physical=96000 insert_s=2.53755
+PASS dataset=fashion-mnist-784-euclidean experiment=repeated mode=raw_f32 batch=20 prefix=100 active=60000 physical=96000 index_bytes=315305028 insert_s=2.53755 decodes=0 max_error=0

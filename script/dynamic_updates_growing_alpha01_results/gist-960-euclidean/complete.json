@@ -1,0 +1,119 @@
+{
+  "config": {
+    "schema": 2,
+    "dataset": "gist-960-euclidean",
+    "experiment": "growing",
+    "train": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/gist-960-euclidean_train.fvecs",
+      "bytes": 3844000000,
+      "mtime_ns": 1775801682640782836
+    },
+    "queries": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/gist-960-euclidean_test.fvecs",
+      "bytes": 3844000,
+      "mtime_ns": 1775801637291165230
+    },
+    "nodes": 1000000,
+    "query_count": 1000,
+    "dim": 960,
+    "batches": 10,
+    "step_percent": 5,
+    "repeat_ratio": 0.05,
+    "search_checkpoints": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "search_every": 1,
+    "insert_decode_cache": true,
+    "insert_upper_tls": true,
+    "initial_percent": 50,
+    "search_rounds": 3,
+    "ef_search": [
+      40
+    ],
+    "M": 16,
+    "ef_construction": 200,
+    "initial_seed": 100,
+    "update_seed": 20261015,
+    "insert_modes": [
+      "raw_f32",
+      "alp_a01"
+    ],
+    "alp_query_modes": [
+      "tls_off",
+      "tls_0.2"
+    ],
+    "hub_ratio_initial": 0.01,
+    "alp_tolerance": 0.0001,
+    "capacity_policy": "initial count, then expand to required count at each batch",
+    "threads": 1,
+    "verify_size": false,
+    "ground_truth": [
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/gist-960-euclidean/gt_prefix050.ivecs",
+        "bytes": 8000,
+        "mtime_ns": 1792058809333534991
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/gist-960-euclidean/gt_prefix055.ivecs",
+        "bytes": 8000,
+        "mtime_ns": 1792058810300539955
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/gist-960-euclidean/gt_prefix060.ivecs",
+        "bytes": 8000,
+        "mtime_ns": 1792058811314545147
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/gist-960-euclidean/gt_prefix065.ivecs",
+        "bytes": 8000,
+        "mtime_ns": 1792058812325550311
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/gist-960-euclidean/gt_prefix070.ivecs",
+        "bytes": 8000,
+        "mtime_ns": 1792058813297555262
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/gist-960-euclidean/gt_prefix075.ivecs",
+        "bytes": 8000,
+        "mtime_ns": 1792058814285560282
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/gist-960-euclidean/gt_prefix080.ivecs",
+        "bytes": 8000,
+        "mtime_ns": 1792058815275565299
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/gist-960-euclidean/gt_prefix085.ivecs",
+        "bytes": 8000,
+        "mtime_ns": 1792058816258570268
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/gist-960-euclidean/gt_prefix090.ivecs",
+        "bytes": 8000,
+        "mtime_ns": 1792058817244575240
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/gist-960-euclidean/gt_prefix095.ivecs",
+        "bytes": 8000,
+        "mtime_ns": 1792058818210580098
+      },
+      {
+        "path": "/home/zmy/HNSWCW/compressedhnsw/script/dynamic_prefix_gt/gist-960-euclidean/gt_prefix100.ivecs",
+        "bytes": 8000,
+        "mtime_ns": 1792058819184584984
+      }
+    ]
+  },
+  "status": "PASS"
+}

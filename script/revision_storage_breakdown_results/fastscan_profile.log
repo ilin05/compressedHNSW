@@ -1,0 +1,6 @@
+PASS deep-image-96-angular ivfpq_fastscan: 563044304 bytes across 5 components
+PASS fashion-mnist-784-euclidean ivfpq_fastscan: 26324752 bytes across 5 components
+PASS gist-960-euclidean ivfpq_fastscan: 499520848 bytes across 5 components
+PASS mnist-784-euclidean ivfpq_fastscan: 26299664 bytes across 5 components
+PASS sift-128-euclidean ivfpq_fastscan: 73529680 bytes across 5 components
+Storage breakdown: /home/zmy/HNSWCW/compressedhnsw/script/revision_storage_breakdown_results/fastscan_storage_breakdown.csv

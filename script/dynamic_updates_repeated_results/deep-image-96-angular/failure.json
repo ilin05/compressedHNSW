@@ -1,0 +1,6 @@
+{
+  "dataset": "deep-image-96-angular",
+  "mode": "alp_a01",
+  "error": "Benchmark failed; see /home/zmy/HNSWCW/compressedhnsw/script/dynamic_updates_repeated_results/deep-image-96-angular/alp_a01/run.log",
+  "status": "FAIL"
+}

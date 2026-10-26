@@ -1,0 +1,32 @@
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=0 active=1000000 physical=1000000 insert_s=0
+PASS dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=0 prefix=100 active=1000000 physical=1000000 index_bytes=3988565344 insert_s=0 decodes=0 max_error=0
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=1 active=1000000 physical=1030000 insert_s=87.3925
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=2 active=1000000 physical=1060000 insert_s=88.5794
+PASS dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=2 prefix=100 active=1000000 physical=1060000 index_bytes=4227877480 insert_s=88.5794 decodes=0 max_error=0
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=3 active=1000000 physical=1090000 insert_s=90.5494
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=4 active=1000000 physical=1120000 insert_s=92.0342
+PASS dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=4 prefix=100 active=1000000 physical=1120000 index_bytes=4467192404 insert_s=92.0342 decodes=0 max_error=0
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=5 active=1000000 physical=1150000 insert_s=92.8385
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=6 active=1000000 physical=1180000 insert_s=94.6599
+PASS dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=6 prefix=100 active=1000000 physical=1180000 index_bytes=4706513244 insert_s=94.6599 decodes=0 max_error=0
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=7 active=1000000 physical=1210000 insert_s=95.7979
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=8 active=1000000 physical=1240000 insert_s=97.4292
+PASS dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=8 prefix=100 active=1000000 physical=1240000 index_bytes=4945824768 insert_s=97.4292 decodes=0 max_error=0
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=9 active=1000000 physical=1270000 insert_s=98.6489
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=10 active=1000000 physical=1300000 insert_s=99.4378
+PASS dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=10 prefix=100 active=1000000 physical=1300000 index_bytes=5185140644 insert_s=99.4378 decodes=0 max_error=0
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=11 active=1000000 physical=1330000 insert_s=101.907
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=12 active=1000000 physical=1360000 insert_s=102.719
+PASS dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=12 prefix=100 active=1000000 physical=1360000 index_bytes=5424459240 insert_s=102.719 decodes=0 max_error=0
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=13 active=1000000 physical=1390000 insert_s=103.691
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=14 active=1000000 physical=1420000 insert_s=105.655
+PASS dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=14 prefix=100 active=1000000 physical=1420000 index_bytes=5663773824 insert_s=105.655 decodes=0 max_error=0
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=15 active=1000000 physical=1450000 insert_s=106.245
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=16 active=1000000 physical=1480000 insert_s=107.568
+PASS dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=16 prefix=100 active=1000000 physical=1480000 index_bytes=5903079704 insert_s=107.568 decodes=0 max_error=0
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=17 active=1000000 physical=1510000 insert_s=110.039
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=18 active=1000000 physical=1540000 insert_s=110.708
+PASS dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=18 prefix=100 active=1000000 physical=1540000 index_bytes=6142384564 insert_s=110.708 decodes=0 max_error=0
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=19 active=1000000 physical=1570000 insert_s=115.193
+PASS update dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=20 active=1000000 physical=1600000 insert_s=114.369
+PASS dataset=gist-960-euclidean experiment=repeated mode=raw_f32 batch=20 prefix=100 active=1000000 physical=1600000 index_bytes=6381695136 insert_s=114.369 decodes=0 max_error=0
