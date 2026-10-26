@@ -25,3 +25,8 @@ PASS update dataset=deep-image-96-angular experiment=repeated mode=alp_a02 batch
 PASS update dataset=deep-image-96-angular experiment=repeated mode=alp_a02 batch=16 active=9990000 physical=14785200 insert_s=922.003
 PASS dataset=deep-image-96-angular experiment=repeated mode=alp_a02 batch=16 prefix=100 active=9990000 physical=14785200 index_bytes=4981703358 insert_s=922.003 decodes=350857584 max_error=5.00083e-05
 PASS update dataset=deep-image-96-angular experiment=repeated mode=alp_a02 batch=17 active=9990000 physical=15084900 insert_s=957.572
+PASS update dataset=deep-image-96-angular experiment=repeated mode=alp_a02 batch=18 active=9990000 physical=15384600 insert_s=975.912
+PASS dataset=deep-image-96-angular experiment=repeated mode=alp_a02 batch=18 prefix=100 active=9990000 physical=15384600 index_bytes=5182769010 insert_s=975.912 decodes=363737288 max_error=5.00083e-05
+PASS update dataset=deep-image-96-angular experiment=repeated mode=alp_a02 batch=19 active=9990000 physical=15684300 insert_s=1000.39
+PASS update dataset=deep-image-96-angular experiment=repeated mode=alp_a02 batch=20 active=9990000 physical=15984000 insert_s=1020.8
+PASS dataset=deep-image-96-angular experiment=repeated mode=alp_a02 batch=20 prefix=100 active=9990000 physical=15984000 index_bytes=5383845790 insert_s=1020.8 decodes=376986887 max_error=5.00083e-05
