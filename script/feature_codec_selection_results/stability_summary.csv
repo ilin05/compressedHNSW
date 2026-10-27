@@ -1,0 +1,61 @@
+Dataset,Phase,ChainMaxLength,Pool,SampleCount,Runs,MajorityCodec,RecommendationAgreement,AllSeedsAgree,CodecCounts,JointTop2Achievable,JointTop2SuccessRate,OracleMatchRate,ParetoRate,MeanPayloadRegret,MeanTimeSlowdown,MeanOnlineSecondsUpperBound
+deep-image-96-angular,heldout_seed,-1,all,256,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.01386786876246333
+deep-image-96-angular,heldout_seed,-1,all,512,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.01691441796720028
+deep-image-96-angular,heldout_seed,-1,all,1024,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.023634838918223978
+deep-image-96-angular,heldout_seed,-1,differential,256,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.01386022032238543
+deep-image-96-angular,heldout_seed,-1,differential,512,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.016904672747477888
+deep-image-96-angular,heldout_seed,-1,differential,1024,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.023620142275467514
+deep-image-96-angular,heldout_seed,2,all,256,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.013872354663908482
+deep-image-96-angular,heldout_seed,2,all,512,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.016916505713015794
+deep-image-96-angular,heldout_seed,2,all,1024,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.02363554984331131
+deep-image-96-angular,heldout_seed,2,differential,256,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.013864881917834282
+deep-image-96-angular,heldout_seed,2,differential,512,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.016921927174553274
+deep-image-96-angular,heldout_seed,2,differential,1024,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.02363566099666059
+fashion-mnist-784-euclidean,heldout_seed,-1,all,256,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.010416702460497617
+fashion-mnist-784-euclidean,heldout_seed,-1,all,512,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.013007985102012754
+fashion-mnist-784-euclidean,heldout_seed,-1,all,1024,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.017751160264015197
+fashion-mnist-784-euclidean,heldout_seed,-1,differential,256,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,1.0,1.0,1.0,0.28426866247932114,1.0,0.010425393562763929
+fashion-mnist-784-euclidean,heldout_seed,-1,differential,512,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,1.0,1.0,1.0,0.28426866247932114,1.0,0.013006167951971292
+fashion-mnist-784-euclidean,heldout_seed,-1,differential,1024,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,1.0,1.0,1.0,0.28426866247932114,1.0,0.017751462385058404
+fashion-mnist-784-euclidean,heldout_seed,2,all,256,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.010419453633949161
+fashion-mnist-784-euclidean,heldout_seed,2,all,512,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.013001229288056493
+fashion-mnist-784-euclidean,heldout_seed,2,all,1024,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.01775450292043388
+fashion-mnist-784-euclidean,heldout_seed,2,differential,256,10,DeXOR,0.6,0,"{""DeXOR"": 6, ""Elf"": 4}",1,0.4,0.4,1.0,0.22499359318142123,1.0828095910113795,0.010423857253044844
+fashion-mnist-784-euclidean,heldout_seed,2,differential,512,10,Elf,0.5,0,"{""DeXOR"": 5, ""Elf"": 5}",1,0.5,0.5,1.0,0.28124199147677653,1.0806521108672946,0.013009227998554706
+fashion-mnist-784-euclidean,heldout_seed,2,differential,1024,10,DeXOR,0.7,0,"{""DeXOR"": 7, ""Elf"": 3}",1,0.3,0.3,1.0,0.16874519488606593,1.0849670711554649,0.01775152999907732
+gist-960-euclidean,heldout_seed,-1,all,256,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.015329522779211402
+gist-960-euclidean,heldout_seed,-1,all,512,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.01847727978602052
+gist-960-euclidean,heldout_seed,-1,all,1024,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.024773809220641853
+gist-960-euclidean,heldout_seed,-1,differential,256,10,raw,0.7,0,"{""Gorilla"": 3, ""raw"": 7}",0,,0.7,1.0,0.0016976526916962164,0.3,0.015330077102407812
+gist-960-euclidean,heldout_seed,-1,differential,512,10,raw,0.9,0,"{""Gorilla"": 1, ""raw"": 9}",0,,0.9,1.0,0.0005658842305654055,0.1,0.018482024781405926
+gist-960-euclidean,heldout_seed,-1,differential,1024,10,raw,0.9,0,"{""Gorilla"": 1, ""raw"": 9}",0,,0.9,1.0,0.0005658842305654055,0.1,0.02477648458443582
+gist-960-euclidean,heldout_seed,2,all,256,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.015329344104975462
+gist-960-euclidean,heldout_seed,2,all,512,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.018482534028589726
+gist-960-euclidean,heldout_seed,2,all,1024,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.024785784911364316
+gist-960-euclidean,heldout_seed,2,differential,256,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.015328304329887032
+gist-960-euclidean,heldout_seed,2,differential,512,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.018467950262129308
+gist-960-euclidean,heldout_seed,2,differential,1024,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.024768342124298216
+mnist-784-euclidean,heldout_seed,-1,all,256,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,1.0,1.0,1.0,0.10905842666824328,1.313207541716444,0.00919544226489961
+mnist-784-euclidean,heldout_seed,-1,all,512,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,1.0,1.0,1.0,0.10905842666824328,1.313207541716444,0.010960092302411795
+mnist-784-euclidean,heldout_seed,-1,all,1024,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,1.0,1.0,1.0,0.10905842666824328,1.313207541716444,0.014253793144598603
+mnist-784-euclidean,heldout_seed,-1,differential,256,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,1.0,1.0,1.0,0.10905842666824328,1.0,0.009199803369119764
+mnist-784-euclidean,heldout_seed,-1,differential,512,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,1.0,1.0,1.0,0.10905842666824328,1.0,0.0109593550208956
+mnist-784-euclidean,heldout_seed,-1,differential,1024,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,1.0,1.0,1.0,0.10905842666824328,1.0,0.014259631419554353
+mnist-784-euclidean,heldout_seed,2,all,256,10,DeXOR,1.0,1,"{""DeXOR"": 10}",0,,1.0,1.0,0.0,1.3107926124320781,0.0092032540589571
+mnist-784-euclidean,heldout_seed,2,all,512,10,DeXOR,1.0,1,"{""DeXOR"": 10}",0,,1.0,1.0,0.0,1.3107926124320781,0.010961690219119191
+mnist-784-euclidean,heldout_seed,2,all,1024,10,DeXOR,1.0,1,"{""DeXOR"": 10}",0,,1.0,1.0,0.0,1.3107926124320781,0.01427075294777751
+mnist-784-euclidean,heldout_seed,2,differential,256,10,DeXOR,1.0,1,"{""DeXOR"": 10}",1,1.0,1.0,1.0,0.0,1.0510142936521931,0.00919915591366589
+mnist-784-euclidean,heldout_seed,2,differential,512,10,DeXOR,1.0,1,"{""DeXOR"": 10}",1,1.0,1.0,1.0,0.0,1.0510142936521931,0.010961439181119203
+mnist-784-euclidean,heldout_seed,2,differential,1024,10,DeXOR,1.0,1,"{""DeXOR"": 10}",1,1.0,1.0,1.0,0.0,1.0510142936521931,0.014257200807332993
+sift-128-euclidean,heldout_seed,-1,all,256,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.011639752238988877
+sift-128-euclidean,heldout_seed,-1,all,512,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.014607057953253389
+sift-128-euclidean,heldout_seed,-1,all,1024,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.020983419427648187
+sift-128-euclidean,heldout_seed,-1,differential,256,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,0.0,0.0,1.0,0.4795034007477142,1.0,0.011642087250947952
+sift-128-euclidean,heldout_seed,-1,differential,512,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,0.0,0.0,1.0,0.4795034007477142,1.0,0.0146025984082371
+sift-128-euclidean,heldout_seed,-1,differential,1024,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,0.0,0.0,1.0,0.4795034007477142,1.0,0.020979437744244933
+sift-128-euclidean,heldout_seed,2,all,256,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.011636509327217937
+sift-128-euclidean,heldout_seed,2,all,512,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.014603304071351885
+sift-128-euclidean,heldout_seed,2,all,1024,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.020978298503905535
+sift-128-euclidean,heldout_seed,2,differential,256,10,DeXOR,1.0,1,"{""DeXOR"": 10}",1,1.0,1.0,1.0,0.0,1.0243723624079806,0.011644317908212543
+sift-128-euclidean,heldout_seed,2,differential,512,10,DeXOR,1.0,1,"{""DeXOR"": 10}",1,1.0,1.0,1.0,0.0,1.0243723624079806,0.014606978977099061
+sift-128-euclidean,heldout_seed,2,differential,1024,10,DeXOR,1.0,1,"{""DeXOR"": 10}",1,1.0,1.0,1.0,0.0,1.0243723624079806,0.020982610853388907

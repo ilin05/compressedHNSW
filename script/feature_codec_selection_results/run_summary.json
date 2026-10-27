@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "CalibrationSeconds": 2.693290099967271,
+  "HeldoutSeedStabilityPassed": false,
+  "HeldoutSeedRecommendationPassed": false,
+  "PassedConditions": 18,
+  "TotalConditions": 20,
+  "OnlineTrialEncoding": false,
+  "OnlineFullForest": false,
+  "GeneralizationScope": "heldout seeds share calibrated datasets; LODO reported separately",
+  "OracleScope": "historical_cross_run_not_same_graph; ALP tolerance unchanged",
+  "TimingScope": "probe/read/features/inference; excludes Python startup; read uses maximum sample size",
+  "settings": {
+    "sample_pool_size": 1024,
+    "dimensions": 32,
+    "references": 32,
+    "dimension_scale": 128.0,
+    "codec_word_bits": 64
+  }
+}

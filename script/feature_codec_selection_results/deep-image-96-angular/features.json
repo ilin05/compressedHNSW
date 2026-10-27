@@ -1,0 +1,96 @@
+{
+  "config": {
+    "settings": {
+      "sample_pool_size": 1024,
+      "dimensions": 32,
+      "references": 32,
+      "dimension_scale": 128.0,
+      "codec_word_bits": 64
+    },
+    "samples": [
+      256,
+      512,
+      1024
+    ],
+    "seeds": [
+      [
+        "train",
+        1001
+      ],
+      [
+        "train",
+        1002
+      ],
+      [
+        "train",
+        1003
+      ],
+      [
+        "train",
+        1004
+      ],
+      [
+        "train",
+        1005
+      ],
+      [
+        "tune",
+        2001
+      ],
+      [
+        "tune",
+        2002
+      ],
+      [
+        "tune",
+        2003
+      ],
+      [
+        "test",
+        3001
+      ],
+      [
+        "test",
+        3002
+      ],
+      [
+        "test",
+        3003
+      ],
+      [
+        "test",
+        3004
+      ],
+      [
+        "test",
+        3005
+      ],
+      [
+        "test",
+        3006
+      ],
+      [
+        "test",
+        3007
+      ],
+      [
+        "test",
+        3008
+      ],
+      [
+        "test",
+        3009
+      ],
+      [
+        "test",
+        3010
+      ]
+    ],
+    "input": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/deep-image-96-angular_train.fvecs",
+      "bytes": 3876120000,
+      "mtime_ns": 1775801637257165521
+    }
+  },
+  "sha256": "2b45ec5fa8ebdae921b635e5286c77cd87452c2eaada2756f33fdb4309778efc"
+}

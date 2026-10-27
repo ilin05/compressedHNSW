@@ -1,0 +1,96 @@
+{
+  "config": {
+    "settings": {
+      "sample_pool_size": 1024,
+      "dimensions": 32,
+      "references": 32,
+      "dimension_scale": 128.0,
+      "codec_word_bits": 64
+    },
+    "samples": [
+      256,
+      512,
+      1024
+    ],
+    "seeds": [
+      [
+        "train",
+        1001
+      ],
+      [
+        "train",
+        1002
+      ],
+      [
+        "train",
+        1003
+      ],
+      [
+        "train",
+        1004
+      ],
+      [
+        "train",
+        1005
+      ],
+      [
+        "tune",
+        2001
+      ],
+      [
+        "tune",
+        2002
+      ],
+      [
+        "tune",
+        2003
+      ],
+      [
+        "test",
+        3001
+      ],
+      [
+        "test",
+        3002
+      ],
+      [
+        "test",
+        3003
+      ],
+      [
+        "test",
+        3004
+      ],
+      [
+        "test",
+        3005
+      ],
+      [
+        "test",
+        3006
+      ],
+      [
+        "test",
+        3007
+      ],
+      [
+        "test",
+        3008
+      ],
+      [
+        "test",
+        3009
+      ],
+      [
+        "test",
+        3010
+      ]
+    ],
+    "input": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/gist-960-euclidean_train.fvecs",
+      "bytes": 3844000000,
+      "mtime_ns": 1775801682640782836
+    }
+  },
+  "sha256": "beac018d6113dd17ad2716675a127a0bd4430a3885abac4587ee45ea974ab0e1"
+}

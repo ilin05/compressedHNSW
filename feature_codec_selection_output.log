@@ -1,0 +1,31 @@
+nohup: ignoring input
+Extracted sift-128-euclidean: 54 feature probes; no forest/codec execution
+Extracted mnist-784-euclidean: 54 feature probes; no forest/codec execution
+Extracted fashion-mnist-784-euclidean: 54 feature probes; no forest/codec execution
+Extracted gist-960-euclidean: 54 feature probes; no forest/codec execution
+Extracted deep-image-96-angular: 54 feature probes; no forest/codec execution
+chain2_all selected ridge=0.01 space_weight=0.75
+sift-128-euclidean chain2_all: stability=1 choices={"256": "ALP", "512": "ALP", "1024": "ALP"}
+mnist-784-euclidean chain2_all: stability=1 choices={"256": "DeXOR", "512": "DeXOR", "1024": "DeXOR"}
+fashion-mnist-784-euclidean chain2_all: stability=1 choices={"256": "ALP", "512": "ALP", "1024": "ALP"}
+gist-960-euclidean chain2_all: stability=1 choices={"256": "ALP", "512": "ALP", "1024": "ALP"}
+deep-image-96-angular chain2_all: stability=1 choices={"256": "ALP", "512": "ALP", "1024": "ALP"}
+chain2_differential selected ridge=0.1 space_weight=0.25
+sift-128-euclidean chain2_differential: stability=1 choices={"256": "DeXOR", "512": "DeXOR", "1024": "DeXOR"}
+mnist-784-euclidean chain2_differential: stability=1 choices={"256": "DeXOR", "512": "DeXOR", "1024": "DeXOR"}
+fashion-mnist-784-euclidean chain2_differential: stability=0 choices={"256": "DeXOR", "512": "Elf", "1024": "DeXOR"}
+gist-960-euclidean chain2_differential: stability=1 choices={"256": "raw", "512": "raw", "1024": "raw"}
+deep-image-96-angular chain2_differential: stability=1 choices={"256": "raw", "512": "raw", "1024": "raw"}
+chainunbounded_all selected ridge=0.01 space_weight=0.75
+sift-128-euclidean chainunbounded_all: stability=1 choices={"256": "ALP", "512": "ALP", "1024": "ALP"}
+mnist-784-euclidean chainunbounded_all: stability=1 choices={"256": "Gorilla", "512": "Gorilla", "1024": "Gorilla"}
+fashion-mnist-784-euclidean chainunbounded_all: stability=1 choices={"256": "ALP", "512": "ALP", "1024": "ALP"}
+gist-960-euclidean chainunbounded_all: stability=1 choices={"256": "ALP", "512": "ALP", "1024": "ALP"}
+deep-image-96-angular chainunbounded_all: stability=1 choices={"256": "ALP", "512": "ALP", "1024": "ALP"}
+chainunbounded_differential selected ridge=0.01 space_weight=0.25
+sift-128-euclidean chainunbounded_differential: stability=1 choices={"256": "Gorilla", "512": "Gorilla", "1024": "Gorilla"}
+mnist-784-euclidean chainunbounded_differential: stability=1 choices={"256": "Gorilla", "512": "Gorilla", "1024": "Gorilla"}
+fashion-mnist-784-euclidean chainunbounded_differential: stability=1 choices={"256": "Gorilla", "512": "Gorilla", "1024": "Gorilla"}
+gist-960-euclidean chainunbounded_differential: stability=0 choices={"256": "raw", "512": "raw", "1024": "raw"}
+deep-image-96-angular chainunbounded_differential: stability=1 choices={"256": "raw", "512": "raw", "1024": "raw"}
+Results: /home/zmy/HNSWCW/compressedhnsw/script/feature_codec_selection_results

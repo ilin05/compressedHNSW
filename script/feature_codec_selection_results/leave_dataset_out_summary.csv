@@ -1,0 +1,61 @@
+Dataset,Phase,ChainMaxLength,Pool,SampleCount,Runs,MajorityCodec,RecommendationAgreement,AllSeedsAgree,CodecCounts,JointTop2Achievable,JointTop2SuccessRate,OracleMatchRate,ParetoRate,MeanPayloadRegret,MeanTimeSlowdown,MeanOnlineSecondsUpperBound
+deep-image-96-angular,leave_dataset_out,-1,all,256,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.013865555729717016
+deep-image-96-angular,leave_dataset_out,-1,all,512,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.01691391821950674
+deep-image-96-angular,leave_dataset_out,-1,all,1024,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.023627424100413918
+deep-image-96-angular,leave_dataset_out,-1,differential,256,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.013870046101510524
+deep-image-96-angular,leave_dataset_out,-1,differential,512,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.01692456896416843
+deep-image-96-angular,leave_dataset_out,-1,differential,1024,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.023632379341870548
+deep-image-96-angular,leave_dataset_out,2,all,256,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.013876328570768237
+deep-image-96-angular,leave_dataset_out,2,all,512,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.016920674592256546
+deep-image-96-angular,leave_dataset_out,2,all,1024,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.023633385356515647
+deep-image-96-angular,leave_dataset_out,2,differential,256,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.013876731973141432
+deep-image-96-angular,leave_dataset_out,2,differential,512,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.016917074099183083
+deep-image-96-angular,leave_dataset_out,2,differential,1024,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.023633238533511756
+fashion-mnist-784-euclidean,leave_dataset_out,-1,all,256,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.010415271809324621
+fashion-mnist-784-euclidean,leave_dataset_out,-1,all,512,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.013001072872430085
+fashion-mnist-784-euclidean,leave_dataset_out,-1,all,1024,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.017745723575353624
+fashion-mnist-784-euclidean,leave_dataset_out,-1,differential,256,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,1.0,1.0,1.0,0.28426866247932114,1.0,0.01042602160014212
+fashion-mnist-784-euclidean,leave_dataset_out,-1,differential,512,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,1.0,1.0,1.0,0.28426866247932114,1.0,0.012999022752046585
+fashion-mnist-784-euclidean,leave_dataset_out,-1,differential,1024,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,1.0,1.0,1.0,0.28426866247932114,1.0,0.01775447609834373
+fashion-mnist-784-euclidean,leave_dataset_out,2,all,256,10,ALP,0.9,0,"{""ALP"": 9, ""DeXOR"": 1}",1,0.9,0.9,0.9,0.0062841361315929545,1.0363775208716022,0.010418041935190558
+fashion-mnist-784-euclidean,leave_dataset_out,2,all,512,10,ALP,0.9,0,"{""ALP"": 9, ""DeXOR"": 1}",1,0.9,0.9,0.9,0.0062841361315929545,1.0363775208716022,0.012993620242923498
+fashion-mnist-784-euclidean,leave_dataset_out,2,all,1024,10,ALP,0.9,0,"{""ALP"": 9, ""DeXOR"": 1}",1,0.9,0.9,0.9,0.0062841361315929545,1.0363775208716022,0.017745212838053703
+fashion-mnist-784-euclidean,leave_dataset_out,2,differential,256,10,Elf,1.0,1,"{""Elf"": 10}",1,1.0,1.0,1.0,0.5624839829535532,1.0698647101468695,0.010422388510778546
+fashion-mnist-784-euclidean,leave_dataset_out,2,differential,512,10,Elf,1.0,1,"{""Elf"": 10}",1,1.0,1.0,1.0,0.5624839829535532,1.0698647101468695,0.013009171606972814
+fashion-mnist-784-euclidean,leave_dataset_out,2,differential,1024,10,Elf,1.0,1,"{""Elf"": 10}",1,1.0,1.0,1.0,0.5624839829535532,1.0698647101468695,0.01778073562309146
+gist-960-euclidean,leave_dataset_out,-1,all,256,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.015331489872187376
+gist-960-euclidean,leave_dataset_out,-1,all,512,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.01847711866721511
+gist-960-euclidean,leave_dataset_out,-1,all,1024,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.02477318295277655
+gist-960-euclidean,leave_dataset_out,-1,differential,256,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.015333304600790142
+gist-960-euclidean,leave_dataset_out,-1,differential,512,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.018473828909918666
+gist-960-euclidean,leave_dataset_out,-1,differential,1024,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.02477582166902721
+gist-960-euclidean,leave_dataset_out,2,all,256,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.01532223979011178
+gist-960-euclidean,leave_dataset_out,2,all,512,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.01846775026060641
+gist-960-euclidean,leave_dataset_out,2,all,1024,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.024770566215738653
+gist-960-euclidean,leave_dataset_out,2,differential,256,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.01531674787402153
+gist-960-euclidean,leave_dataset_out,2,differential,512,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.01846250449307263
+gist-960-euclidean,leave_dataset_out,2,differential,1024,10,raw,1.0,1,"{""raw"": 10}",0,,1.0,1.0,0.0,0.0,0.02476333063095808
+mnist-784-euclidean,leave_dataset_out,-1,all,256,10,ALP,1.0,1,"{""ALP"": 10}",1,0.0,0.0,1.0,0.5815113859054793,1.0,0.009203638648614287
+mnist-784-euclidean,leave_dataset_out,-1,all,512,10,ALP,1.0,1,"{""ALP"": 10}",1,0.0,0.0,1.0,0.5815113859054793,1.0,0.010956044541671872
+mnist-784-euclidean,leave_dataset_out,-1,all,1024,10,ALP,1.0,1,"{""ALP"": 10}",1,0.0,0.0,1.0,0.5815113859054793,1.0,0.014252967573702336
+mnist-784-euclidean,leave_dataset_out,-1,differential,256,10,Gorilla,0.8,0,"{""DeXOR"": 2, ""Gorilla"": 8}",1,0.8,0.8,1.0,0.08724674133459462,1.0557700635974918,0.009205254819244146
+mnist-784-euclidean,leave_dataset_out,-1,differential,512,10,Gorilla,0.9,0,"{""DeXOR"": 1, ""Gorilla"": 9}",1,0.9,0.9,1.0,0.09815258400141895,1.0278850317987458,0.010961165511980652
+mnist-784-euclidean,leave_dataset_out,-1,differential,1024,10,Gorilla,0.9,0,"{""DeXOR"": 1, ""Gorilla"": 9}",1,0.9,0.9,1.0,0.09815258400141895,1.0278850317987458,0.014258915558457375
+mnist-784-euclidean,leave_dataset_out,2,all,256,10,ALP,1.0,1,"{""ALP"": 10}",0,,0.0,1.0,0.5316627928762767,1.0,0.009203582862392068
+mnist-784-euclidean,leave_dataset_out,2,all,512,10,ALP,1.0,1,"{""ALP"": 10}",0,,0.0,1.0,0.5316627928762767,1.0,0.010953721357509494
+mnist-784-euclidean,leave_dataset_out,2,all,1024,10,ALP,1.0,1,"{""ALP"": 10}",0,,0.0,1.0,0.5316627928762767,1.0,0.014253339171409607
+mnist-784-euclidean,leave_dataset_out,2,differential,256,10,DeXOR,1.0,1,"{""DeXOR"": 10}",1,1.0,1.0,1.0,0.0,1.0510142936521931,0.009205147810280322
+mnist-784-euclidean,leave_dataset_out,2,differential,512,10,DeXOR,1.0,1,"{""DeXOR"": 10}",1,1.0,1.0,1.0,0.0,1.0510142936521931,0.010960584413260222
+mnist-784-euclidean,leave_dataset_out,2,differential,1024,10,DeXOR,1.0,1,"{""DeXOR"": 10}",1,1.0,1.0,1.0,0.0,1.0510142936521931,0.014258881378918887
+sift-128-euclidean,leave_dataset_out,-1,all,256,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.011643417412415147
+sift-128-euclidean,leave_dataset_out,-1,all,512,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.014607828808948398
+sift-128-euclidean,leave_dataset_out,-1,all,1024,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.020981160225346684
+sift-128-euclidean,leave_dataset_out,-1,differential,256,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,0.0,0.0,1.0,0.4795034007477142,1.0,0.011633314425125718
+sift-128-euclidean,leave_dataset_out,-1,differential,512,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,0.0,0.0,1.0,0.4795034007477142,1.0,0.014613075274974107
+sift-128-euclidean,leave_dataset_out,-1,differential,1024,10,Gorilla,1.0,1,"{""Gorilla"": 10}",1,0.0,0.0,1.0,0.4795034007477142,1.0,0.020984323835000394
+sift-128-euclidean,leave_dataset_out,2,all,256,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.011648158635944128
+sift-128-euclidean,leave_dataset_out,2,all,512,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.014610268361866473
+sift-128-euclidean,leave_dataset_out,2,all,1024,10,ALP,1.0,1,"{""ALP"": 10}",1,1.0,1.0,1.0,0.0,1.0,0.020980286691337825
+sift-128-euclidean,leave_dataset_out,2,differential,256,10,DeXOR,1.0,1,"{""DeXOR"": 10}",1,1.0,1.0,1.0,0.0,1.0243723624079806,0.0116320273373276
+sift-128-euclidean,leave_dataset_out,2,differential,512,10,DeXOR,1.0,1,"{""DeXOR"": 10}",1,1.0,1.0,1.0,0.0,1.0243723624079806,0.014600346749648451
+sift-128-euclidean,leave_dataset_out,2,differential,1024,10,DeXOR,1.0,1,"{""DeXOR"": 10}",1,1.0,1.0,1.0,0.0,1.0243723624079806,0.020970869297161698

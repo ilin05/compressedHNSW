@@ -1,0 +1,96 @@
+{
+  "config": {
+    "settings": {
+      "sample_pool_size": 1024,
+      "dimensions": 32,
+      "references": 32,
+      "dimension_scale": 128.0,
+      "codec_word_bits": 64
+    },
+    "samples": [
+      256,
+      512,
+      1024
+    ],
+    "seeds": [
+      [
+        "train",
+        1001
+      ],
+      [
+        "train",
+        1002
+      ],
+      [
+        "train",
+        1003
+      ],
+      [
+        "train",
+        1004
+      ],
+      [
+        "train",
+        1005
+      ],
+      [
+        "tune",
+        2001
+      ],
+      [
+        "tune",
+        2002
+      ],
+      [
+        "tune",
+        2003
+      ],
+      [
+        "test",
+        3001
+      ],
+      [
+        "test",
+        3002
+      ],
+      [
+        "test",
+        3003
+      ],
+      [
+        "test",
+        3004
+      ],
+      [
+        "test",
+        3005
+      ],
+      [
+        "test",
+        3006
+      ],
+      [
+        "test",
+        3007
+      ],
+      [
+        "test",
+        3008
+      ],
+      [
+        "test",
+        3009
+      ],
+      [
+        "test",
+        3010
+      ]
+    ],
+    "input": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/sift-128-euclidean_train.fvecs",
+      "bytes": 516000000,
+      "mtime_ns": 1775801645723093339
+    }
+  },
+  "sha256": "88a9edba072d71083ed1e9ad6a6a5fdf6dceaf57eeb040fbcd90e1f884465f4a"
+}

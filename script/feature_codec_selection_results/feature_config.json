@@ -1,0 +1,116 @@
+{
+  "schema": 1,
+  "settings": {
+    "sample_pool_size": 1024,
+    "dimensions": 32,
+    "references": 32,
+    "dimension_scale": 128.0,
+    "codec_word_bits": 64
+  },
+  "samples": [
+    256,
+    512,
+    1024
+  ],
+  "seeds": [
+    [
+      "train",
+      1001
+    ],
+    [
+      "train",
+      1002
+    ],
+    [
+      "train",
+      1003
+    ],
+    [
+      "train",
+      1004
+    ],
+    [
+      "train",
+      1005
+    ],
+    [
+      "tune",
+      2001
+    ],
+    [
+      "tune",
+      2002
+    ],
+    [
+      "tune",
+      2003
+    ],
+    [
+      "test",
+      3001
+    ],
+    [
+      "test",
+      3002
+    ],
+    [
+      "test",
+      3003
+    ],
+    [
+      "test",
+      3004
+    ],
+    [
+      "test",
+      3005
+    ],
+    [
+      "test",
+      3006
+    ],
+    [
+      "test",
+      3007
+    ],
+    [
+      "test",
+      3008
+    ],
+    [
+      "test",
+      3009
+    ],
+    [
+      "test",
+      3010
+    ]
+  ],
+  "inputs": {
+    "sift-128-euclidean": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/sift-128-euclidean_train.fvecs",
+      "bytes": 516000000,
+      "mtime_ns": 1775801645723093339
+    },
+    "mnist-784-euclidean": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/mnist-784-euclidean_train.fvecs",
+      "bytes": 188400000,
+      "mtime_ns": 1775801640500137827
+    },
+    "fashion-mnist-784-euclidean": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/fashion-mnist-784-euclidean_train.fvecs",
+      "bytes": 188400000,
+      "mtime_ns": 1775801638895151526
+    },
+    "gist-960-euclidean": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/gist-960-euclidean_train.fvecs",
+      "bytes": 3844000000,
+      "mtime_ns": 1775801682640782836
+    },
+    "deep-image-96-angular": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/deep-image-96-angular_train.fvecs",
+      "bytes": 3876120000,
+      "mtime_ns": 1775801637257165521
+    }
+  }
+}

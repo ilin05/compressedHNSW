@@ -1,0 +1,85 @@
+{
+  "command": "calibrate",
+  "data_dir": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files",
+  "output_dir": "/home/zmy/HNSWCW/compressedhnsw/script/feature_codec_selection_results",
+  "datasets": [
+    "sift-128-euclidean",
+    "mnist-784-euclidean",
+    "fashion-mnist-784-euclidean",
+    "gist-960-euclidean",
+    "deep-image-96-angular"
+  ],
+  "samples": [
+    256,
+    512,
+    1024
+  ],
+  "train_seeds": [
+    1001,
+    1002,
+    1003,
+    1004,
+    1005
+  ],
+  "tune_seeds": [
+    2001,
+    2002,
+    2003
+  ],
+  "test_seeds": [
+    3001,
+    3002,
+    3003,
+    3004,
+    3005,
+    3006,
+    3007,
+    3008,
+    3009,
+    3010
+  ],
+  "dimensions": 32,
+  "references": 32,
+  "codec_word_bits": 64,
+  "chains": [
+    2,
+    -1
+  ],
+  "pools": [
+    "all",
+    "differential"
+  ],
+  "ridges": [
+    0.01,
+    0.1,
+    1,
+    10
+  ],
+  "space_weights": [
+    0.25,
+    0.5,
+    0.75,
+    0.9
+  ],
+  "min_payload_ratio": 1.02,
+  "stability_threshold": 1.0,
+  "alp_oracle": "/home/zmy/HNSWCW/compressedhnsw/script/hnswalp_pq_build_compression_results.csv",
+  "differential_oracle": "/home/zmy/HNSWCW/compressedhnsw/script/compressed_hnsw_ablation_build_results.csv",
+  "oracle_alp_raw_bytes": 8,
+  "oracle_differential_raw_bytes": 8,
+  "resume": false,
+  "analyze_only": false,
+  "skip_lodo": false,
+  "oracle_identity": {
+    "ALP": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/script/hnswalp_pq_build_compression_results.csv",
+      "bytes": 420,
+      "mtime_ns": 1784266864070671842
+    },
+    "differential": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/script/compressed_hnsw_ablation_build_results.csv",
+      "bytes": 17922,
+      "mtime_ns": 1792206819336818534
+    }
+  }
+}
