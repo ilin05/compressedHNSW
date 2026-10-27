@@ -71,3 +71,6 @@ script/alp_insert_optimizations_sift_results/*.labels
 script/alp_insert_optimizations_sift_results/*.distances
 script/alp_insert_optimizations_sift_results/*.index
 !script/test_dynamic_updates_optimized.py
+!script/plot_dynamic_updates_sift_optimized.py
+!script/feature_codec_recommendation.py
+!script/test_feature_codec_recommendation.py

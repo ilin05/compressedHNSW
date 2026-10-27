@@ -25,9 +25,9 @@ INDEX_ORDER = (
     "HNSW+SQ",
     "LVC",
     "IVF-Flat",
-    "IVFPQ-FastScan",
     "NSG",
     "ScaNN",
+    "IVFPQ-FastScan"
 )
 INDEX_NAMES = {
     "ivf_flat": "IVF-Flat",
@@ -130,19 +130,19 @@ def load_breakdown(original_csv, baseline_csv):
 
 
 def draw_breakdown(datasets, totals, output, subplot_width, subplot_height):
+    row_scale = 0.8
     fig, axes = plt.subplots(
         1, len(datasets),
-        figsize=(subplot_width * len(datasets), subplot_height),
+        figsize=(subplot_width * len(datasets), subplot_height * row_scale),
         sharey=True, squeeze=False,
     )
     axes = axes[0]
-    positions = list(range(len(INDEX_ORDER)))
-    # positions = [i*0.8 for i in range(len(INDEX_ORDER))]  # alternative spacing
+    positions = [i * row_scale for i in range(len(INDEX_ORDER))]
     gib = 1024 ** 3
 
     for panel, (ax, dataset) in enumerate(zip(axes, datasets)):
         maximum = max(sum(totals[dataset, index].values()) for index in INDEX_ORDER) / gib
-        for y, index in enumerate(INDEX_ORDER):
+        for y, index in zip(positions, INDEX_ORDER):
             left = 0.0
             for component in COMPONENT_ORDER:
                 value = totals[dataset, index].get(component, 0) / gib
@@ -150,7 +150,7 @@ def draw_breakdown(datasets, totals, output, subplot_width, subplot_height):
                     continue
                 face, edge = COLORS[component]
                 ax.barh(
-                    y, value, left=left, height=0.62, color=face,
+                    y, value, left=left, height=0.62 * row_scale, color=face,
                     edgecolor=edge, linewidth=0.75, alpha=0.94, zorder=3,
                 )
                 left += value
@@ -162,7 +162,10 @@ def draw_breakdown(datasets, totals, output, subplot_width, subplot_height):
         ax.set_xlim(0, max(maximum * 1.35, 0.02))
         ax.set_yticks(positions)
         if panel == 0:
-            ax.set_yticklabels(INDEX_ORDER, fontsize=15)
+            ax.set_yticklabels(
+                ["HNSW+LVC" if index == "LVC" else index for index in INDEX_ORDER],
+                fontsize=15,
+            )
         else:
             ax.tick_params(axis="y", labelleft=False, left=False)
         ax.invert_yaxis()
