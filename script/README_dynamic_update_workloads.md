@@ -209,3 +209,23 @@ eleven prefix GT checkpoints, and set BATCHES=2, SEARCH_ROUNDS=1 and VERIFY_SIZE
 Growing still runs all ten growth steps so that GT switching is exercised.
 
 The optional CMake target is `test_dynamic_update_workloads`.
+
+## Optimized repeated updates with 1% batches
+
+The following launchers default to 20 batches, deleting and reinserting 1% of
+the full dataset per batch. Upper/base insertion TLS both use the named alpha;
+the insertion-local decoded-vector cache is enabled. Both run HNSW F32 and the
+ALP-backed compressed index, with query TLS off/on (alpha=0.2), efSearch=40,
+three query rounds, and one thread. Query checkpoints are 0,2,...,20.
+
+```bash
+DATASETS=sift-128-euclidean bash script/test_dynamic_updates_repeated_1pct_alpha01.sh
+DATASETS=sift-128-euclidean bash script/test_dynamic_updates_repeated_1pct_alpha02.sh
+```
+
+Without `DATASETS`, the existing five-dataset list is retained. Default outputs
+are `script/dynamic_updates_repeated_1pct_alpha01_results/` and
+`script/dynamic_updates_repeated_1pct_alpha02_results/`, with separate build
+directories. The original 3% launchers and results are unchanged. Existing
+environment overrides, including BATCHES, REPEAT_RATIO, OUT and BIN, still apply;
+resume requires a matching configuration.

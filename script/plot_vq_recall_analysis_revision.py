@@ -6,6 +6,7 @@ uses positive filtering ratios only. Exact LVC uses precisely HNSWALP0.000000.
 Missing dataset/index combinations are reported and never synthesized.
 FastScan uses the separate M=dim, 4-bit results, keeping only nprobe>=10;
 its minimum recall can extend each panel's original lower recall boundary.
+Baseline points up to recall=1.0 are shown with the legacy x-axis limits.
 """
 
 import argparse
@@ -220,10 +221,11 @@ def plot_panel(ax, curves, dataset, k, metric):
         fastscan_min = min(point["recall"] for point in fastscan)
         min_recall = min(min_recall, fastscan_min)
         y_min = min(y_min, fastscan_min)
+    # Keep higher-recall baseline points; reference_x above preserves x limits.
     for name in CURVE_ORDER:
         points = filtered if name == "HNSW-Filtered-LVC" else [
             point for point in curves.get(name, [])
-            if min_recall <= point["recall"] <= max_recall
+            if min_recall <= point["recall"] <= 1.0
         ]
         if not points:
             continue

@@ -1,0 +1,109 @@
+{
+  "dataset": "sift-128-euclidean",
+  "insertion_alpha": 0.1,
+  "query_alpha": 0.2,
+  "ef_search": 40,
+  "threads": 1,
+  "query_rounds": 3,
+  "update_scope": "one measured trajectory per method/workload; three rounds only for queries",
+  "footprint_scope": "serialized layout including retained deleted records; not RSS",
+  "strict_two_times_insertion_all_batches": false,
+  "experiments": {
+    "repeated": {
+      "insert_ratio_total": 2.0722629867161455,
+      "insert_batch_ratio_min": 1.9030463791856886,
+      "insert_batch_ratio_max": 2.224793140598913,
+      "raw_insert_seconds": 536.574391788,
+      "lvc_insert_seconds": 1111.923251722,
+      "final_raw_serialized_bytes": 1056895136,
+      "final_lvc_serialized_bytes": 484872050,
+      "final_size_reduction_percent": 54.1229745994403,
+      "final_physical_nodes": 1600000,
+      "final_deleted_nodes": 600000,
+      "lvc_encoding_share_percent": 1.3730732974918618,
+      "insertion_decoded_cache_peak_bytes": 2189824,
+      "insertion_decoded_cache_peak_nodes": 4277,
+      "raw_delete_mean_us": 0.5732625483333,
+      "lvc_delete_mean_us": 0.6884949300001,
+      "max_abs_reconstruction_error": 0.0,
+      "queries": {
+        "tls_off": {
+          "max_recall_gap_pp": 0.28000000000000247,
+          "max_abs_recall_gap_pp": 0.28000000000000247,
+          "final_raw_recall": 0.9516,
+          "final_lvc_recall": 0.9529,
+          "final_raw_qps": 4574.572903643333,
+          "final_lvc_qps": 601.4237117283333,
+          "initial_raw_query_us": 161.15243743333332,
+          "final_raw_query_us": 218.60179116666666,
+          "initial_lvc_query_us": 1045.9381402333333,
+          "final_lvc_query_us": 1663.5817451666667,
+          "query_latency_ratio_min": 6.271497324933381,
+          "query_latency_ratio_max": 7.610101162887163
+        },
+        "tls_0.2": {
+          "max_recall_gap_pp": 1.5600000000000058,
+          "max_abs_recall_gap_pp": 1.5600000000000058,
+          "final_raw_recall": 0.9516,
+          "final_lvc_recall": 0.9367,
+          "final_raw_qps": 4574.572903643333,
+          "final_lvc_qps": 2033.3653257466667,
+          "initial_raw_query_us": 161.15243743333332,
+          "final_raw_query_us": 218.60179116666666,
+          "initial_lvc_query_us": 315.97409096666667,
+          "final_lvc_query_us": 491.7958768,
+          "query_latency_ratio_min": 1.9351085971085111,
+          "query_latency_ratio_max": 2.2497339759903627
+        }
+      }
+    },
+    "growing": {
+      "insert_ratio_total": 1.9834120331111955,
+      "insert_batch_ratio_min": 1.8230046228464358,
+      "insert_batch_ratio_max": 2.08963388774474,
+      "raw_insert_seconds": 338.710010676,
+      "lvc_insert_seconds": 671.8015109099999,
+      "final_raw_serialized_bytes": 660565344,
+      "final_lvc_serialized_bytes": 302594714,
+      "final_size_reduction_percent": 54.19155474193329,
+      "final_physical_nodes": 1000000,
+      "final_deleted_nodes": 0,
+      "lvc_encoding_share_percent": 1.8914632853069484,
+      "insertion_decoded_cache_peak_bytes": 1441792,
+      "insertion_decoded_cache_peak_nodes": 2816,
+      "raw_delete_mean_us": 0.0,
+      "lvc_delete_mean_us": 0.0,
+      "max_abs_reconstruction_error": 0.0,
+      "queries": {
+        "tls_off": {
+          "max_recall_gap_pp": 0.23999999999999577,
+          "max_abs_recall_gap_pp": 0.45000000000000595,
+          "final_raw_recall": 0.9502,
+          "final_lvc_recall": 0.9509,
+          "final_raw_qps": 6173.146249213333,
+          "final_lvc_qps": 908.7179092756667,
+          "initial_raw_query_us": 148.84677066666666,
+          "final_raw_query_us": 161.99316836666668,
+          "initial_lvc_query_us": 931.9309719333334,
+          "final_lvc_query_us": 1100.4773774,
+          "query_latency_ratio_min": 6.231654712175885,
+          "query_latency_ratio_max": 7.072561968856884
+        },
+        "tls_0.2": {
+          "max_recall_gap_pp": 1.0299999999999976,
+          "max_abs_recall_gap_pp": 1.0299999999999976,
+          "final_raw_recall": 0.9502,
+          "final_lvc_recall": 0.9457,
+          "final_raw_qps": 6173.146249213333,
+          "final_lvc_qps": 3044.885876263333,
+          "initial_raw_query_us": 148.84677066666666,
+          "final_raw_query_us": 161.99316836666668,
+          "initial_lvc_query_us": 267.4919275,
+          "final_lvc_query_us": 328.42479396666664,
+          "query_latency_ratio_min": 1.7970959416985401,
+          "query_latency_ratio_max": 2.1324783310444118
+        }
+      }
+    }
+  }
+}
