@@ -1,0 +1,32 @@
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=0 active=1000000 physical=1000000 insert_s=0
+PASS dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=0 prefix=100 active=1000000 physical=1000000 index_bytes=660565344 insert_s=0 decodes=0 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=1 active=1000000 physical=1010000 insert_s=6.9753
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=2 active=1000000 physical=1020000 insert_s=6.97977
+PASS dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=2 prefix=100 active=1000000 physical=1020000 index_bytes=673777484 insert_s=6.97977 decodes=0 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=3 active=1000000 physical=1030000 insert_s=7.01506
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=4 active=1000000 physical=1040000 insert_s=7.13161
+PASS dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=4 prefix=100 active=1000000 physical=1040000 index_bytes=686986088 insert_s=7.13161 decodes=0 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=5 active=1000000 physical=1050000 insert_s=7.11676
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=6 active=1000000 physical=1060000 insert_s=7.16139
+PASS dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=6 prefix=100 active=1000000 physical=1060000 index_bytes=700197480 insert_s=7.16139 decodes=0 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=7 active=1000000 physical=1070000 insert_s=7.24067
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=8 active=1000000 physical=1080000 insert_s=7.3297
+PASS dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=8 prefix=100 active=1000000 physical=1080000 index_bytes=713409688 insert_s=7.3297 decodes=0 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=9 active=1000000 physical=1090000 insert_s=7.31318
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=10 active=1000000 physical=1100000 insert_s=7.37041
+PASS dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=10 prefix=100 active=1000000 physical=1100000 index_bytes=726621216 insert_s=7.37041 decodes=0 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=11 active=1000000 physical=1110000 insert_s=7.44531
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=12 active=1000000 physical=1120000 insert_s=7.46301
+PASS dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=12 prefix=100 active=1000000 physical=1120000 index_bytes=739832404 insert_s=7.46301 decodes=0 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=13 active=1000000 physical=1130000 insert_s=7.57205
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=14 active=1000000 physical=1140000 insert_s=7.58647
+PASS dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=14 prefix=100 active=1000000 physical=1140000 index_bytes=753045156 insert_s=7.58647 decodes=0 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=15 active=1000000 physical=1150000 insert_s=7.5439
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=16 active=1000000 physical=1160000 insert_s=7.58481
+PASS dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=16 prefix=100 active=1000000 physical=1160000 index_bytes=766261240 insert_s=7.58481 decodes=0 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=17 active=1000000 physical=1170000 insert_s=7.60823
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=18 active=1000000 physical=1180000 insert_s=7.72998
+PASS dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=18 prefix=100 active=1000000 physical=1180000 index_bytes=779473244 insert_s=7.72998 decodes=0 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=19 active=1000000 physical=1190000 insert_s=7.72
+PASS update dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=20 active=1000000 physical=1200000 insert_s=7.72354
+PASS dataset=sift-128-euclidean experiment=repeated mode=raw_f32 batch=20 prefix=100 active=1000000 physical=1200000 index_bytes=792684228 insert_s=7.72354 decodes=0 max_error=0

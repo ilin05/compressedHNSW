@@ -1,0 +1,32 @@
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=0 active=1000000 physical=1000000 insert_s=0
+PASS dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=0 prefix=100 active=1000000 physical=1000000 index_bytes=304542146 insert_s=0 decodes=0 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=1 active=1000000 physical=1010000 insert_s=13.0836
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=2 active=1000000 physical=1020000 insert_s=12.651
+PASS dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=2 prefix=100 active=1000000 physical=1020000 index_bytes=310551154 insert_s=12.651 decodes=5363888 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=3 active=1000000 physical=1030000 insert_s=13.3266
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=4 active=1000000 physical=1040000 insert_s=13.3232
+PASS dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=4 prefix=100 active=1000000 physical=1040000 index_bytes=316557678 insert_s=13.3232 decodes=5471508 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=5 active=1000000 physical=1050000 insert_s=13.5092
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=6 active=1000000 physical=1060000 insert_s=13.4685
+PASS dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=6 prefix=100 active=1000000 physical=1060000 index_bytes=322566962 insert_s=13.4685 decodes=5559178 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=7 active=1000000 physical=1070000 insert_s=13.6403
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=8 active=1000000 physical=1080000 insert_s=13.8231
+PASS dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=8 prefix=100 active=1000000 physical=1080000 index_bytes=328580586 insert_s=13.8231 decodes=5713501 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=9 active=1000000 physical=1090000 insert_s=14.0652
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=10 active=1000000 physical=1100000 insert_s=14.3774
+PASS dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=10 prefix=100 active=1000000 physical=1100000 index_bytes=334594010 insert_s=14.3774 decodes=5838721 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=11 active=1000000 physical=1110000 insert_s=14.4265
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=12 active=1000000 physical=1120000 insert_s=14.3916
+PASS dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=12 prefix=100 active=1000000 physical=1120000 index_bytes=340603310 insert_s=14.3916 decodes=5923554 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=13 active=1000000 physical=1130000 insert_s=14.4792
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=14 active=1000000 physical=1140000 insert_s=14.6945
+PASS dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=14 prefix=100 active=1000000 physical=1140000 index_bytes=346612538 insert_s=14.6945 decodes=6019067 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=15 active=1000000 physical=1150000 insert_s=14.9778
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=16 active=1000000 physical=1160000 insert_s=15.1043
+PASS dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=16 prefix=100 active=1000000 physical=1160000 index_bytes=352622090 insert_s=15.1043 decodes=6104853 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=17 active=1000000 physical=1170000 insert_s=15.0762
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=18 active=1000000 physical=1180000 insert_s=15.3562
+PASS dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=18 prefix=100 active=1000000 physical=1180000 index_bytes=358634742 insert_s=15.3562 decodes=6231629 max_error=0
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=19 active=1000000 physical=1190000 insert_s=15.2225
+PASS update dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=20 active=1000000 physical=1200000 insert_s=15.4471
+PASS dataset=sift-128-euclidean experiment=repeated mode=alp_a01 batch=20 prefix=100 active=1000000 physical=1200000 index_bytes=364643798 insert_s=15.4471 decodes=6311932 max_error=0
