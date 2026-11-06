@@ -1,0 +1,44 @@
+{
+  "dataset": "sift-128-euclidean",
+  "experiment": "repeated",
+  "repeat_ratio": 0.01,
+  "batches": 20,
+  "ef_search": 40,
+  "insertion_mode": "alp_a01",
+  "threads": 1,
+  "insert_ratio_total": 1.9269820126820498,
+  "insert_batch_ratio_min": 1.8125201977833543,
+  "insert_batch_ratio_max": 1.9999961517668638,
+  "lvc_delete_mean_us": 0.78776154,
+  "final_raw_serialized_bytes": 792684228,
+  "final_lvc_serialized_bytes": 364643798,
+  "final_size_reduction_percent": 53.998857915967015,
+  "queries": {
+    "tls_off": {
+      "max_recall_deficit_pp": 0.14000000000000057,
+      "latency_ratio_min": 6.439584327144424,
+      "latency_ratio_max": 6.833669348895141,
+      "final_raw_recall_percent": 95.1,
+      "final_lvc_recall_percent": 94.96,
+      "final_raw_query_us": 172.33669596666667,
+      "final_lvc_query_us": 1156.9501760666667
+    },
+    "tls_0.2": {
+      "max_recall_deficit_pp": 0.7900000000000063,
+      "latency_ratio_min": 1.811068732058166,
+      "latency_ratio_max": 2.007389671643804,
+      "final_raw_recall_percent": 95.1,
+      "final_lvc_recall_percent": 94.42,
+      "final_raw_query_us": 172.33669596666667,
+      "final_lvc_query_us": 345.5987548666667
+    }
+  },
+  "footprint_scope": "serialized layout including tombstones; not RSS",
+  "update_scope": "one update trajectory; three timing rounds apply only to queries",
+  "source_sha256": {
+    "config.json": "f8368a54d697e50d0397e65c6c363bdd4713234ba3de3ebee0c33ae9e6c6eee8",
+    "updates.csv": "d6b9ec6683f4c04eed958bc3bfb0a54b719018170d5293f7dc609ce2667229a8",
+    "search.csv": "1c9bb58842e0fed610b2473589b3efec5f9d52bb85e86f24d3bf2c3dd6e959a5",
+    "summary.csv": "6dd5bf812a3927e8a986fc7d950b46a035578524deeba70601d678b4fb52f050"
+  }
+}
