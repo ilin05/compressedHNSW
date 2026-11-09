@@ -1,0 +1,67 @@
+{
+  "config": {
+    "schema": 2,
+    "dataset": "deep-image-96-angular",
+    "experiment": "repeated",
+    "train": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/deep-image-96-angular_train.fvecs",
+      "bytes": 3876120000,
+      "mtime_ns": 1775801637257165521
+    },
+    "queries": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/deep-image-96-angular_test.fvecs",
+      "bytes": 3880000,
+      "mtime_ns": 1775801604099446017
+    },
+    "nodes": 9990000,
+    "query_count": 10000,
+    "dim": 96,
+    "batches": 20,
+    "step_percent": 1.0,
+    "repeat_ratio": 0.01,
+    "search_checkpoints": [
+      0,
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      14,
+      16,
+      18,
+      20
+    ],
+    "search_every": 2,
+    "insert_decode_cache": true,
+    "insert_upper_tls": true,
+    "initial_percent": 100,
+    "search_rounds": 3,
+    "ef_search": [
+      40
+    ],
+    "M": 16,
+    "ef_construction": 200,
+    "initial_seed": 100,
+    "update_seed": 20261015,
+    "insert_modes": [
+      "raw_f32",
+      "alp_a01"
+    ],
+    "alp_query_modes": [
+      "tls_off",
+      "tls_0.2"
+    ],
+    "hub_ratio_initial": 0.01,
+    "alp_tolerance": 0.0001,
+    "capacity_policy": "initial count, then expand to required count at each batch",
+    "threads": 1,
+    "verify_size": false,
+    "ground_truth": {
+      "path": "/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files/deep-image-96-angular_neighbors.ivecs",
+      "bytes": 4040000,
+      "mtime_ns": 1775801533155824656
+    }
+  },
+  "status": "PASS"
+}
