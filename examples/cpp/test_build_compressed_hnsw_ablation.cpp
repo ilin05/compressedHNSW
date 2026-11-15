@@ -17,6 +17,9 @@
 using namespace std;
 using namespace hnswlib;
 static size_t verify_sample_count = 0; // zero keeps --verify_vectors exhaustive
+static bool ratios_only = false;
+static bool has_root_seed = false;
+static uint32_t root_seed = 0;
 
 class StopW {
     std::chrono::steady_clock::time_point begin_;
@@ -139,6 +142,7 @@ BuildResult build_one(const std::string& dataset,
         : new HierarchicalNSWCABFRAMEWORK<double, CodecPolicy>(
             &l2space, shared_graph_file, true, 0);
     index->setF32Lossless(f32_lossless);
+    if (has_root_seed) index->setCompressionRootSeed(root_seed);
     if (root_policy == CompressionRootPolicy::AccessFrequency)
         index->setRootAccessCounts(access_counts);
 
@@ -177,17 +181,24 @@ BuildResult build_one(const std::string& dataset,
 
     r.index_file = dataset + "_" + algo + "_" + chain_tag(chain_max_length) +
                    (r.root_policy == "level" ? "" : "_" + r.root_policy) + "_pq.bin";
-    index->exportCompressionForest(r.index_file + ".forest.csv");
+    if (!ratios_only) index->exportCompressionForest(r.index_file + ".forest.csv");
     std::vector<double> reference_distances;
     reference_distances.reserve(r.vectors);
     uint64_t depth_sum = 0;
+    uint64_t root_hash = 14695981039346656037ULL;
     for (size_t i = 0; i < r.vectors; ++i) {
-        if (index->compression_parent_export_[i] == static_cast<tableint>(-1)) ++r.roots;
+        if (index->compression_parent_export_[i] == static_cast<tableint>(-1)) {
+            ++r.roots;
+            root_hash = (root_hash ^ static_cast<uint64_t>(i)) * 1099511628211ULL;
+        }
         else reference_distances.push_back(index->compression_reference_l2_export_[i]);
         r.max_depth = std::max(r.max_depth, size_t(index->compression_depth_export_[i]));
         depth_sum += index->compression_depth_export_[i];
         r.mean_reference_l2 += index->compression_reference_l2_export_[i];
     }
+    if (has_root_seed)
+        std::cout << "ROOT_SAMPLE seed=" << root_seed << " roots=" << r.roots
+                  << " hash=" << root_hash << std::endl;
     r.mean_reference_l2 /= std::max<size_t>(1, r.vectors - r.roots);
     r.average_depth = double(depth_sum) / r.vectors;
     r.average_nonroot_depth = double(depth_sum) / std::max<size_t>(1, r.vectors - r.roots);
@@ -240,9 +251,11 @@ BuildResult build_one(const std::string& dataset,
         }
         std::cout << "PASS HNSW F32 bitwise vectors=" << verify_ids.size() << '/' << r.vectors << '\n';
     }
-    index->saveIndex(r.index_file);
-    r.file_bytes = std::filesystem::file_size(r.index_file);
-    if (verify_vectors) {
+    if (!ratios_only) {
+        index->saveIndex(r.index_file);
+        r.file_bytes = std::filesystem::file_size(r.index_file);
+    }
+    if (verify_vectors && !ratios_only) {
         HierarchicalNSWCABFRAMEWORK<double, CodecPolicy> reloaded(
             &l2space, r.index_file, true, cache_max_size);
         for (tableint i : verify_ids) {
@@ -332,6 +345,16 @@ int main(int argc, char** argv) {
             else if (policy == "random") root_policy = CompressionRootPolicy::Random;
             else if (policy == "access") root_policy = CompressionRootPolicy::AccessFrequency;
             else throw std::runtime_error("Unknown root policy: " + policy);
+        } else if (arg == "--root_seed" && i + 1 < argc) {
+            const std::string value = argv[++i];
+            size_t used = 0;
+            const auto seed = std::stoull(value, &used);
+            if (value.empty() || value.front() == '-' || used != value.size() || seed > UINT32_MAX)
+                throw std::runtime_error("--root_seed must be a uint32 integer");
+            root_seed = static_cast<uint32_t>(seed);
+            has_root_seed = true;
+        } else if (arg == "--ratios_only") {
+            ratios_only = true;
         } else if (arg == "--shared_graph_file" && i + 1 < argc) {
             provided_graph_file = argv[++i];
         } else if (arg == "--access_counts" && i + 1 < argc) {

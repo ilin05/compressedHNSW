@@ -131,13 +131,14 @@ def load_breakdown(original_csv, baseline_csv):
 
 def draw_breakdown(datasets, totals, output, subplot_width, subplot_height):
     row_scale = 0.8
+    row_spacing = 0.68
     fig, axes = plt.subplots(
         1, len(datasets),
         figsize=(subplot_width * len(datasets), subplot_height * row_scale),
         sharey=True, squeeze=False,
     )
     axes = axes[0]
-    positions = [i * row_scale for i in range(len(INDEX_ORDER))]
+    positions = [i * row_spacing for i in range(len(INDEX_ORDER))]
     gib = 1024 ** 3
 
     for panel, (ax, dataset) in enumerate(zip(axes, datasets)):
@@ -181,11 +182,12 @@ def draw_breakdown(datasets, totals, output, subplot_width, subplot_height):
     ]
     fig.legend(
         handles=handles, loc="upper center", ncol=len(handles), frameon=False,
+        fontsize=16,
         bbox_to_anchor=(0.5, 0.985), handletextpad=0.5,
         columnspacing=1.0, borderpad=0.0,
     )
-    fig.tight_layout(rect=[0, 0.035, 1, 0.93], w_pad=0.8)
-    fig.subplots_adjust(bottom=0.18)
+    fig.tight_layout(rect=[0, 0.035, 1, 0.95], w_pad=0.8)
+    fig.subplots_adjust(bottom=0.20)
     fig.supxlabel("Index Size (GiB)", fontsize=20, y=0.065)
     fig.savefig(output, dpi=240, bbox_inches="tight")
     plt.close(fig)
@@ -201,7 +203,7 @@ def main():
     parser.add_argument("--out_dir", type=Path, default=SCRIPT_DIR / "index_size_revision_plots")
     parser.add_argument("--output", default="index_storage_breakdown_revision.pdf")
     parser.add_argument("--subplot_width", type=float, default=3.7)
-    parser.add_argument("--subplot_height", type=float, default=5.6)
+    parser.add_argument("--subplot_height", type=float, default=4.9)
     args = parser.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
     datasets, totals = load_breakdown(args.csv, args.baseline_csv)

@@ -124,15 +124,20 @@ def plot_single(curves, x_key, output):
 
 
 def plot_combined(curves, output):
-    # Match the panel proportions of plot_lvc_codec_comparison.py; the extra
-    # figure height accommodates one shared legend above both panels.
-    fig, axes = plt.subplots(1, 2, figsize=(12.0, 4.9))
+    # Dedicated caption axes keep subcaptions below the x-axis labels, as in
+    # plot_diskann_three_regime_compact.py. Both panels share the top legend.
+    fig = plt.figure(figsize=(12.0, 5.3))
+    grid = fig.add_gridspec(2, 2, height_ratios=[1.0, 0.12],
+                           left=0.09, right=0.99, top=0.72, bottom=0.015,
+                           wspace=0.30, hspace=0.52)
+    axes = [fig.add_subplot(grid[0, column]) for column in range(2)]
     handles = plot_panel(axes[0], curves, "latency_ms")
     plot_panel(axes[1], curves, "vq")
-    axes[0].set_title("(a) Recall@1 vs. Latency", fontsize=24, pad=2)
-    axes[1].set_title("(b) Recall@1 vs. VQ Capacity", fontsize=24, pad=2)
+    for column, label in enumerate(("(a) Recall@1 vs. latency", "(b) Recall@1 vs. VQ Capacity")):
+        caption_ax = fig.add_subplot(grid[1, column])
+        caption_ax.axis("off")
+        caption_ax.text(0.5, 0.5, label, ha="center", va="center", fontsize=24)
     add_legend(fig, handles, 3, 0.514, 25)
-    fig.subplots_adjust(left=0.09, right=0.99, top=0.70, bottom=0.15, wspace=0.30)
     fig.savefig(output, dpi=220, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved: {output}")
@@ -140,13 +145,18 @@ def plot_combined(curves, output):
 
 def plot_stacked(curves, output):
     """Two readable panels with one shared legend for a paper column."""
-    fig, axes = plt.subplots(2, 1, figsize=(5.7, 9.0))
+    fig = plt.figure(figsize=(5.7, 10.6))
+    grid = fig.add_gridspec(4, 1, height_ratios=[1.0, 0.16, 1.0, 0.16],
+                           left=0.18, right=0.98, top=0.79, bottom=0.015,
+                           hspace=0.65)
+    axes = [fig.add_subplot(grid[row, 0]) for row in (0, 2)]
     handles = plot_panel(axes[0], curves, "latency_ms")
     plot_panel(axes[1], curves, "vq")
-    axes[0].set_title("(a) Recall@1 vs. Latency", fontsize=24, pad=2)
-    axes[1].set_title("(b) Recall@1 vs. VQ Capacity", fontsize=24, pad=2)
+    for row, label in enumerate(("(a) Recall@1 vs. latency", "(b) Recall@1 vs. VQ Capacity")):
+        caption_ax = fig.add_subplot(grid[2 * row + 1, 0])
+        caption_ax.axis("off")
+        caption_ax.text(0.5, 0.5, label, ha="center", va="center", fontsize=24)
     add_legend(fig, handles, 2, 0.49, 20.5)
-    fig.subplots_adjust(left=0.18, right=0.98, top=0.76, bottom=0.08, hspace=0.53)
     fig.savefig(output, dpi=220, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved: {output}")

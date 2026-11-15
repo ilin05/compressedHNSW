@@ -1,0 +1,120 @@
+{
+  "ef_search": 40,
+  "vamana_L": 20,
+  "insertion_alpha": 0.1,
+  "query_tls_alpha": 0.2,
+  "recall_metric": "strict recall_at_1; GT distance block is not used",
+  "notes": [
+    "LVC curves show Filtered-LVC only: insertion alpha=0.1 by default, query alpha=0.2.",
+    "HNSW/SIFT and Vamana/BIGANN100M have different datasets and batch sizes; the figure shows within-system update trends.",
+    "Batch 0 insertion time is a placeholder and is excluded from the insertion panel and means.",
+    "All three query rounds are retained; no smoothing or interpolation."
+  ],
+  "summaries": {
+    "HNSW": {
+      "insert_ms_mean": 0.73805572941,
+      "initial": {
+        "batch": 0,
+        "x": 0,
+        "recall_percent": 94.95,
+        "query_us": 153.55556996666667
+      },
+      "final": {
+        "batch": 20,
+        "x": 20,
+        "recall_percent": 95.1,
+        "query_us": 172.33669596666667
+      }
+    },
+    "HNSW+LVC": {
+      "insert_ms_mean": 1.42222011493,
+      "initial": {
+        "batch": 0,
+        "x": 0,
+        "recall_percent": 94.52000000000001,
+        "query_us": 278.0996914
+      },
+      "final": {
+        "batch": 20,
+        "x": 20,
+        "recall_percent": 94.42,
+        "query_us": 345.5987548666667
+      }
+    },
+    "Vamana": {
+      "insert_ms_mean": 0.957168238557,
+      "initial": {
+        "batch": 0,
+        "x": 0,
+        "recall_percent": 72.54,
+        "query_us": 228.17898606666668
+      },
+      "final": {
+        "batch": 20,
+        "x": 20,
+        "recall_percent": 72.35999999999999,
+        "query_us": 227.1034203
+      }
+    },
+    "Vamana+LVC": {
+      "insert_ms_mean": 1.2502832431205,
+      "initial": {
+        "batch": 0,
+        "x": 0,
+        "recall_percent": 72.50999999999999,
+        "query_us": 496.31343153333336
+      },
+      "final": {
+        "batch": 20,
+        "x": 20,
+        "recall_percent": 72.98,
+        "query_us": 561.8823428333334
+      }
+    }
+  },
+  "layout": {
+    "recall_ylim": [
+      70.0,
+      100.0
+    ],
+    "legend_bbox": [
+      237.15277777777783,
+      432.4277777777778,
+      1009.6944444444443,
+      31.0
+    ],
+    "panel_bboxes": [
+      [
+        105.0,
+        79.90000000000002,
+        323.4848484848485,
+        258.49999999999994
+      ],
+      [
+        583.7575757575758,
+        79.90000000000002,
+        323.4848484848484,
+        258.49999999999994
+      ],
+      [
+        1062.5151515151515,
+        79.90000000000002,
+        323.4848484848485,
+        258.49999999999994
+      ]
+    ]
+  },
+  "source_sha256": {
+    "/mnt/d/zju/sudis/DiskANN/scripts/dynamic_lvc_vamana_results/bigann_100M_full_0p1pct/summary.csv": "3f1c44bce52b621ce9773f5433bcccec13b7d07cd77ad38d3e2135772f665db8",
+    "/mnt/d/zju/sudis/DiskANN/scripts/dynamic_lvc_vamana_results/bigann_100M_full_0p1pct/raw/config.json": "26227c50998fdc23bcb1d63fa2692374925965cc298f02f37a94f6f0bee2c75f",
+    "/mnt/d/zju/sudis/DiskANN/scripts/dynamic_lvc_vamana_results/bigann_100M_full_0p1pct/raw/updates.csv": "46f851a4dee1deccbdd2c5d371c35956736000e349528980454cfedab568da95",
+    "/mnt/d/zju/sudis/DiskANN/scripts/dynamic_lvc_vamana_results/bigann_100M_full_0p1pct/raw/search.csv": "a65a8d85abe6749feb00ad3a85178b2c2257ffc91a2fffaa274d41364fbd0d94",
+    "/mnt/d/zju/sudis/DiskANN/scripts/dynamic_lvc_vamana_results/bigann_100M_full_0p1pct/alp_a0.1/config.json": "ff7bd881be6a6f50ab68e04ed8282d68372830c3147787b67afc2c05ddd2a0f3",
+    "/mnt/d/zju/sudis/DiskANN/scripts/dynamic_lvc_vamana_results/bigann_100M_full_0p1pct/alp_a0.1/updates.csv": "2601d435f1a35afb8184f420f9ff162b5b059c3f6ba075e71ecbac83e77c0f26",
+    "/mnt/d/zju/sudis/DiskANN/scripts/dynamic_lvc_vamana_results/bigann_100M_full_0p1pct/alp_a0.1/search.csv": "8dfdd76875d748961483f520ae32bf17799f1b2855d4c307ac42d98a31d7156e",
+    "/mnt/d/zju/sudis/hnswlib_cpp_py/script/dynamic_updates_repeated_1pct_alpha01_results/sift-128-euclidean/config.json": "f8368a54d697e50d0397e65c6c363bdd4713234ba3de3ebee0c33ae9e6c6eee8",
+    "/mnt/d/zju/sudis/hnswlib_cpp_py/script/dynamic_updates_repeated_1pct_alpha01_results/sift-128-euclidean/updates.csv": "d6b9ec6683f4c04eed958bc3bfb0a54b719018170d5293f7dc609ce2667229a8",
+    "/mnt/d/zju/sudis/hnswlib_cpp_py/script/dynamic_updates_repeated_1pct_alpha01_results/sift-128-euclidean/search.csv": "1c9bb58842e0fed610b2473589b3efec5f9d52bb85e86f24d3bf2c3dd6e959a5",
+    "/mnt/d/zju/sudis/hnswlib_cpp_py/script/dynamic_updates_repeated_1pct_alpha01_results/sift-128-euclidean/summary.csv": "6dd5bf812a3927e8a986fc7d950b46a035578524deeba70601d678b4fb52f050"
+  }
+}

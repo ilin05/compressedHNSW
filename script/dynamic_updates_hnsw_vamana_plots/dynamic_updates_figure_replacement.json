@@ -1,0 +1,14 @@
+[
+  {
+    "target": "/mnt/d/zju/sudis/VectorCompress/SIGMOD27_VectorCompress/figures/dynamic_updates_sift_revision.pdf",
+    "backup": "/mnt/d/zju/sudis/hnswlib_cpp_py/script/dynamic_updates_hnsw_vamana_plots/previous_figures/paper_dynamic_updates_sift_revision_019dac164722.pdf",
+    "previous_sha256": "019dac164722cc4ef9b2d023854b0f30aca9b47e81d334d6abb5a64624184f01",
+    "new_sha256": "76a3c6f7bc6b59cd40108bd996e86337ef7140b909314f7be053795734f245e3"
+  },
+  {
+    "target": "/mnt/d/zju/sudis/VectorCompress/SIGMOD27_VectorCompress/revision_letter/figures/dynamic_updates_sift_revision.pdf",
+    "backup": "/mnt/d/zju/sudis/hnswlib_cpp_py/script/dynamic_updates_hnsw_vamana_plots/previous_figures/letter_dynamic_updates_sift_revision_019dac164722.pdf",
+    "previous_sha256": "019dac164722cc4ef9b2d023854b0f30aca9b47e81d334d6abb5a64624184f01",
+    "new_sha256": "76a3c6f7bc6b59cd40108bd996e86337ef7140b909314f7be053795734f245e3"
+  }
+]

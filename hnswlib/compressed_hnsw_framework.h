@@ -162,6 +162,14 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
     std::vector<std::vector<std::pair<uint32_t, uint32_t>>> f32_patches_;
     CompressionRootPolicy compressed_root_policy_ = CompressionRootPolicy::Level;
 
+    // Optional experiment seed: do not couple root sampling to PQ/graph RNG use.
+    bool has_compression_root_seed_ = false;
+    uint32_t compression_root_seed_ = 0;
+    void setCompressionRootSeed(uint32_t seed) {
+        compression_root_seed_ = seed;
+        has_compression_root_seed_ = true;
+    }
+
     void setF32Lossless(bool enabled) { f32_lossless_ = enabled; }
     size_t getF32PatchBytes() const {
         size_t bytes = 0;
@@ -1505,9 +1513,15 @@ class HierarchicalNSWCABFRAMEWORK : public AlgorithmInterface<dist_t> {
                 });
                 break;
 
-            case CompressionRootPolicy::Random:
-                std::shuffle(candidates.begin(), candidates.end(), level_generator_);
+            case CompressionRootPolicy::Random: {
+                if (has_compression_root_seed_) {
+                    std::mt19937 root_rng(compression_root_seed_);
+                    std::shuffle(candidates.begin(), candidates.end(), root_rng);
+                } else {
+                    std::shuffle(candidates.begin(), candidates.end(), level_generator_);
+                }
                 break;
+            }
 
             case CompressionRootPolicy::Level0Degree:
                 std::sort(candidates.begin(), candidates.end(), [&](tableint a, tableint b) {
