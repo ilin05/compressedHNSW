@@ -1,0 +1,42 @@
+nohup: ignoring input
+-- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+-- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+-- Configuring done (0.3s)
+-- Generating done (0.7s)
+-- Build files have been written to: /home/zmy/HNSWCW/compressedhnsw/build_lvc_root_score
+[  0%] Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/examples/cpp/test_build_compressed_hnsw_ablation.cpp.o
+[  0%] Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/camel/camel_tools.cpp.o
+[  0%] Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/camel/decoder/double_camel_decoder.cpp.o
+[  0%] Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/camel/encoder/double_camel_encoder.cpp.o
+[  0%] Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/dexor/decoder/double_dexor_decoder.cpp.o
+[  0%] Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/dexor/encoder/double_dexor_encoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/elf/decoder/double_elf_decoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/elf/elf64_utils.cpp.o
+[100%] Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/elf/encoder/double_elf_encoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/gorilla/decoder/double_gorilla_decoder.cpp.o
+[100%] Building CXX object CMakeFiles/test_build_compressed_hnsw_ablation.dir/encoding_algorithms/gorilla/encoder/double_gorilla_encoder.cpp.o
+[100%] Linking CXX executable test_build_compressed_hnsw_ablation
+[100%] Built target test_build_compressed_hnsw_ablation
+RUN 1/20 seed=20261116 codecs=['DeXOR'] chains=[-1]
+RUN 2/20 seed=20261117 codecs=['DeXOR'] chains=[-1]
+RUN 3/20 seed=20261118 codecs=['DeXOR'] chains=[-1]
+RUN 4/20 seed=20261119 codecs=['DeXOR'] chains=[-1]
+RUN 5/20 seed=20261120 codecs=['DeXOR'] chains=[-1]
+RUN 6/20 seed=20261121 codecs=['DeXOR'] chains=[-1]
+RUN 7/20 seed=20261122 codecs=['DeXOR'] chains=[-1]
+RUN 8/20 seed=20261123 codecs=['DeXOR'] chains=[-1]
+RUN 9/20 seed=20261124 codecs=['DeXOR'] chains=[-1]
+RUN 10/20 seed=20261125 codecs=['DeXOR'] chains=[-1]
+RUN 11/20 seed=20261126 codecs=['DeXOR'] chains=[-1]
+RUN 12/20 seed=20261127 codecs=['DeXOR'] chains=[-1]
+RUN 13/20 seed=20261128 codecs=['DeXOR'] chains=[-1]
+RUN 14/20 seed=20261129 codecs=['DeXOR'] chains=[-1]
+RUN 15/20 seed=20261130 codecs=['DeXOR'] chains=[-1]
+RUN 16/20 seed=20261131 codecs=['DeXOR'] chains=[-1]
+RUN 17/20 seed=20261132 codecs=['DeXOR'] chains=[-1]
+RUN 18/20 seed=20261133 codecs=['DeXOR'] chains=[-1]
+RUN 19/20 seed=20261134 codecs=['DeXOR'] chains=[-1]
+RUN 20/20 seed=20261135 codecs=['DeXOR'] chains=[-1]
+chain=-1 distinct root sets=20/20
+Results: /home/zmy/HNSWCW/compressedhnsw/script/root_selection_random_repeats_results/20261115T161404Z/summary.csv
+Statistics: /home/zmy/HNSWCW/compressedhnsw/script/root_selection_random_repeats_results/20261115T161404Z/statistics.csv

@@ -1,0 +1,10 @@
+COMMAND: ['/home/zmy/HNSWCW/compressedhnsw/build_lvc_root_score/test_build_compressed_hnsw_ablation', '--base_dir', '/home/zmy/HNSWCW/compressedhnsw/datasets/hdf5files', '--dataset', 'sift-128-euclidean', '--algorithm', 'DeXOR', '--chain_max', '-1', '--root_policy', 'random', '--root_seed', '20261116', '--f32_lossless', '--ratios_only', '--threads', '32', '--M', '16', '--ef_construction', '200', '--output_csv', '/home/zmy/HNSWCW/compressedhnsw/script/root_selection_random_repeats_results/20261115T161404Z/current_build.csv', '--shared_graph_file', '/home/zmy/HNSWCW/compressedhnsw/script/root_selection_score_results/shared_raw_graph.bin']
+
+=== Build dataset=sift-128-euclidean algo=DeXOR chain_max=-1 ===
+Training PQ: dim=128, m=16, d_sub=8, K=256
+Encoding dataset with PQ...
+Compression: Selected 10000 roots using policy random.
+Compression: chain max length = -1, actual roots = 10000
+ROOT_SAMPLE seed=20261116 roots=10000 hash=917966339266796627
+
+Saved CSV: /home/zmy/HNSWCW/compressedhnsw/script/root_selection_random_repeats_results/20261115T161404Z/current_build.csv
